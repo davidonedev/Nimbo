@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { Appointment, BlockedSlot } from '../types';
-import { listAppointmentsApi } from '../services/appointments.service';
+import type { BlockedSlot } from '../types';
+import { listAgendaAppointmentsApi, type AgendaAppointment } from '../services/appointments.service';
 import { listBlockedSlotsApi } from '../services/blockedSlots.service';
 import type { AgendaApiScope } from '../services/appointments.service';
 
 export interface AgendaPeriod {
-  appointments: Appointment[];
+  appointments: AgendaAppointment[];
   blocks: BlockedSlot[];
 }
 
@@ -31,7 +31,7 @@ function fetchPeriod(cacheKey: string, apiScope: AgendaApiScope, start: string, 
   if (pending) return pending; // evita chamadas duplicadas (StrictMode, dois componentes)
   const v = version;
   const p = Promise.all([
-    listAppointmentsApi({ startDate: start, endDate: end }, apiScope),
+    listAgendaAppointmentsApi({ startDate: start, endDate: end }, apiScope),
     listBlockedSlotsApi({ startDate: start, endDate: end }, apiScope),
   ]).then(([appointments, blocks]) => {
     cache.set(key, { value: { appointments, blocks }, version: v });
