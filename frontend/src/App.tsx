@@ -28,6 +28,8 @@ import ProfessionalLayout    from './components/layout/ProfessionalLayout';
 import ClientLayout          from './components/layout/ClientLayout';
 import Dashboard             from './components/admin/Dashboard';
 import AgendaView            from './components/admin/AgendaView';
+import AdminAgenda            from './components/admin/agenda/AdminAgenda';
+import ProfessionalAgenda     from './components/admin/agenda/ProfessionalAgenda';
 import ClientsView           from './components/admin/ClientsView';
 import ProfessionalsView     from './components/admin/ProfessionalsView';
 import RevenueView           from './components/admin/RevenueView';
@@ -105,6 +107,8 @@ function AppRoutes() {
         <Route index                 element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard"      element={<Dashboard />} />
         <Route path="agenda"         element={<AgendaView />} />
+        {/* Nova Agenda em desenvolvimento: assume /admin/agenda quando tiver paridade (etapa 3) */}
+        <Route path="agenda-beta"    element={<AdminAgenda />} />
         <Route path="clients"        element={<ClientsView />} />
         <Route path="professionals"  element={<ProfessionalsView />} />
         <Route path="services"       element={<ServicesView />} />
@@ -124,6 +128,8 @@ function AppRoutes() {
       <Route path="professional" element={<ProfessionalGuard><ProfessionalLayout /></ProfessionalGuard>}>
         <Route index              element={<Navigate to="agenda" replace />} />
         <Route path="agenda"      element={<ProfAgendaView />} />
+        {/* Nova Agenda em desenvolvimento: assume /professional/agenda quando tiver paridade */}
+        <Route path="agenda-beta" element={<ProfessionalAgenda />} />
         <Route path="services"    element={<ProfServicesView />} />
         <Route path="revenue"     element={<ProfRevenueView />} />
         <Route path="settings"    element={<ProfSettingsView />} />
