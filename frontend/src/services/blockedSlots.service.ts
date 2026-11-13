@@ -13,13 +13,13 @@ export async function listBlockedSlotsApi(filters?: {
   date?: string;
   startDate?: string;
   endDate?: string;
-}): Promise<BlockedSlot[]> {
+}, scope: 'admin' | 'professional' = 'admin'): Promise<BlockedSlot[]> {
   const params = new URLSearchParams();
   if (filters) {
     Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v); });
   }
   const query = params.toString() ? `?${params.toString()}` : '';
-  const data = await api.get<Record<string, unknown>[]>(`/admin/blocked-slots${query}`);
+  const data = await api.get<Record<string, unknown>[]>(`/${scope}/blocked-slots${query}`);
   return data.map(normalize);
 }
 

@@ -19,11 +19,14 @@ export interface AppointmentFilters {
   status?: string;
 }
 
-export async function listAppointmentsApi(filters: AppointmentFilters = {}): Promise<Appointment[]> {
+/** Admin e profissional usam o mesmo contrato; o backend limita o profissional à própria agenda. */
+export type AgendaApiScope = 'admin' | 'professional';
+
+export async function listAppointmentsApi(filters: AppointmentFilters = {}, scope: AgendaApiScope = 'admin'): Promise<Appointment[]> {
   const params = new URLSearchParams();
   Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v); });
   const query = params.toString() ? `?${params.toString()}` : '';
-  const data = await api.get<Record<string, unknown>[]>(`/admin/appointments${query}`);
+  const data = await api.get<Record<string, unknown>[]>(`/${scope}/appointments${query}`);
   return data.map(normalize);
 }
 
