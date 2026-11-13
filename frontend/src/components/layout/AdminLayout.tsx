@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { NavLink, Link, useNavigate, Outlet } from 'react-router-dom';
+import { NavLink, Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import {
   LayoutDashboard, Calendar, Users, UserCog, BarChart3, LogOut, X,
   Settings, Sun, Moon, ExternalLink, Scissors, Package, Bell,
@@ -44,6 +44,7 @@ export default function AdminLayout() {
   const { isDark, toggle }                          = useTheme();
   const { collapsed, toggle: toggleCollapsed }      = useSidebarCollapsed();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [open, setOpen]             = useState(false);
   const [accountOpen, setAccountOpen] = useState(true);
   const [copied, setCopied]         = useState(false);
@@ -280,8 +281,8 @@ export default function AdminLayout() {
 
       {/* Celular: navegação inferior e botão flutuante (no desktop valem a sidebar e o "Novo" da navbar) */}
       <BottomNav items={NAV_ITEMS.slice(0, 3)} accentColor={accentColor} onMore={() => setOpen(true)} moreOpen={open} />
-      {/* TODO: abrir o fluxo de novo agendamento; por ora leva à Agenda */}
-      <Fab label="Novo" to="/admin/agenda" />
+      {/* Só no Painel: nas demais telas a própria página já tem seu botão de criar. TODO: abrir o fluxo de novo agendamento; por ora leva à Agenda */}
+      {pathname === '/admin/dashboard' && <Fab label="Novo agendamento" to="/admin/agenda" />}
     </div>
   );
 }
