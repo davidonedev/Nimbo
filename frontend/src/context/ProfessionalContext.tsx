@@ -93,7 +93,7 @@ export function ProfessionalProvider({ children }: { children: React.ReactNode }
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center text-muted-foreground">
+      <div className="flex h-dvh items-center justify-center text-muted-foreground">
         Carregando...
       </div>
     );
@@ -101,7 +101,7 @@ export function ProfessionalProvider({ children }: { children: React.ReactNode }
 
   if (!professional || !tenant) {
     return (
-      <div className="flex h-screen items-center justify-center text-muted-foreground">
+      <div className="flex h-dvh items-center justify-center text-muted-foreground">
         Profissional não encontrado.
       </div>
     );

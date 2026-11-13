@@ -21,7 +21,7 @@ export default function LandingPage() {
   const ref = useReveal<HTMLDivElement>();
 
   return (
-    <div ref={ref} className="lp-root min-h-screen overflow-x-clip selection:bg-lp-primary/20">
+    <div ref={ref} className="lp-root min-h-dvh overflow-x-clip selection:bg-lp-primary/20">
       <a href="#conteudo" className="sr-only z-[60] rounded-full bg-lp-white px-5 py-3 font-bold text-lp-primary focus:not-sr-only focus:fixed focus:left-4 focus:top-4">Pular para o conteúdo</a>
       <LandingNav />
       <main id="conteudo" tabIndex={-1} className="outline-none">

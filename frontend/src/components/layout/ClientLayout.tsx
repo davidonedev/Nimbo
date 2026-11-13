@@ -67,7 +67,7 @@ export default function ClientLayout() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-dvh flex flex-col">
       {/* ── Header ── */}
       <header className="sticky top-0 z-20 bg-background/80 backdrop-blur border-b">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">

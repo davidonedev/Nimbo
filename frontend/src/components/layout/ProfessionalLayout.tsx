@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Calendar, BarChart3, CalendarClock, LogOut, Menu, X, Sun, Moon, Scissors } from 'lucide-react';
+import { Calendar, BarChart3, CalendarClock, LogOut, X, Sun, Moon, Scissors } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { BottomNav } from './BottomNav';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { NotificationBell } from '@/components/ui/NotificationBell';
@@ -36,12 +37,12 @@ export default function ProfessionalLayout() {
 
   return (
     <div
-      className="flex h-screen bg-muted/30 overflow-hidden"
+      className="flex h-dvh bg-muted/30 overflow-hidden"
       style={{ '--primary': hsl, '--primary-foreground': fgHsl, '--ring': hsl } as React.CSSProperties}
     >
-      {open && <div className="fixed inset-0 bg-black/40 z-30 md:hidden" onClick={() => setOpen(false)} />}
+      {open && <div className="fixed inset-0 bg-black/40 z-[35] md:hidden" onClick={() => setOpen(false)} />}
 
-      <aside className={`fixed md:static inset-y-0 left-0 z-40 w-64 bg-card border-r flex flex-col transform transition-transform duration-200 ${open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+      <aside id="admin-sidebar" className={`fixed md:static inset-y-0 left-0 z-40 w-64 bg-card border-r flex flex-col transform transition-transform duration-200 ${open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         {/* Professional identity */}
         <div className="p-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -76,7 +77,7 @@ export default function ProfessionalLayout() {
                 to={item.to}
                 onClick={() => setOpen(false)}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
+                  `flex items-center gap-3 px-3 py-3 md:py-2.5 rounded-lg text-sm font-medium transition-colors
                   ${isActive ? 'text-white' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`
                 }
                 style={({ isActive }) => isActive ? { backgroundColor: accentColor } : {}}
@@ -98,10 +99,7 @@ export default function ProfessionalLayout() {
       </aside>
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-14 border-b bg-card flex items-center px-4 gap-3 shrink-0">
-          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setOpen(true)}>
-            <Menu className="h-5 w-5" />
-          </Button>
+        <header className="h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] border-b bg-card flex items-center px-4 gap-3 shrink-0">
           <div className="flex-1" />
           <NotificationBell
             notifications={notifications}
@@ -121,10 +119,12 @@ export default function ProfessionalLayout() {
             </AvatarFallback>
           </Avatar>
         </header>
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] md:p-6">
           <Outlet />
         </main>
       </div>
+
+      <BottomNav items={[NAV_ITEMS[0], NAV_ITEMS[2], NAV_ITEMS[3]]} accentColor={accentColor} onMore={() => setOpen(true)} moreOpen={open} />
     </div>
   );
 }

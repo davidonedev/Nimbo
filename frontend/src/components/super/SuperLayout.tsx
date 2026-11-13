@@ -59,7 +59,7 @@ export default function SuperLayout() {
   const handleLogout = () => { logout(); navigate('/login', { replace: true }); };
 
   return (
-    <div className="flex h-screen bg-muted/30 overflow-hidden">
+    <div className="flex h-dvh bg-muted/30 overflow-hidden">
       {open && <div className="fixed inset-0 bg-black/40 z-30 md:hidden" onClick={() => setOpen(false)} />}
 
       <aside className={`fixed md:static inset-y-0 left-0 z-40 w-64 bg-card border-r flex flex-col transform transition-transform duration-200 ${open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>

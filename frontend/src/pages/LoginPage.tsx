@@ -129,7 +129,7 @@ export default function LoginPage() {
 
   return (
     <div className="lp-root">
-      <div className="min-h-screen bg-lp-alt">
+      <div className="min-h-dvh bg-lp-alt">
         <AuthHeader
           right={<Link to="/" className={headerLinkClass}><ArrowLeft className="h-4 w-4" aria-hidden /> Voltar ao início</Link>}
         />
