@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { PlatformProvider }        from './context/PlatformContext';
@@ -8,48 +9,49 @@ import { PublicClientProvider }   from './context/PublicClientContext';
 import { ProfessionalProvider }    from './context/ProfessionalContext';
 
 // Pages & layouts
-import LandingPage           from './pages/LandingPage';
-import LoginPage             from './pages/LoginPage';
-import SignupPage            from './pages/SignupPage';
-import ForgotPasswordPage    from './pages/ForgotPasswordPage';
-import ResetPasswordPage     from './pages/ResetPasswordPage';
-import ConfirmEmailChangePage from './pages/ConfirmEmailChangePage';
-import AccessHelpPage        from './pages/AccessHelpPage';
-import AccessHelpList        from './components/account/AccessHelpList';
-import SuperLayout           from './components/super/SuperLayout';
-import SuperDashboard        from './components/super/SuperDashboard';
-import TenantsView           from './components/super/TenantsView';
-import TenantDetailView      from './components/super/TenantDetailView';
-import PlatformMetricsView   from './components/super/PlatformMetricsView';
-import SuperAccountView      from './components/super/SuperAccountView';
-import PlansView             from './components/super/PlansView';
-import AdminLayout           from './components/layout/AdminLayout';
-import ProfessionalLayout    from './components/layout/ProfessionalLayout';
-import ClientLayout          from './components/layout/ClientLayout';
-import Dashboard             from './components/admin/Dashboard';
-import AgendaView            from './components/admin/AgendaView';
-import AdminAgenda            from './components/admin/agenda/AdminAgenda';
-import ProfessionalAgenda     from './components/admin/agenda/ProfessionalAgenda';
-import ClientsView           from './components/admin/ClientsView';
-import ProfessionalsView     from './components/admin/ProfessionalsView';
-import RevenueView           from './components/admin/RevenueView';
-import SettingsView          from './components/admin/SettingsView';
-import ProfAgendaView        from './components/professional/ProfAgendaView';
-import ProfRevenueView       from './components/professional/ProfRevenueView';
-import ProfSettingsView      from './components/professional/ProfSettingsView';
-import ProfServicesView      from './components/professional/ProfServicesView';
-import ServicesView          from './components/admin/ServicesView';
-import ProductsView          from './components/admin/ProductsView';
-import RemindersView         from './components/admin/RemindersView';
-import ServicesPage                from './components/client/ServicesPage';
-import BookingFlow                from './components/client/BookingFlow';
-import MyAppointments             from './components/client/MyAppointments';
-import RegisterPage               from './pages/RegisterPage';
-import ProfessionalRegisterPage   from './pages/ProfessionalRegisterPage';
-import VerifyEmailPage            from './pages/VerifyEmailPage';
-import TermsPage                  from './pages/TermsPage';
-import PrivacyPage                from './pages/PrivacyPage';
+const LandingPage = lazy(() => import('./pages/LandingPage'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const SignupPage = lazy(() => import('./pages/SignupPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+const ConfirmEmailChangePage = lazy(() => import('./pages/ConfirmEmailChangePage'));
+const AccessHelpPage = lazy(() => import('./pages/AccessHelpPage'));
+const AccessHelpList = lazy(() => import('./components/account/AccessHelpList'));
+const SuperLayout = lazy(() => import('./components/super/SuperLayout'));
+const SuperDashboard = lazy(() => import('./components/super/SuperDashboard'));
+const TenantsView = lazy(() => import('./components/super/TenantsView'));
+const TenantDetailView = lazy(() => import('./components/super/TenantDetailView'));
+const PlatformMetricsView = lazy(() => import('./components/super/PlatformMetricsView'));
+const SuperAccountView = lazy(() => import('./components/super/SuperAccountView'));
+const PlansView = lazy(() => import('./components/super/PlansView'));
+const AdminLayout = lazy(() => import('./components/layout/AdminLayout'));
+const ProfessionalLayout = lazy(() => import('./components/layout/ProfessionalLayout'));
+const ClientLayout = lazy(() => import('./components/layout/ClientLayout'));
+const Dashboard = lazy(() => import('./components/admin/Dashboard'));
+const AgendaView = lazy(() => import('./components/admin/AgendaView'));
+const AdminAgenda = lazy(() => import('./components/admin/agenda/AdminAgenda'));
+const ProfessionalAgenda = lazy(() => import('./components/admin/agenda/ProfessionalAgenda'));
+const ClientsView = lazy(() => import('./components/admin/ClientsView'));
+const ProfessionalsView = lazy(() => import('./components/admin/ProfessionalsView'));
+const RevenueView = lazy(() => import('./components/admin/RevenueView'));
+const SettingsView = lazy(() => import('./components/admin/SettingsView'));
+const ProfAgendaView = lazy(() => import('./components/professional/ProfAgendaView'));
+const ProfRevenueView = lazy(() => import('./components/professional/ProfRevenueView'));
+const ProfSettingsView = lazy(() => import('./components/professional/ProfSettingsView'));
+const ProfServicesView = lazy(() => import('./components/professional/ProfServicesView'));
+const ServicesView = lazy(() => import('./components/admin/ServicesView'));
+const ProductsView = lazy(() => import('./components/admin/ProductsView'));
+const RemindersView = lazy(() => import('./components/admin/RemindersView'));
+const ServicesPage = lazy(() => import('./components/client/ServicesPage'));
+const BookingFlow = lazy(() => import('./components/client/BookingFlow'));
+const MyAppointments = lazy(() => import('./components/client/MyAppointments'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const ProfessionalRegisterPage = lazy(() => import('./pages/ProfessionalRegisterPage'));
+const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'));
+const TermsPage = lazy(() => import('./pages/TermsPage'));
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
 import { LoginSplashHost }       from './motion/LoginSplashHost';
+import { PwaHost }               from './pwa/PwaHost';
 
 // ─── Route guards ─────────────────────────────────────────────────────────────
 function SuperGuard({ children }: { children: React.ReactNode }) {
@@ -76,6 +78,7 @@ function ProfessionalGuard({ children }: { children: React.ReactNode }) {
 // ─── App shell ────────────────────────────────────────────────────────────────
 function AppRoutes() {
   return (
+    <Suspense fallback={<div className="flex min-h-dvh items-center justify-center text-sm text-muted-foreground" role="status">Carregando…</div>}>
     <Routes>
       {/* Landing page */}
       <Route index element={<LandingPage />} />
@@ -148,6 +151,7 @@ function AppRoutes() {
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
+    </Suspense>
   );
 }
 
@@ -160,6 +164,7 @@ export default function App() {
       <AuthProvider>
         <AppRoutes />
         <LoginSplashHost />
+        <PwaHost />
       </AuthProvider>
     </BrowserRouter>
     </GoogleOAuthProvider>
