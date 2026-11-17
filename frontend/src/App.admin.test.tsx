@@ -359,3 +359,39 @@ describe('navbar do admin', { timeout: 60000 }, () => {
     await waitFor(() => expect(window.location.pathname).toBe('/admin/professionals'));
   });
 });
+
+/** Falhas de carga: sessão vencida volta ao login; dado acessório indisponível não derruba o painel. */
+describe('falhas ao carregar os dados', { timeout: 60000 }, () => {
+  const respond = (status: number) => ({ ok: false, status, json: async () => ({ error: 'Token inválido ou expirado' }) }) as Response;
+
+  beforeEach(() => {
+    variant = 'completo';
+    sessionStorage.clear(); localStorage.clear(); unmatched.length = 0;
+    setViewportWidth(1280);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+  it('admin com token vencido (401) volta para o login, sem ficar num erro sem saída', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => respond(401)));
+    signIn('tenant_admin');
+    open('/admin/dashboard');
+    expect(await screen.findByText('tela de login', {}, { timeout: 15000 })).toBeTruthy();
+  });
+
+  it('super admin com token vencido (401) volta para o login, sem mostrar o erro cru no layout', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => respond(401)));
+    signIn('super_admin');
+    open('/super/dashboard');
+    expect(await screen.findByText('tela de login', {}, { timeout: 15000 })).toBeTruthy();
+  });
+
+  it.each(['products', 'blocked-slots'])('falha em /admin/%s (500) não derruba o painel', async (broken) => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
+      new RegExp(`/admin/${broken}`).test(String(input)) ? respond(500) : fakeFetch(input, init)));
+    signIn('tenant_admin');
+    open('/admin/dashboard');
+    await expectMounted('Painel');
+    expect(screen.queryByText(/Não foi possível carregar os dados/)).toBeNull();
+  });
+});

@@ -6,6 +6,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { Appointment, BlockedSlot, Client, Product, ProductCategory, ServiceCategory, Professional, Service, Tenant, TenantData } from '../types';
 import { useAuth } from './AuthContext';
+import { ApiError } from '../lib/api';
 
 import { getMyTenantApi, updateTenantSettingsApi } from '../services/tenant.service';
 import { listAppointmentsApi, createAppointmentApi, updateAppointmentStatusApi } from '../services/appointments.service';
@@ -103,6 +104,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   // Só a PRIMEIRA carga troca o app por "Carregando…". Recargas depois disso são em segundo plano: se derrubassem
   // a tela inteira, a tela aberta (e o que o usuário digitava nela) seria desmontada.
   const loadedOnce = useRef(false);
+  // `logout` muda de identidade a cada render do AuthProvider; a ref evita refazer a carga por causa disso.
+  const logoutRef = useRef(logout);
+  useEffect(() => { logoutRef.current = logout; });
 
   const refresh = useCallback(async () => {
     if (!loadedOnce.current) setLoading(true);
@@ -114,8 +118,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         listServicesApi(),
         listClientsApi(),
         listAppointmentsApi(),
-        listBlockedSlotsApi(),
-        listProductsApi(),
+        // Bloqueios e produtos são acessórios: se falharem, o resto do painel carrega mesmo assim.
+        listBlockedSlotsApi().catch((err): BlockedSlot[] => { if (err instanceof ApiError && err.status === 401) throw err; return []; }),
+        listProductsApi().catch((err): Product[] => { if (err instanceof ApiError && err.status === 401) throw err; return []; }),
       ]);
       setTenant(t);
       setProfessionals(profs);
@@ -128,7 +133,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       // Categorias carregadas separadamente — falha não bloqueia o portal
       listCategoriesApi().then(setProductCategories).catch(() => {});
       listServiceCategoriesApi().then(setServiceCategories).catch(() => {});
-    } catch {
+    } catch (err) {
+      // Sessão vencida/revogada: volta para o login em vez de ficar num erro sem saída.
+      if (err instanceof ApiError && err.status === 401) { logoutRef.current(); return; }
       // Falha de rede/servidor: não é "sem tenant". Mostra erro com ação em vez de tela em branco.
       // Numa recarga em segundo plano (dados já na tela) mantém o que há em vez de trocá-lo por um erro.
       if (!loadedOnce.current) setLoadError(true);

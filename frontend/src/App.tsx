@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
+import { GOOGLE_CLIENT_ID } from './lib/googleAuth';
 import { PlatformProvider }        from './context/PlatformContext';
 import { AuthProvider, useAuth }   from './context/AuthContext';
 import { TenantProvider }          from './context/TenantContext';
@@ -188,7 +189,6 @@ function AppRoutes() {
   );
 }
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '';
 
 export default function App() {
   return (

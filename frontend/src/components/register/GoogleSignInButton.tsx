@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { googleAuthClientApi } from '@/services/register.service';
 import { usePublicClient } from '@/context/PublicClientContext';
 import { usePublicTenant } from '@/context/PublicTenantContext';
+import { isGoogleLoginEnabled } from '@/lib/googleAuth';
 
 // SVG do logo Google
 function GoogleIcon() {
@@ -24,7 +25,7 @@ interface GoogleSignInButtonProps {
   disabled?: boolean;
 }
 
-export default function GoogleSignInButton({
+function GoogleSignInButtonInner({
   label = 'Continuar com Google',
   onSuccess,
   onError,
@@ -58,4 +59,12 @@ export default function GoogleSignInButton({
       {label}
     </Button>
   );
+}
+
+/**
+ * Sem `VITE_GOOGLE_CLIENT_ID` o hook do Google lança erro e a tela inteira (cadastro e "Entrar" do portal) fica em branco.
+ * Então, sem client id, o botão simplesmente não aparece: e-mail e senha continuam funcionando.
+ */
+export default function GoogleSignInButton(props: GoogleSignInButtonProps) {
+  return isGoogleLoginEnabled ? <GoogleSignInButtonInner {...props} /> : null;
 }
