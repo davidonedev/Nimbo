@@ -50,7 +50,7 @@ public class ProfessionalSelfController {
         UUID tenantId = SecurityUtils.requireTenantId();
         Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> AppException.notFound("Tenant não encontrado"));
-        return ResponseEntity.ok(ApiResponse.ok(TenantDtos.TenantResponse.from(tenant)));
+        return ResponseEntity.ok(ApiResponse.ok(TenantDtos.TenantResponse.forProfessional(tenant)));
     }
 
     /** Só os clientes que já têm agendamento com o próprio profissional (nunca a base inteira do tenant). */

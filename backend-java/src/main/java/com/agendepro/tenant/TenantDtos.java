@@ -29,6 +29,15 @@ public final class TenantDtos {
                     t.getMinAdvanceMinutes(), t.getWhatsappApiUrl(), t.getWhatsappApiKey(), t.getWhatsappInstance(),
                     t.getWhatsappTemplate(), t.getCreatedAt(), t.getUpdatedAt());
         }
+
+        /** Para o papel PROFESSIONAL: mesmos campos, mas sem a integração de WhatsApp (URL, chave e instância são do dono). */
+        public static TenantResponse forProfessional(Tenant t) {
+            TenantResponse full = from(t);
+            return new TenantResponse(full.id(), full.slug(), full.name(), full.ownerName(), full.email(), full.phone(),
+                    full.address(), full.status(), full.plan(), full.monthlyPrice(), full.primaryColor(), full.adminColor(),
+                    full.logoUrl(), full.bannerUrl(), full.isOpen(), full.minAdvanceMinutes(),
+                    null, null, null, null, full.createdAt(), full.updatedAt());
+        }
     }
 
     public record TenantCounts(long professionals, long services, long clients, long appointments) {
