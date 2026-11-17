@@ -5,6 +5,7 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 @Configuration
 public class RateLimitFilterConfig {
@@ -19,7 +20,8 @@ public class RateLimitFilterConfig {
             @Value("${app.rate-limit.forgot-password-capacity:5}") int forgotCapacity,
             @Value("${app.rate-limit.reset-password-capacity:10}") int resetCapacity,
             @Value("${app.rate-limit.email-change-capacity:5}") int emailChangeCapacity,
-            @Value("${app.rate-limit.access-help-capacity:5}") int accessHelpCapacity
+            @Value("${app.rate-limit.access-help-capacity:5}") int accessHelpCapacity,
+            CorsConfigurationSource corsConfigurationSource
     ) {
         RateLimitFilter filter = new RateLimitFilter(authCapacity, authRefillMinutes, apiCapacity, apiRefillMinutes)
                 .withRouteLimit("/api/auth/login", loginCapacity, 15)
@@ -27,7 +29,8 @@ public class RateLimitFilterConfig {
                 .withRouteLimit("/api/auth/reset-password", resetCapacity, 15)
                 .withRouteLimit("/api/auth/email-change", emailChangeCapacity, 15)
                 .withRouteLimit("/api/auth/email-change/confirm", resetCapacity, 15)
-                .withRouteLimit("/api/auth/access-help", accessHelpCapacity, 60);
+                .withRouteLimit("/api/auth/access-help", accessHelpCapacity, 60)
+                .withCors(corsConfigurationSource);
 
         FilterRegistrationBean<RateLimitFilter> registration = new FilterRegistrationBean<>(filter);
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE);

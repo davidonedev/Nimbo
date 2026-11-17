@@ -30,7 +30,7 @@ cp .env.example .env        # PowerShell: Copy-Item .env.example .env
 | `DB_USERNAME` / `DB_PASSWORD` | Usuário e senha do banco | `postgres` / `root` |
 | `PORT` | Porta da API | `3333` |
 | `JWT_SECRET` | Segredo dos tokens (troque fora do ambiente local) | placeholder |
-| `CORS_ORIGIN` | Origens do frontend permitidas | `http://localhost:5173,http://localhost:3000` |
+| `CORS_ALLOWED_ORIGINS` | Origens do frontend permitidas, separadas por vírgula e sem barra no final. Aceita curinga para previews (`https://nimbo-*.vercel.app`). `CORS_ORIGIN` (nome antigo) ainda vale | `http://localhost:5173,http://localhost:3000` |
 | `SEED_ENABLED` | Cria dados de demonstração no primeiro start (banco vazio) | `true` |
 
 `SMTP_*` e `APP_URL` são opcionais. Sem SMTP configurado, o link de verificação de e-mail aparece apenas no console.
@@ -114,7 +114,7 @@ cp .env.example .env        # PowerShell: Copy-Item .env.example .env
 | `DB_USERNAME` / `DB_PASSWORD` | Database user and password | `postgres` / `root` |
 | `PORT` | API port | `3333` |
 | `JWT_SECRET` | Token signing secret (change it outside local development) | placeholder |
-| `CORS_ORIGIN` | Allowed frontend origins | `http://localhost:5173,http://localhost:3000` |
+| `CORS_ALLOWED_ORIGINS` | Allowed frontend origins, comma-separated, no trailing slash. Wildcards allowed for previews (`https://nimbo-*.vercel.app`). The old `CORS_ORIGIN` still works | `http://localhost:5173,http://localhost:3000` |
 | `SEED_ENABLED` | Creates demo data on first start (empty database) | `true` |
 
 `SMTP_*` and `APP_URL` are optional. Without SMTP configured, the e-mail verification link is only printed to the console.
