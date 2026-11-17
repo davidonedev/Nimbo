@@ -109,7 +109,8 @@ function AppRoutes() {
       <Route path="admin" element={<TenantGuard><AdminLayout /></TenantGuard>}>
         <Route index                 element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard"      element={<Dashboard />} />
-        <Route path="agenda"         element={<AgendaView />} />
+        <Route path="agenda"         element={<AgendaView only="calendar" />} />
+        <Route path="appointments"   element={<AgendaView only="table" />} />
         {/* Nova Agenda em desenvolvimento: assume /admin/agenda quando tiver paridade (etapa 3) */}
         <Route path="agenda-beta"    element={<AdminAgenda />} />
         <Route path="clients"        element={<ClientsView />} />
@@ -117,14 +118,17 @@ function AppRoutes() {
         <Route path="services"       element={<ServicesView />} />
         <Route path="products"       element={<ProductsView />} />
         <Route path="reminders"      element={<RemindersView />} />
-        <Route path="revenue"        element={<RevenueView />} />
+        <Route path="reports"        element={<RevenueView />} />
+        <Route path="revenue"        element={<Navigate to="/admin/reports" replace />} />
         <Route path="access-help"    element={<AccessHelpList scope="admin" />} />
         {/* Minha Conta — subseções */}
         <Route path="account"          element={<SettingsView section="account" />} />
         <Route path="account/portal"   element={<SettingsView section="portal" />} />
         <Route path="account/schedule" element={<SettingsView section="schedule" />} />
         {/* Compatibilidade com rota antiga */}
-        <Route path="settings"       element={<SettingsView section="account" />} />
+        <Route path="settings"          element={<SettingsView section="account" />} />
+        <Route path="settings/portal"   element={<SettingsView section="portal" />} />
+        <Route path="settings/schedule" element={<SettingsView section="schedule" />} />
       </Route>
 
       {/* Professional portal */}

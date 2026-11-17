@@ -213,7 +213,15 @@ function TableRow({
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function AgendaView() {
+interface AgendaViewProps {
+  /**
+   * Fixa a visão: `calendar` é a Agenda (calendário visual) e `table` é a lista de Agendamentos.
+   * Sem a prop, mantém o seletor Tabela/Calendário de antes.
+   */
+  only?: 'calendar' | 'table';
+}
+
+export default function AgendaView({ only }: AgendaViewProps = {}) {
   const {
     appointments, professionals, clients, services,
     blockedSlots, addBlockedSlot, removeBlockedSlot,
@@ -221,7 +229,8 @@ export default function AgendaView() {
   } = useTenant();
 
   const { isMobile } = useBreakpoint();
-  const [view, setView] = useState<'calendar' | 'table'>('table');
+  const [viewState, setView] = useState<'calendar' | 'table'>('table');
+  const view = only ?? viewState;
 
   // ── Calendar state ──────────────────────────────────────────────────────────
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -400,7 +409,7 @@ export default function AgendaView() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Agenda</h2>
+          <h2 className="text-2xl font-bold tracking-tight">{only === 'table' ? 'Agendamentos' : 'Agenda'}</h2>
           <p className="text-muted-foreground text-sm">
             {view === 'table'
               ? `${tableRows.length} agendamento${tableRows.length !== 1 ? 's' : ''} encontrado${tableRows.length !== 1 ? 's' : ''}`
@@ -410,8 +419,8 @@ export default function AgendaView() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {/* View toggle */}
-          <div className="flex items-center border rounded-md overflow-hidden">
+          {/* View toggle (só quando a tela não está fixada em Agenda ou Agendamentos) */}
+          <div className={`items-center border rounded-md overflow-hidden ${only ? 'hidden' : 'flex'}`}>
             <Button variant="ghost" size="sm" className={`rounded-none border-r gap-1.5 ${view === 'table' ? 'bg-muted' : ''}`}
               onClick={() => setView('table')}>
               <Table2 className="h-3.5 w-3.5" /> Tabela
