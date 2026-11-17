@@ -9,6 +9,7 @@ import { UserMenu } from './admin/UserMenu';
 import { BottomNav } from './BottomNav';
 import { MoreSheet } from './MoreSheet';
 import { Sidebar } from './Sidebar';
+import { ScreenSuspense } from './ScreenFallback';
 import { Fab } from '@/components/ui/fab';
 import { useAuth, IMPERSONATION_BACKUP_KEY } from '@/context/AuthContext';
 import { useTenant } from '@/context/TenantContext';
@@ -126,7 +127,7 @@ export default function AdminLayout() {
           </div>
         )}
         <main className="flex-1 overflow-y-auto p-4 pb-[calc(9rem+env(safe-area-inset-bottom))] md:p-6">
-          <Outlet />
+          <ScreenSuspense><Outlet /></ScreenSuspense>
         </main>
       </div>
 

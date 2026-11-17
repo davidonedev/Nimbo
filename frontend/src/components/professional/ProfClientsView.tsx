@@ -28,7 +28,7 @@ export default function ProfClientsView() {
   const q = norm(search.trim());
   const qDigits = search.replace(/\D/g, '');
   const filtered = clients.filter(c =>
-    !q || norm(c.name).includes(q) || norm(c.email).includes(q) || (qDigits.length > 0 && c.phone.replace(/\D/g, '').includes(qDigits)));
+    !q || norm(c.name).includes(q) || norm(c.email ?? '').includes(q) || (qDigits.length > 0 && (c.phone ?? '').replace(/\D/g, '').includes(qDigits)));
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const statsOf = (c: Client) => {
@@ -83,7 +83,7 @@ export default function ProfClientsView() {
                   </Avatar>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold">{c.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">{c.phone}</p>
+                    <p className="truncate text-xs text-muted-foreground">{c.phone || c.email}</p>
                     <p className="truncate text-xs text-muted-foreground">
                       {s.total === 1 ? '1 agendamento' : `${s.total} agendamentos`}
                       {s.next ? ` · próximo em ${format(parseISO(s.next.date), 'dd/MM', { locale: ptBR })}` : s.lastVisit ? ` · última visita ${format(parseISO(s.lastVisit), 'dd/MM/yy', { locale: ptBR })}` : ''}
@@ -102,7 +102,7 @@ export default function ProfClientsView() {
             <>
               <DialogHeader>
                 <DialogTitle>{selected.name}</DialogTitle>
-                <DialogDescription>{selected.phone} · {selected.email}</DialogDescription>
+                <DialogDescription>{[selected.phone, selected.email].filter(Boolean).join(' · ')}</DialogDescription>
               </DialogHeader>
               <div>
                 <p className="mb-2 text-sm font-semibold">Seus atendimentos com este cliente</p>

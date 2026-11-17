@@ -60,6 +60,7 @@ import { canEnterArea } from './config/navigation';
 import { LEGACY_ADMIN_REDIRECTS } from './config/legacyRoutes';
 import { LoginSplashHost }       from './motion/LoginSplashHost';
 import { PwaHost }               from './pwa/PwaHost';
+import { RouteErrorBoundary }    from './components/RouteErrorBoundary';
 
 // ─── Route guards ─────────────────────────────────────────────────────────────
 function SuperGuard({ children }: { children: React.ReactNode }) {
@@ -86,6 +87,7 @@ function ProfessionalGuard({ children }: { children: React.ReactNode }) {
 // ─── App shell ────────────────────────────────────────────────────────────────
 function AppRoutes() {
   return (
+    <RouteErrorBoundary>
     <Suspense fallback={<div className="flex min-h-dvh items-center justify-center text-sm text-muted-foreground" role="status">Carregando…</div>}>
     <Routes>
       {/* Landing page */}
@@ -182,6 +184,7 @@ function AppRoutes() {
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
     </Suspense>
+    </RouteErrorBoundary>
   );
 }
 

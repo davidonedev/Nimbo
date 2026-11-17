@@ -38,7 +38,7 @@ function StatusBadge({ status }: { status: AppointmentStatus }) {
 interface RowData {
   appt: Appointment;
   clientName: string;
-  clientPhone?: string;
+  clientPhone?: string | null;
   serviceName: string;
   professionalName: string;
 }

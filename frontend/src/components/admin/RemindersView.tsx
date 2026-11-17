@@ -22,9 +22,10 @@ const PERIOD_OPTIONS = [
 ];
 
 // ─── Mensagem padrão de WhatsApp ──────────────────────────────────────────────
-function buildWhatsAppUrl(client: AbsentClient, message: string): string {
+function buildWhatsAppUrl(client: AbsentClient, message: string): string | null {
   // Remove tudo que não for número
-  const phone = client.phone.replace(/\D/g, '');
+  const phone = (client.phone ?? "").replace(/\D/g, '');
+  if (!phone) return null; // cliente sem telefone: sem link de WhatsApp
   // Adiciona DDI 55 (Brasil) se não tiver
   const fullPhone = phone.startsWith('55') ? phone : `55${phone}`;
   const encoded = encodeURIComponent(message);
@@ -61,7 +62,7 @@ export default function RemindersView() {
 
   const filtered = clients.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone.includes(search)
+    (c.phone ?? "").includes(search)
   );
 
   const getMessage = (c: AbsentClient) =>
@@ -173,7 +174,7 @@ export default function RemindersView() {
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-sm truncate">{client.name}</p>
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
-                        <span className="text-xs text-muted-foreground">{client.phone}</span>
+                        <span className="text-xs text-muted-foreground">{client.phone || "Sem telefone"}</span>
                         {client.lastServiceName && (
                           <span className="text-xs text-muted-foreground hidden sm:inline">
                             Último: {client.lastServiceName}
@@ -231,15 +232,19 @@ export default function RemindersView() {
                         >
                           Restaurar padrão
                         </button>
-                        <a
-                          href={waUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white bg-[#25D366] hover:bg-[#20bd5a] transition-colors"
-                        >
-                          <MessageCircle className="h-4 w-4" />
-                          Enviar via WhatsApp
-                        </a>
+                        {waUrl ? (
+                          <a
+                            href={waUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white bg-[#25D366] hover:bg-[#20bd5a] transition-colors"
+                          >
+                            <MessageCircle className="h-4 w-4" />
+                            Enviar via WhatsApp
+                          </a>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">Cliente sem telefone cadastrado</span>
+                        )}
                       </div>
                     </div>
                   )}

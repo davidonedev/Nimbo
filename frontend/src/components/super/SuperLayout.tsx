@@ -8,6 +8,7 @@ import { UserMenu } from '@/components/layout/admin/UserMenu';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { MoreSheet } from '@/components/layout/MoreSheet';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { ScreenSuspense } from '@/components/layout/ScreenFallback';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/hooks/useTheme';
 import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed';
@@ -88,7 +89,7 @@ export default function SuperLayout() {
         </header>
         <main className="flex-1 overflow-y-auto p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] md:p-6">
           <ToastProvider>
-            <Outlet />
+            <ScreenSuspense><Outlet /></ScreenSuspense>
           </ToastProvider>
         </main>
       </div>

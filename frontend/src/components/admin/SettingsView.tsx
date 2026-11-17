@@ -206,8 +206,8 @@ export default function SettingsView({ section = 'account' }: Props) {
   // Account form
   const [adminForm, setAdminForm] = useState({
     name:       tenant.name,
-    phone:      tenant.phone,
-    address:    tenant.address,
+    phone:      tenant.phone ?? '',
+    address:    tenant.address ?? '',
     adminColor: tenant.adminColor ?? tenant.primaryColor,
     logoUrl:    tenant.logoUrl,
   });

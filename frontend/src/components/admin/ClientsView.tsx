@@ -52,7 +52,7 @@ export default function ClientsView() {
   const filtered = clients.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
     c.email.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone.includes(search)
+    (c.phone ?? '').includes(search)
   );
 
   const getStats = (clientId: string) => {
@@ -97,7 +97,7 @@ export default function ClientsView() {
   // ── UPDATE ────────────────────────────────────────────────────────────────────
   const openEdit = (client: Client) => {
     setSelected(client);
-    setForm({ name: client.name, email: client.email, phone: client.phone });
+    setForm({ name: client.name, email: client.email, phone: client.phone ?? '' });
     setFormError('');
     setEditOpen(true);
   };
@@ -224,7 +224,7 @@ export default function ClientsView() {
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate">{client.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">{client.phone} · {client.email}</p>
+                    <p className="text-xs text-muted-foreground truncate">{client.phone ? `${client.phone} · ` : ''}{client.email}</p>
                   </div>
                   <div className="hidden sm:flex items-center gap-6 shrink-0 text-center">
                     <div>
@@ -294,7 +294,7 @@ export default function ClientsView() {
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   {[
                     ['E-mail',        selected.email],
-                    ['Telefone',      selected.phone],
+                    ['Telefone',      selected.phone || 'Não informado'],
                     ['Cliente desde', format(parseDate(selected.createdAt), "d 'de' MMM 'de' yyyy", { locale: ptBR })],
                     ['Total gasto',   formatCurrency(stats.totalSpent)],
                   ].map(([l, v]) => (

@@ -3,7 +3,7 @@
  * Carrega tudo via API real e expõe as mesmas mutações que antes,
  * agora persistindo no backend.
  */
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { Appointment, BlockedSlot, Client, Product, ProductCategory, ServiceCategory, Professional, Service, Tenant, TenantData } from '../types';
 import { useAuth } from './AuthContext';
 
@@ -100,8 +100,12 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading]         = useState(true);
   const [loadError, setLoadError]     = useState(false);
 
+  // Só a PRIMEIRA carga troca o app por "Carregando…". Recargas depois disso são em segundo plano: se derrubassem
+  // a tela inteira, a tela aberta (e o que o usuário digitava nela) seria desmontada.
+  const loadedOnce = useRef(false);
+
   const refresh = useCallback(async () => {
-    setLoading(true);
+    if (!loadedOnce.current) setLoading(true);
     setLoadError(false);
     try {
       const [t, profs, svcs, cls, apts, bls, prods] = await Promise.all([
@@ -120,25 +124,31 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       setAppointments(apts);
       setBlockedSlots(bls);
       setProducts(prods);
+      loadedOnce.current = true;
       // Categorias carregadas separadamente — falha não bloqueia o portal
       listCategoriesApi().then(setProductCategories).catch(() => {});
       listServiceCategoriesApi().then(setServiceCategories).catch(() => {});
     } catch {
       // Falha de rede/servidor: não é "sem tenant". Mostra erro com ação em vez de tela em branco.
-      setLoadError(true);
+      // Numa recarga em segundo plano (dados já na tela) mantém o que há em vez de trocá-lo por um erro.
+      if (!loadedOnce.current) setLoadError(true);
     } finally {
       setLoading(false);
     }
   }, []);
 
+  // Depende do papel, não do objeto `user`: salvar o nome em Configurações troca o objeto e não deve recarregar tudo.
+  const role = user?.role;
+  const userId = user?.id;
   useEffect(() => {
-    if (user?.role === 'tenant_admin') refresh();
-  }, [user, refresh]);
+    loadedOnce.current = false; // outra conta: volta a mostrar "Carregando…" na primeira carga
+    if (role === 'tenant_admin') refresh();
+  }, [role, userId, refresh]);
 
   // Auto-polling: re-busca agendamentos a cada 30s para detectar novos
   // agendamentos e cancelamentos feitos pelo cliente, acionando notificações.
   useEffect(() => {
-    if (user?.role !== 'tenant_admin') return;
+    if (role !== 'tenant_admin') return;
     const id = setInterval(async () => {
       try {
         const apts = await listAppointmentsApi();
@@ -148,7 +158,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       }
     }, 30_000);
     return () => clearInterval(id);
-  }, [user?.role]);
+  }, [role]);
 
   if (!tenant && !loading) {
     return (
