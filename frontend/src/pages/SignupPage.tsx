@@ -2,7 +2,7 @@ import { useState, useId } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { CalendarCheck, Store, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { registerBusinessApi, type BusinessRegisterPayload } from '@/services/register.service';
-import { ApiError } from '@/lib/api';
+import { signupErrors } from '@/lib/signupErrors';
 import { LpButton } from '@/components/brand/LpButton';
 import { AuthHeader, headerLinkClass } from '@/components/auth/AuthHeader';
 import { AuthAlert } from '@/components/auth/AuthAlert';
@@ -181,6 +181,9 @@ function validate(form: BusinessForm): FormErrors {
   return e;
 }
 
+/** Depois de quantos ms de espera a tela avisa que o servidor pode estar acordando. */
+const WAKING_HINT_AFTER_MS = 6_000;
+
 function BusinessFormStep({
   onBack,
   onSuccess,
@@ -192,6 +195,7 @@ function BusinessFormStep({
   const [form,     setForm]     = useState<BusinessForm>(INITIAL);
   const [errors,   setErrors]   = useState<FormErrors>({});
   const [loading,  setLoading]  = useState(false);
+  const [waking,   setWaking]   = useState(false); // chamada demorando: servidor gratuito acordando
   const [slugAuto, setSlugAuto] = useState(true); // se o slug ainda é auto-gerado
 
   const set = (key: keyof BusinessForm) => (
@@ -221,6 +225,8 @@ function BusinessFormStep({
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
 
     setLoading(true);
+    setErrors({});
+    const wakingTimer = setTimeout(() => setWaking(true), WAKING_HINT_AFTER_MS);
     try {
       const payload: BusinessRegisterPayload = {
         ownerName:    form.ownerName.trim(),
@@ -231,12 +237,14 @@ function BusinessFormStep({
         address:      form.address.trim() || undefined,
         slug:         form.slug.trim() || undefined,
       };
-      const result = await registerBusinessApi(payload);
+      // 3 novas tentativas se a chamada nem chegar ao servidor (ele pode estar acordando)
+      const result = await registerBusinessApi(payload, { retries: 3, onRetry: () => setWaking(true) });
       onSuccess(result.slug);
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'Erro ao criar conta. Tente novamente.';
-      setErrors({ general: msg });
+      setErrors(signupErrors(err));
     } finally {
+      clearTimeout(wakingTimer);
+      setWaking(false);
       setLoading(false);
     }
   };
@@ -302,6 +310,17 @@ function BusinessFormStep({
 
         {/* Erro geral */}
         {errors.general && <AuthAlert kind="error">{errors.general}</AuthAlert>}
+
+        {/* Servidor gratuito dormindo: a 1ª chamada demora, então explicamos em vez de deixar o botão girando */}
+        {loading && waking && (
+          <div
+            role="status"
+            className="flex items-start gap-2.5 rounded-xl border border-lp-primary/30 bg-lp-primary/5 px-4 py-3 text-sm font-medium text-lp-primary"
+          >
+            <Spinner className="mt-0.5 shrink-0" />
+            <div>Estamos acordando o servidor, pode levar até 1 minuto. Não feche esta página.</div>
+          </div>
+        )}
 
         <ActionRow onBack={onBack}>
           <LpButton type="submit" disabled={loading}>

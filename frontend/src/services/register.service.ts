@@ -1,4 +1,4 @@
-import { api } from '../lib/api';
+import { api, type RequestExtra } from '../lib/api';
 
 // ─── Shared result type ───────────────────────────────────────────────────────
 
@@ -78,6 +78,7 @@ export interface BusinessRegisterPayload {
 
 export async function registerBusinessApi(
   payload: BusinessRegisterPayload,
+  extra?: RequestExtra,
 ): Promise<{ message: string; slug: string }> {
-  return api.post('/public/register/business', payload);
+  return api.post('/public/register/business', payload, extra);
 }
