@@ -41,6 +41,7 @@ const ProfSettingsView = lazy(() => import('./components/professional/ProfSettin
 const ProfServicesView = lazy(() => import('./components/professional/ProfServicesView'));
 const ServicesView = lazy(() => import('./components/admin/ServicesView'));
 const ProductsView = lazy(() => import('./components/admin/ProductsView'));
+const BlockedSlotsView = lazy(() => import('./components/admin/BlockedSlotsView'));
 const RemindersView = lazy(() => import('./components/admin/RemindersView'));
 const ServicesPage = lazy(() => import('./components/client/ServicesPage'));
 const BookingFlow = lazy(() => import('./components/client/BookingFlow'));
@@ -50,6 +51,9 @@ const ProfessionalRegisterPage = lazy(() => import('./pages/ProfessionalRegister
 const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
+import { SectionLayout } from './components/layout/SectionTabs';
+import { SERVICES_TABS, SETTINGS_TABS, REPORTS_TABS } from './config/sectionTabs';
+import { LEGACY_ADMIN_REDIRECTS } from './config/legacyRoutes';
 import { LoginSplashHost }       from './motion/LoginSplashHost';
 import { PwaHost }               from './pwa/PwaHost';
 
@@ -115,20 +119,32 @@ function AppRoutes() {
         <Route path="agenda-beta"    element={<AdminAgenda />} />
         <Route path="clients"        element={<ClientsView />} />
         <Route path="professionals"  element={<ProfessionalsView />} />
-        <Route path="services"       element={<ServicesView />} />
-        <Route path="products"       element={<ProductsView />} />
-        <Route path="reminders"      element={<RemindersView />} />
-        <Route path="reports"        element={<RevenueView />} />
-        <Route path="revenue"        element={<Navigate to="/admin/reports" replace />} />
-        <Route path="access-help"    element={<AccessHelpList scope="admin" />} />
-        {/* Minha Conta — subseções */}
-        <Route path="account"          element={<SettingsView section="account" />} />
-        <Route path="account/portal"   element={<SettingsView section="portal" />} />
-        <Route path="account/schedule" element={<SettingsView section="schedule" />} />
-        {/* Compatibilidade com rota antiga */}
-        <Route path="settings"          element={<SettingsView section="account" />} />
-        <Route path="settings/portal"   element={<SettingsView section="portal" />} />
-        <Route path="settings/schedule" element={<SettingsView section="schedule" />} />
+
+        {/* Serviços — com a aba Produtos */}
+        <Route path="services" element={<SectionLayout tabs={SERVICES_TABS} label="Serviços e produtos" />}>
+          <Route index            element={<ServicesView />} />
+          <Route path="products"  element={<ProductsView />} />
+        </Route>
+
+        {/* Relatórios — Financeiro (era "Faturamento") */}
+        <Route path="reports" element={<SectionLayout tabs={REPORTS_TABS} label="Relatórios" />}>
+          <Route index element={<RevenueView />} />
+        </Route>
+
+        {/* Configurações — conta, portal, disponibilidade, bloqueios, lembretes e pedidos de acesso */}
+        <Route path="settings" element={<SectionLayout tabs={SETTINGS_TABS} label="Configurações" />}>
+          <Route index              element={<SettingsView section="account" />} />
+          <Route path="portal"      element={<SettingsView section="portal" />} />
+          <Route path="schedule"    element={<SettingsView section="schedule" />} />
+          <Route path="blocks"      element={<BlockedSlotsView />} />
+          <Route path="reminders"   element={<RemindersView />} />
+          <Route path="access-help" element={<AccessHelpList scope="admin" />} />
+        </Route>
+
+        {/* URLs antigas (menu anterior) → novo destino; nada some */}
+        {Object.entries(LEGACY_ADMIN_REDIRECTS).map(([from, to]) => (
+          <Route key={from} path={from} element={<Navigate to={to} replace />} />
+        ))}
       </Route>
 
       {/* Professional portal */}
