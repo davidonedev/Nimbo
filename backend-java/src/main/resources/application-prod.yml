@@ -1,0 +1,50 @@
+# ─── Perfil de produção (SPRING_PROFILES_ACTIVE=prod, definido no Dockerfile) ───────────────────────────
+# Foco: subir rápido e usar pouca memória no Render free (512 MB, CPU compartilhada). Tudo aqui SOBRESCREVE
+# o application.yml; o que não aparece aqui continua igual.
+
+spring:
+  main:
+    # Não cria na partida o que só será usado quando chegar requisição. Exceção: beans com @Scheduled
+    # (ver LazyInitConfig), senão os lembretes automáticos nunca disparam.
+    lazy-initialization: true
+    banner-mode: "off"
+
+  jpa:
+    open-in-view: false
+    # O Flyway é a fonte da verdade do schema em produção; o `validate` do Hibernate (várias consultas de metadados
+    # na partida) segue valendo nos testes de integração (application.yml / Testcontainers), que pegam divergência
+    # entre entidade e tabela antes do deploy.
+    hibernate:
+      ddl-auto: none
+    # Com o acesso a metadados JDBC desligado, o Hibernate não consulta o banco só para descobrir o dialeto.
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    properties:
+      hibernate:
+        boot:
+          allow_jdbc_metadata_access: false
+
+  datasource:
+    hikari:
+      # Pool enxuto: menos conexões abertas na partida e menos memória (o Postgres free também limita conexões).
+      maximum-pool-size: 5
+      minimum-idle: 1
+
+  # Em produção os templates (e-mails) não precisam ser relidos do disco a cada uso.
+  thymeleaf:
+    cache: true
+
+# Swagger/OpenAPI: desligado em produção (menos beans na subida e menos superfície exposta).
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+# Sem DEBUG em produção: o application.yml deixa `com.agendepro: DEBUG`, que é caro e verboso.
+logging:
+  level:
+    root: INFO
+    com.agendepro: INFO
+    com.agendepro.security.JwtAuthenticationFilter: INFO
+    com.agendepro.ratelimit.RateLimitFilter: INFO
+    org.hibernate.SQL: WARN
