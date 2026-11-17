@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { setViewportWidth } from '@/test/setup';
+import { MemoryRouter } from 'react-router-dom';
 import AppointmentsView from './AppointmentsView';
+
+/** A busca mora na URL (?q=), então a tela precisa de um Router. */
+const renderView = (url = '/admin/appointments') =>
+  render(<MemoryRouter initialEntries={[url]}><AppointmentsView /></MemoryRouter>);
 
 const updateAppointmentStatus = vi.fn(async () => {});
 
@@ -29,7 +34,7 @@ describe('AppointmentsView (desktop)', () => {
   beforeEach(() => { setViewportWidth(1280); Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1280 }); updateAppointmentStatus.mockClear(); });
 
   it('lista os agendamentos do mais recente ao mais antigo, com contagem', () => {
-    render(<AppointmentsView />);
+    renderView();
     expect(screen.getByRole('heading', { name: 'Agendamentos' })).toBeTruthy();
     expect(screen.getByText('3 agendamentos encontrados')).toBeTruthy();
     expect(rowText()[0]).toContain('20/11/2026');
@@ -37,13 +42,13 @@ describe('AppointmentsView (desktop)', () => {
   });
 
   it('tem filtros de período, status, profissional, serviço e busca', () => {
-    render(<AppointmentsView />);
+    renderView();
     for (const name of ['De', 'Até', 'Status', 'Profissional', 'Serviço']) expect(screen.getByLabelText(name)).toBeTruthy();
     expect(screen.getByRole('searchbox', { name: /nome, e-mail ou telefone/i })).toBeTruthy();
   });
 
   it('filtra por período', () => {
-    render(<AppointmentsView />);
+    renderView();
     fireEvent.change(screen.getByLabelText('De'), { target: { value: '2026-11-11' } });
     fireEvent.change(screen.getByLabelText('Até'), { target: { value: '2026-11-15' } });
     expect(dataRows()).toHaveLength(1);
@@ -51,7 +56,7 @@ describe('AppointmentsView (desktop)', () => {
   });
 
   it('filtra por status, profissional e serviço', () => {
-    render(<AppointmentsView />);
+    renderView();
     fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'completed' } });
     expect(dataRows()).toHaveLength(1);
     fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'all' } });
@@ -62,8 +67,15 @@ describe('AppointmentsView (desktop)', () => {
     expect(dataRows()).toHaveLength(2);
   });
 
+  it('abre já filtrada pela busca da URL (?q=), como vem da busca global da navbar', () => {
+    renderView('/admin/appointments?q=maria');
+    expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe('maria');
+    expect(dataRows()).toHaveLength(1);
+    expect(rowText()[0]).toContain('Maria');
+  });
+
   it('busca por nome, e-mail e telefone', () => {
-    render(<AppointmentsView />);
+    renderView();
     const box = screen.getByRole('searchbox');
     fireEvent.change(box, { target: { value: 'maria' } });
     expect(dataRows()).toHaveLength(1);
@@ -74,7 +86,7 @@ describe('AppointmentsView (desktop)', () => {
   });
 
   it('mostra estado vazio e "Limpar filtros" restaura a lista', () => {
-    render(<AppointmentsView />);
+    renderView();
     const clear = screen.getByRole('button', { name: /limpar filtros/i });
     expect((clear as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'ninguém' } });
@@ -85,20 +97,20 @@ describe('AppointmentsView (desktop)', () => {
   });
 
   it('avisa quando o período está invertido', () => {
-    render(<AppointmentsView />);
+    renderView();
     fireEvent.change(screen.getByLabelText('De'), { target: { value: '2026-11-20' } });
     fireEvent.change(screen.getByLabelText('Até'), { target: { value: '2026-11-10' } });
     expect(screen.getByRole('alert').textContent).toMatch(/data inicial/i);
   });
 
   it('confirma um agendamento pendente', async () => {
-    render(<AppointmentsView />);
+    renderView();
     fireEvent.click(screen.getByRole('button', { name: /^Confirmar:.*Maria Souza/ }));
     await waitFor(() => expect(updateAppointmentStatus).toHaveBeenCalledWith('a2', 'confirmed'));
   });
 
   it('conclui e marca falta sem confirmação extra', async () => {
-    render(<AppointmentsView />);
+    renderView();
     fireEvent.click(screen.getByRole('button', { name: /^Concluir:.*João Pereira/ }));
     await waitFor(() => expect(updateAppointmentStatus).toHaveBeenCalledWith('a1', 'completed'));
     fireEvent.click(screen.getByRole('button', { name: /^Marcar falta:.*João Pereira/ }));
@@ -106,7 +118,7 @@ describe('AppointmentsView (desktop)', () => {
   });
 
   it('cancelar pede confirmação e só então chama a API', async () => {
-    render(<AppointmentsView />);
+    renderView();
     fireEvent.click(screen.getByRole('button', { name: /^Cancelar:.*Maria Souza/ }));
     expect(updateAppointmentStatus).not.toHaveBeenCalled();
     const dialog = screen.getByRole('dialog', { name: 'Cancelar agendamento' });
@@ -115,7 +127,7 @@ describe('AppointmentsView (desktop)', () => {
   });
 
   it('agendamento concluído não tem ações', () => {
-    render(<AppointmentsView />);
+    renderView();
     expect(within(dataRows()[0]).getByText('Sem ações')).toBeTruthy();
   });
 });
@@ -124,7 +136,7 @@ describe('AppointmentsView (celular)', () => {
   beforeEach(() => { Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 390 }); setViewportWidth(390); });
 
   it('vira lista de cards, sem tabela, com as mesmas ações e filtros', () => {
-    render(<AppointmentsView />);
+    renderView();
     expect(screen.queryByRole('table')).toBeNull();
     expect(screen.getAllByRole('listitem')).toHaveLength(3);
     expect(screen.getByLabelText('Serviço')).toBeTruthy();
@@ -133,7 +145,7 @@ describe('AppointmentsView (celular)', () => {
   });
 
   it('a busca também filtra os cards', () => {
-    render(<AppointmentsView />);
+    renderView();
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'maria' } });
     expect(screen.getAllByRole('listitem')).toHaveLength(1);
   });

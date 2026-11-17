@@ -218,9 +218,10 @@ export default function SettingsView({ section = 'account' }: Props) {
     primaryColor: tenant.primaryColor,
     bannerUrl:    tenant.bannerUrl,
     logoUrl:      tenant.logoUrl,
-    isOpen:       tenant.isOpen,
   });
   const [portalSaved, setPortalSaved] = useState(false);
+  const [openSaving, setOpenSaving] = useState(false);
+  const [openError, setOpenError] = useState('');
   const [copied, setCopied] = useState(false);
 
   const portalUrl = `${window.location.origin}/${tenant.slug}`;
@@ -228,6 +229,15 @@ export default function SettingsView({ section = 'account' }: Props) {
   const saveAdmin = async () => {
     try { await updateSettings(adminForm); setAdminSaved(true); setTimeout(() => setAdminSaved(false), 2500); }
     catch (err) { console.error(err); }
+  };
+
+  /** O interruptor vale na hora (não espera "Salvar alterações"): o navbar e o portal do cliente seguem o mesmo valor. */
+  const toggleOpen = async (isOpen: boolean) => {
+    setOpenError('');
+    setOpenSaving(true);
+    try { await updateSettings({ isOpen }); }
+    catch (err) { setOpenError(err instanceof Error ? err.message : 'Não foi possível alterar o status.'); }
+    finally { setOpenSaving(false); }
   };
 
   const savePortal = async () => {
@@ -479,16 +489,17 @@ export default function SettingsView({ section = 'account' }: Props) {
           <div className="flex items-center justify-between p-4 rounded-lg border">
             <div>
               <p className="font-medium">
-                {portalForm.isOpen ? '🟢 Aberto — aceitando agendamentos' : '🔴 Fechado — sem agendamentos'}
+                {tenant.isOpen ? '🟢 Aberto — aceitando agendamentos' : '🔴 Fechado — sem agendamentos'}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {portalForm.isOpen
+                {tenant.isOpen
                   ? 'Clientes podem visualizar horários e agendar normalmente.'
                   : 'O portal mostra um aviso de fechado e desativa novos agendamentos.'}
               </p>
             </div>
-            <Switch checked={portalForm.isOpen} onCheckedChange={val => setPortalForm(f => ({ ...f, isOpen: val }))} />
+            <Switch aria-label="Estabelecimento aberto" checked={tenant.isOpen} disabled={openSaving} onCheckedChange={toggleOpen} />
           </div>
+          {openError && <p role="alert" className="mt-2 text-sm text-destructive">{openError}</p>}
         </CardContent>
       </Card>
 

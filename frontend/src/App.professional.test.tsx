@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { configure, render, screen, waitFor } from '@testing-library/react';
 import { profContext } from '@/components/professional/testFixtures';
 import { setViewportWidth } from '@/test/setup';
 import App from './App';
@@ -20,20 +20,23 @@ const signIn = (role: string) =>
   sessionStorage.setItem('agendepro_session', JSON.stringify({ token: 't', user: { id: 'u1', name: 'Marina Souza', email: 'm@x.com', role } }));
 const open = (path: string) => { window.history.pushState({}, '', path); return render(<App />); };
 
-describe('rotas do portal do profissional', { timeout: 15000 }, () => {
+// As telas são `lazy`: a primeira carga sob uma suíte cheia pode passar de 1 s (padrão). Sem isso o teste fica instável.
+configure({ asyncUtilTimeout: 20000 });
+
+describe('rotas do portal do profissional', { timeout: 45000 }, () => {
   beforeEach(() => { sessionStorage.clear(); setViewportWidth(1280); });
 
   it('/professional abre o Painel', async () => {
     signIn('professional');
     open('/professional');
-    expect(await screen.findByRole('heading', { name: 'Olá, Marina' }, { timeout: 8000 })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Olá, Marina' }, { timeout: 20000 })).toBeTruthy();
     expect(window.location.pathname).toBe('/professional/dashboard');
   });
 
   it('Agenda e Clientes abrem dentro do portal', async () => {
     signIn('professional');
     open('/professional/clients');
-    expect(await screen.findByRole('heading', { name: 'Clientes' }, { timeout: 8000 })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Clientes' }, { timeout: 20000 })).toBeTruthy();
     expect(screen.queryByText('Carla Colega')).toBeNull();
   });
 

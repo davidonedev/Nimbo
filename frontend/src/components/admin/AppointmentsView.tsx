@@ -1,4 +1,5 @@
 import { useId, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { CalendarDays, Clock, FilterX, Scissors, Search, User, UserCheck } from 'lucide-react';
@@ -72,11 +73,18 @@ export default function AppointmentsView() {
   const { appointments, clients, professionals, services, updateAppointmentStatus } = useTenant();
   const { isMobile } = useBreakpoint();
   const uid = useId();
-  const [filters, setFilters] = useState<AppointmentFilters>(EMPTY_FILTERS);
+  // O texto da busca mora na URL (?q=): a busca global da navbar abre esta tela já filtrada.
+  const [params, setParams] = useSearchParams();
+  const [otherFilters, setOtherFilters] = useState<AppointmentFilters>(EMPTY_FILTERS);
+  const filters = useMemo<AppointmentFilters>(() => ({ ...otherFilters, search: params.get('q') ?? '' }), [otherFilters, params]);
+  const setFilters = (next: AppointmentFilters) => {
+    setOtherFilters(next);
+    setParams(next.search ? { q: next.search } : {}, { replace: true });
+  };
   const [pendingCancel, setPendingCancel] = useState<RowData | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const set = <K extends keyof AppointmentFilters>(k: K, v: AppointmentFilters[K]) => setFilters(f => ({ ...f, [k]: v }));
+  const set = <K extends keyof AppointmentFilters>(k: K, v: AppointmentFilters[K]) => setFilters({ ...filters, [k]: v });
 
   const rows = useMemo<RowData[]>(() => {
     const clientById = new Map(clients.map(c => [c.id, c]));

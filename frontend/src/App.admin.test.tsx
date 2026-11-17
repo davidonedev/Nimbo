@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { setViewportWidth } from '@/test/setup';
 import { LEGACY_ADMIN_REDIRECTS } from '@/config/legacyRoutes';
 import App from './App';
@@ -99,8 +99,12 @@ const routes = (): [RegExp, unknown][] => [
 ];
 
 const unmatched: string[] = [];
-const fakeFetch = vi.fn(async (input: RequestInfo | URL) => {
+const fakeFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input);
+  // PATCH /admin/settings devolve o tenant já com o que foi enviado (como o backend)
+  if (init?.method === 'PATCH' && /\/admin\/settings$/.test(url)) {
+    return { ok: true, status: 200, json: async () => ({ success: true, data: { ...TENANT, ...JSON.parse(String(init.body)) } }) } as Response;
+  }
   const hit = routes().find(([re]) => re.test(url.split('?')[0]) || re.test(url));
   if (!hit) unmatched.push(url);
   const status = hit ? 200 : 404;
@@ -252,5 +256,106 @@ describe.each<Variant>(['completo', 'campos nulos', 'conta nova'])('telas do adm
     signIn('tenant_admin');
     open('/super/dashboard');
     expect(await screen.findByText('tela de login')).toBeTruthy();
+  });
+});
+
+/** Navbar do admin: status Aberto/Fechado, "+ Novo" e busca — com o app real. */
+describe('navbar do admin', { timeout: 60000 }, () => {
+  beforeEach(() => {
+    variant = 'completo';
+    sessionStorage.clear(); localStorage.clear(); unmatched.length = 0;
+    setViewportWidth(1280);
+    vi.stubGlobal('fetch', fakeFetch);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+  const statusBadge = () => screen.getAllByRole('status').find(el => /^(Aberto|Fechado)/.test((el.textContent ?? '').trim()))!;
+
+  it('o interruptor do portal do cliente muda o status do navbar na hora, sem precisar salvar', async () => {
+    signIn('tenant_admin');
+    open('/admin/settings/portal');
+    const toggle = await screen.findByRole('switch', { name: 'Estabelecimento aberto' }, { timeout: 15000 });
+    await waitFor(() => expect(statusBadge().textContent).toContain('Aberto'));
+
+    fireEvent.click(toggle);
+    await waitFor(() => expect(statusBadge().textContent).toContain('Fechado'), { timeout: 5000 });
+    expect(screen.getByText(/Fechado — sem agendamentos/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Estabelecimento aberto' }));
+    await waitFor(() => expect(statusBadge().textContent).toContain('Aberto'), { timeout: 5000 });
+  });
+
+  it('o status do navbar não depende do expediente dos profissionais (só do interruptor)', async () => {
+    signIn('tenant_admin');
+    open('/admin/dashboard');
+    await expectMounted('Painel');
+    // Painel aberto + interruptor ligado = "Aberto", mesmo fora do horário do profissional
+    expect(statusBadge().textContent).toContain('Aberto');
+  });
+
+  it('"+ Novo" da navbar abre o diálogo de novo agendamento', async () => {
+    signIn('tenant_admin');
+    open('/admin/dashboard');
+    await expectMounted('Painel');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Novo agendamento' })[0]);
+    const dialog = await screen.findByRole('dialog', {}, { timeout: 15000 });
+    expect(dialog.textContent).toContain('Novo Agendamento');
+    expect(screen.getByRole('button', { name: 'Criar Agendamento' }).hasAttribute('disabled')).toBe(true); // falta cliente, serviço…
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('a busca acha cliente sem acento/caixa e abre a tela de Clientes já filtrada', async () => {
+    signIn('tenant_admin');
+    open('/admin/dashboard');
+    await expectMounted('Painel');
+    const box = screen.getByRole('combobox', { name: 'Buscar' }) as HTMLInputElement;
+    await waitFor(() => expect(box).toBeTruthy());
+    fireEvent.change(box, { target: { value: 'ANA lím' } });
+    const options = await screen.findAllByRole('option');
+    expect(options.some(o => (o.textContent ?? '').includes('Ana Lima'))).toBe(true);
+    fireEvent.keyDown(box, { key: 'Enter' });
+    await waitFor(() => expect(window.location.pathname).toBe('/admin/clients'));
+    expect(decodeURIComponent(window.location.search)).toBe('?q=Ana Lima');
+    // a tela de destino já abre filtrada pelo mesmo texto
+    expect(await screen.findByDisplayValue('Ana Lima')).toBeTruthy();
+  });
+
+  it('Ctrl+K foca a busca e Esc limpa o texto', async () => {
+    signIn('tenant_admin');
+    open('/admin/dashboard');
+    await expectMounted('Painel');
+    const box = screen.getByRole('combobox', { name: 'Buscar' }) as HTMLInputElement;
+    fireEvent.keyDown(document, { key: 'k', ctrlKey: true });
+    expect(document.activeElement).toBe(box);
+    fireEvent.change(box, { target: { value: 'corte' } });
+    expect((await screen.findAllByRole('option')).some(o => (o.textContent ?? '').includes('Corte feminino'))).toBe(true);
+    fireEvent.keyDown(box, { key: 'Escape' });
+    expect(box.value).toBe('');
+  });
+
+  it('sem resultado, a busca avisa em vez de ficar muda', async () => {
+    signIn('tenant_admin');
+    open('/admin/dashboard');
+    await expectMounted('Painel');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Buscar' }), { target: { value: 'zzzxyz' } });
+    expect(await screen.findByText(/Nenhum resultado para/)).toBeTruthy();
+  });
+
+  it('no celular, a lupa abre a folha de busca e o resultado leva à tela', async () => {
+    setViewportWidth(390);
+    signIn('tenant_admin');
+    open('/admin/dashboard');
+    await expectMounted('Painel');
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar' }));
+    const dialog = await screen.findByRole('dialog', {}, { timeout: 15000 });
+    expect(dialog.textContent).toContain('Buscar');
+    const box = within(dialog).getByRole('combobox', { name: 'Buscar' });
+    fireEvent.change(box, { target: { value: 'marina' } });
+    // o agendamento também cita a Marina no subtítulo: escolhe o item cujo TÍTULO é o profissional
+    const option = (await within(dialog).findAllByRole('option')).find(o => o.querySelector('span')?.textContent === 'Marina Souza')!;
+    fireEvent.click(option);
+    await waitFor(() => expect(window.location.pathname).toBe('/admin/professionals'));
   });
 });

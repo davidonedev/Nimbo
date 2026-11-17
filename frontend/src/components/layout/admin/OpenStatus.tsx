@@ -1,21 +1,13 @@
-import { useEffect, useState } from 'react';
 import { useTenant } from '@/context/TenantContext';
 import { computeOpenStatus } from '@/lib/businessStatus';
 
 /**
  * "Aberto" com bolinha verde pulsando; "Fechado" com bolinha vermelha estática (um vermelho piscando
- * lê como alarme). O pulso respeita prefers-reduced-motion (motion-reduce). Reavalia a cada minuto.
+ * lê como alarme). O pulso respeita prefers-reduced-motion (motion-reduce). Segue o interruptor do portal do cliente.
  */
 export function OpenStatus() {
-  const { tenant, professionals } = useTenant();
-  const [now, setNow] = useState(() => new Date());
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 60_000);
-    return () => clearInterval(id);
-  }, []);
-
-  const open = computeOpenStatus(tenant, professionals, now);
+  const { tenant } = useTenant();
+  const open = computeOpenStatus(tenant);
 
   return (
     <div role="status" className="flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-sm font-medium">

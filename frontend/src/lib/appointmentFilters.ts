@@ -1,4 +1,5 @@
 import type { Appointment, AppointmentStatus, Client } from '@/types';
+import { digitsOf as digits, normalizeText as normalize } from '@/lib/text';
 
 export interface AppointmentFilters {
   /** Texto livre: nome, e-mail ou telefone do cliente. */
@@ -19,8 +20,6 @@ export const EMPTY_FILTERS: AppointmentFilters = {
 export const hasActiveFilters = (f: AppointmentFilters): boolean =>
   (Object.keys(EMPTY_FILTERS) as (keyof AppointmentFilters)[]).some(k => f[k] !== EMPTY_FILTERS[k]);
 
-const normalize = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
-const digits = (s: string) => s.replace(/\D/g, '');
 
 /** O cliente combina com a busca? Nome e e-mail ignoram acento e caixa; telefone compara só os dígitos. */
 export function clientMatches(client: Pick<Client, 'name' | 'email' | 'phone'> | undefined, query: string): boolean {

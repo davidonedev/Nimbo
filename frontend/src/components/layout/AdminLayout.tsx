@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { Sun, Moon, Plus, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,9 @@ import { hexToHslVars } from '@/lib/utils';
 import { useAppointmentNotifications } from '@/hooks/useAppointmentNotifications';
 import { bottomBarItems, moreItems, navItemsFor } from '@/config/navigation';
 
+// Só é baixado quando alguém abre o "+ Novo"
+const NewAppointmentDialog = lazy(() => import('@/components/admin/NewAppointmentDialog').then(m => ({ default: m.NewAppointmentDialog })));
+
 export default function AdminLayout() {
   const { logout, user }                            = useAuth();
   const { tenant, appointments, clients, services } = useTenant();
@@ -27,6 +30,7 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [newApptOpen, setNewApptOpen] = useState(false);
 
   const [impersonating] = useState<string | null>(() => {
     try { return localStorage.getItem(IMPERSONATION_BACKUP_KEY) ? (tenant?.name ?? 'tenant') : null; } catch { return null; }
@@ -90,8 +94,7 @@ export default function AdminLayout() {
           <AdminSearch />
           <div className="flex-1" />
           <OpenStatus />
-          {/* TODO: abrir o fluxo de novo agendamento (solicitação do zero). Por ora, só o botão. */}
-          <Button type="button" size="sm" className="hidden gap-1.5 md:inline-flex" aria-label="Novo agendamento" onClick={() => { /* TODO */ }}>
+          <Button type="button" size="sm" className="hidden gap-1.5 md:inline-flex" aria-label="Novo agendamento" onClick={() => setNewApptOpen(true)}>
             <Plus className="h-4 w-4" aria-hidden /> <span className="hidden sm:inline">Novo</span>
           </Button>
           <Button variant="ghost" size="icon" onClick={toggle} aria-label={isDark ? "Ativar tema claro" : "Ativar tema escuro"} title={isDark ? "Tema claro" : "Tema escuro"}>
@@ -134,8 +137,14 @@ export default function AdminLayout() {
       {/* Celular: navegação inferior e botão flutuante (no desktop valem a sidebar e o "Novo" da navbar) */}
       <BottomNav items={bottomBarItems(role)} accentColor={accentColor} onMore={() => setMoreOpen(true)} moreOpen={moreOpen} />
       <MoreSheet items={moreItems(role)} open={moreOpen} onOpenChange={setMoreOpen} accentColor={accentColor} />
-      {/* Só no Painel: nas demais telas a própria página já tem seu botão de criar. TODO: abrir o fluxo de novo agendamento; por ora leva à Agenda */}
-      {pathname === '/admin/dashboard' && <Fab label="Novo agendamento" to="/admin/agenda" />}
+      {/* Só no Painel: nas demais telas a própria página já tem seu botão de criar */}
+      {pathname === '/admin/dashboard' && <Fab label="Novo agendamento" onClick={() => setNewApptOpen(true)} />}
+
+      {newApptOpen && (
+        <Suspense fallback={null}>
+          <NewAppointmentDialog open onOpenChange={setNewApptOpen} />
+        </Suspense>
+      )}
     </div>
   );
 }

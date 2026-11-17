@@ -86,7 +86,7 @@ afterEach(() => { vi.unstubAllGlobals(); });
 const signIn = (role: string, extra: Record<string, unknown> = {}) =>
   sessionStorage.setItem('agendepro_session', JSON.stringify({ token: 't', user: { id: 'u1', name: 'Marina Souza', email: 'm@x.com', role, tenantId: TENANT_ID, professionalId: PROF_ID, ...extra } }));
 const open = (path: string) => { window.history.pushState({}, '', path); return render(<App />); };
-const T = { timeout: 10000 };
+const T = { timeout: 25000 }; // telas `lazy`: a 1ª carga sob uma suíte cheia pode demorar
 
 describe('telas do profissional montam com a API no formato real do back', { timeout: 60000 }, () => {
   const routes: [string, RegExp | string][] = [
