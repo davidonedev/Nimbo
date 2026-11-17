@@ -31,6 +31,7 @@ export interface NavItem {
 
 const ADMIN: readonly Role[] = ['tenant_admin'];
 const SUPER: readonly Role[] = ['super_admin'];
+const PROF: readonly Role[] = ['professional'];
 
 export const NAV_ITEMS: readonly NavItem[] = [
   // ── Dono da empresa (tenant_admin) ──────────────────────────────────────────
@@ -51,6 +52,11 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { id: 'super-relatorios',    to: '/super/metrics',   label: 'Relatórios',    icon: BarChart3,       roles: SUPER, placement: 'main',   mobile: 'bar' },
   { id: 'super-configuracoes', to: '/super/account',   label: 'Configurações', icon: Settings,        roles: SUPER, placement: 'footer', mobile: 'more', activeFor: ['/super/access-help'] },
   // O profissional entra na config na etapa 5.
+  // ── Profissional: só o que é dele (Painel resumido, Agenda e Clientes dele) ──
+  { id: 'prof-painel',   to: '/professional/dashboard', label: 'Painel',   icon: LayoutDashboard, roles: PROF, placement: 'main', mobile: 'bar' },
+  { id: 'prof-agenda',   to: '/professional/agenda',    label: 'Agenda',   icon: Calendar,        roles: PROF, placement: 'main', mobile: 'bar', activeFor: ['/professional/agenda-beta'] },
+  { id: 'prof-clientes', to: '/professional/clients',   label: 'Clientes', icon: Users,           roles: PROF, placement: 'main', mobile: 'bar' },
+  // Super admin entra na config na etapa 7.
 ];
 
 /** Cada área do app, o prefixo de rota e quem pode entrar. Os guards do App usam isto. */
@@ -69,7 +75,7 @@ export const canEnterArea = (role: Role | undefined, area: AreaName): boolean =>
 export const HOME_PATH: Record<Role, string> = {
   super_admin:  '/super/dashboard',
   tenant_admin: '/admin/dashboard',
-  professional: '/professional/agenda',
+  professional: '/professional/dashboard',
 };
 
 /** Itens visíveis para o papel, na ordem declarada. */

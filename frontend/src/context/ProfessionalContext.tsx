@@ -77,7 +77,8 @@ export function ProfessionalProvider({ children }: { children: React.ReactNode }
         api.get<Tenant>('/professional/tenant'),
         api.get<Client[]>('/professional/clients'),
       ]);
-      setAppointments(apts);
+      // Defesa em profundidade: o back já devolve só os dele, mas nunca mostramos agendamento de colega.
+      setAppointments(apts.filter((a) => a.professionalId === (profRaw.id as string)));
       setServices(svcs);
       setProfessional(normalizeProfessional(profRaw));
       setTenant(t);

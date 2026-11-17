@@ -3,6 +3,7 @@ import type { AuthUser } from '../types';
 import { loginApi, logoutApi, updateMeApi, changePasswordApi } from '../services/auth.service';
 import { impersonateTenantApi } from '../services/super.service';
 import { ApiError, saveSession } from '../lib/api';
+import { HOME_PATH } from '../config/navigation';
 
 export const IMPERSONATION_BACKUP_KEY = 'agendepro_super_backup';
 
@@ -60,12 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         sessionStorage.setItem(SESSION_KEY, JSON.stringify({ ...session, user: authUser }));
       }
 
-      const redirectTo =
-        authUser.role === 'super_admin'
-          ? '/super/dashboard'
-          : authUser.role === 'professional'
-          ? '/professional/agenda'
-          : '/admin/dashboard';
+      const redirectTo = HOME_PATH[authUser.role] ?? '/admin/dashboard';
 
       return { ok: true, redirectTo };
     } catch (err) {

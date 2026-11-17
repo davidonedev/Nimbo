@@ -7,8 +7,8 @@ export type BottomNavItem = Pick<NavItem, 'to' | 'label' | 'icon' | 'activeFor'>
 interface Props {
   items: readonly BottomNavItem[];
   accentColor: string;
-  /** Abre a folha do "Mais" (itens que não cabem na barra). */
-  onMore: () => void;
+  /** Abre o menu completo (itens que não cabem na barra). Sem ele, não há "Mais" (papel sem itens `more`). */
+  onMore?: () => void;
   moreOpen?: boolean;
 }
 
@@ -41,7 +41,7 @@ export function BottomNav({ items, accentColor, onMore, moreOpen = false }: Prop
           </Link>
         );
       })}
-      <button
+      {onMore && <button
         type="button"
         onClick={onMore}
         aria-expanded={moreOpen}
@@ -51,7 +51,7 @@ export function BottomNav({ items, accentColor, onMore, moreOpen = false }: Prop
       >
         <MoreHorizontal className="h-5 w-5" aria-hidden />
         <span>Mais</span>
-      </button>
+      </button>}
     </nav>
   );
 }

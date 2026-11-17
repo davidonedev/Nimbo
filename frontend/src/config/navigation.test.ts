@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bottomBarItems, canEnterArea, isNavItemActive, moreItems, navItemsFor, NAV_ITEMS } from './navigation';
+import { bottomBarItems, canEnterArea, HOME_PATH, isNavItemActive, moreItems, navItemsFor, NAV_ITEMS } from './navigation';
 
 const labels = (items: { label: string }[]) => items.map(i => i.label);
 
@@ -123,5 +123,43 @@ describe('menu do super admin (super_admin)', () => {
     expect(canEnterArea('super_admin', 'super')).toBe(true);
     expect(canEnterArea('tenant_admin', 'super')).toBe(false);
     expect(canEnterArea('professional', 'super')).toBe(false);
+  });
+});
+
+describe('menu do profissional', () => {
+  it('tem exatamente Painel, Agenda e Clientes, nesta ordem', () => {
+    expect(labels(navItemsFor('professional'))).toEqual(['Painel', 'Agenda', 'Clientes']);
+    expect(navItemsFor('professional').map(i => i.to)).toEqual(['/professional/dashboard', '/professional/agenda', '/professional/clients']);
+  });
+
+  it('não tem rodapé, nem Sair/Usuário, e tudo cabe na barra do celular (sem "Mais")', () => {
+    expect(navItemsFor('professional', 'footer')).toEqual([]);
+    expect(labels(navItemsFor('professional')).join('|').toLowerCase()).not.toMatch(/sair|usuário|usuario|logout/);
+    expect(labels(bottomBarItems('professional'))).toEqual(['Painel', 'Agenda', 'Clientes']);
+    expect(moreItems('professional')).toEqual([]);
+  });
+
+  it('não recebe nenhum item do admin (nem Relatórios, Configurações ou Profissionais) e vice-versa', () => {
+    const prof = navItemsFor('professional');
+    expect(prof.every(i => i.to.startsWith('/professional/'))).toBe(true);
+    for (const banned of ['Relatórios', 'Configurações', 'Profissionais', 'Agendamentos', 'Serviços']) {
+      expect(labels(prof)).not.toContain(banned);
+    }
+    expect(navItemsFor('tenant_admin').some(i => i.to.startsWith('/professional/'))).toBe(false);
+    expect(navItemsFor('super_admin').some(i => i.to.startsWith('/professional/'))).toBe(false);
+  });
+
+  it('a home do profissional é o Painel e só ele entra na própria área', () => {
+    expect(HOME_PATH.professional).toBe('/professional/dashboard');
+    expect(canEnterArea('professional', 'professional')).toBe(true);
+    expect(canEnterArea('tenant_admin', 'professional')).toBe(false);
+    expect(canEnterArea('super_admin', 'professional')).toBe(false);
+    expect(canEnterArea(undefined, 'professional')).toBe(false);
+  });
+
+  it('a Agenda fica ativa também na Nova Agenda (beta)', () => {
+    const agenda = navItemsFor('professional').find(i => i.label === 'Agenda')!;
+    expect(isNavItemActive(agenda, '/professional/agenda-beta')).toBe(true);
+    expect(isNavItemActive(agenda, '/professional/clients')).toBe(false);
   });
 });

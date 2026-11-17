@@ -36,6 +36,8 @@ const ClientsView = lazy(() => import('./components/admin/ClientsView'));
 const ProfessionalsView = lazy(() => import('./components/admin/ProfessionalsView'));
 const RevenueView = lazy(() => import('./components/admin/RevenueView'));
 const SettingsView = lazy(() => import('./components/admin/SettingsView'));
+const ProfDashboardView = lazy(() => import('./components/professional/ProfDashboardView'));
+const ProfClientsView = lazy(() => import('./components/professional/ProfClientsView'));
 const ProfAgendaView = lazy(() => import('./components/professional/ProfAgendaView'));
 const ProfRevenueView = lazy(() => import('./components/professional/ProfRevenueView'));
 const ProfSettingsView = lazy(() => import('./components/professional/ProfSettingsView'));
@@ -154,10 +156,13 @@ function AppRoutes() {
 
       {/* Professional portal */}
       <Route path="professional" element={<ProfessionalGuard><ProfessionalLayout /></ProfessionalGuard>}>
-        <Route index              element={<Navigate to="agenda" replace />} />
+        <Route index              element={<Navigate to="dashboard" replace />} />
+        <Route path="dashboard"   element={<ProfDashboardView />} />
         <Route path="agenda"      element={<ProfAgendaView />} />
+        <Route path="clients"     element={<ProfClientsView />} />
         {/* Nova Agenda em desenvolvimento: assume /professional/agenda quando tiver paridade */}
         <Route path="agenda-beta" element={<ProfessionalAgenda />} />
+        {/* Telas antigas: saíram do menu, mas seguem alcançáveis por URL (settings = "Meu horário" do avatar) */}
         <Route path="services"    element={<ProfServicesView />} />
         <Route path="revenue"     element={<ProfRevenueView />} />
         <Route path="settings"    element={<ProfSettingsView />} />

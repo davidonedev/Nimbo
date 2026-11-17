@@ -11,8 +11,8 @@ interface Props {
   photoUrl?: string;
   accentColor: string;
   onLogout: () => void;
-  /** "Minha Conta". */
-  accountPath: string;
+  /** "Minha Conta". Sem ele, o item não aparece (o portal do profissional não tem essa tela). */
+  accountPath?: string;
   /** "Meu horário" (só aparece quando informado; o super admin não tem horário). */
   schedulePath?: string;
   /** "Aparência": alterna entre tema claro e escuro. */
@@ -50,7 +50,7 @@ export function UserMenu({ name, email, photoUrl, accentColor, onLogout, account
           <DropdownMenuItem onSelect={() => navigate(schedulePath)} className="gap-2"><Clock className="h-4 w-4 text-muted-foreground" aria-hidden />Meu horário</DropdownMenuItem>
         )}
         <DropdownMenuItem onSelect={onToggleTheme} className="gap-2"><Palette className="h-4 w-4 text-muted-foreground" aria-hidden />Aparência: {isDark ? 'tema escuro' : 'tema claro'}</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => navigate(accountPath)} className="gap-2"><UserCircle className="h-4 w-4 text-muted-foreground" aria-hidden />Minha Conta</DropdownMenuItem>
+        {accountPath && <DropdownMenuItem onSelect={() => navigate(accountPath)} className="gap-2"><UserCircle className="h-4 w-4 text-muted-foreground" aria-hidden />Minha Conta</DropdownMenuItem>}
         <DropdownMenuItem className="gap-2"><CircleHelp className="h-4 w-4 text-muted-foreground" aria-hidden />Ajuda</DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onLogout} className="gap-2 text-red-600 focus:bg-red-500/10 focus:text-red-600 dark:text-red-400 dark:focus:text-red-400"><LogOut className="h-4 w-4" aria-hidden />Sair</DropdownMenuItem>
