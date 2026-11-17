@@ -59,3 +59,37 @@ describe('Sidebar do admin', () => {
     expect(screen.queryByRole('tooltip')).toBeNull();
   });
 });
+
+describe('Sidebar do super admin', () => {
+  const setupSuper = (path = '/super/dashboard') =>
+    render(
+      <MemoryRouter initialEntries={[path]}>
+        <Sidebar
+          items={navItemsFor('super_admin', 'main')} footerItems={navItemsFor('super_admin', 'footer')}
+          accentColor="#1e1b4b" collapsed={false} onToggleCollapsed={() => {}}
+          homeTo="/super/dashboard" homeLabel="Nimbo — ir para o Painel"
+        />
+      </MemoryRouter>,
+    );
+
+  it('principal com 4 itens e rodapé só com Configurações', () => {
+    setupSuper();
+    const nav = screen.getByRole('navigation', { name: 'Menu principal' });
+    expect(within(nav).getAllByRole('link').map(l => l.textContent)).toEqual(['Painel', 'Empresas', 'Planos', 'Relatórios']);
+    const footer = screen.getByRole('navigation', { name: 'Menu de configurações' });
+    expect(within(footer).getAllByRole('link').map(l => l.textContent)).toEqual(['Configurações']);
+  });
+
+  it('não tem Usuário nem Sair, nem itens do admin', () => {
+    setupSuper();
+    expect(screen.queryByRole('button', { name: /sair/i })).toBeNull();
+    expect(screen.queryByText(/^sair$/i)).toBeNull();
+    expect(screen.queryByText('Agendamentos')).toBeNull();
+    expect(screen.queryByText('Clientes')).toBeNull();
+  });
+
+  it('Configurações fica ativa em Pedidos de acesso', () => {
+    setupSuper('/super/access-help');
+    expect(screen.getByRole('link', { name: 'Configurações' }).getAttribute('aria-current')).toBe('page');
+  });
+});

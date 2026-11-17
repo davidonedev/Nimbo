@@ -1,5 +1,5 @@
 import {
-  BarChart3, Calendar, ClipboardList, LayoutDashboard, Scissors, Settings, UserCog, Users,
+  BarChart3, Building2, Calendar, ClipboardList, CreditCard, LayoutDashboard, Scissors, Settings, UserCog, Users,
   type LucideIcon,
 } from 'lucide-react';
 import type { Role } from '@/types';
@@ -30,6 +30,7 @@ export interface NavItem {
 }
 
 const ADMIN: readonly Role[] = ['tenant_admin'];
+const SUPER: readonly Role[] = ['super_admin'];
 
 export const NAV_ITEMS: readonly NavItem[] = [
   // ── Dono da empresa (tenant_admin) ──────────────────────────────────────────
@@ -41,7 +42,15 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { id: 'admin-profissionais', to: '/admin/professionals', label: 'Profissionais', icon: UserCog,         roles: ADMIN, placement: 'main',   mobile: 'more' },
   { id: 'admin-relatorios',    to: '/admin/reports',       label: 'Relatórios',    icon: BarChart3,       roles: ADMIN, placement: 'main',   mobile: 'more' },
   { id: 'admin-configuracoes', to: '/admin/settings',      label: 'Configurações', icon: Settings,        roles: ADMIN, placement: 'footer', mobile: 'more', activeFor: ['/admin/account'] },
-  // Profissional e super admin entram na config nas etapas 5 e 7.
+
+  // ── Super admin (dono da plataforma) ────────────────────────────────────────
+  // Usuário e Sair ficam só no menu do avatar do navbar. "Pedidos de acesso" é uma aba dentro de Configurações.
+  { id: 'super-painel',        to: '/super/dashboard', label: 'Painel',        icon: LayoutDashboard, roles: SUPER, placement: 'main',   mobile: 'bar' },
+  { id: 'super-empresas',      to: '/super/tenants',   label: 'Empresas',      icon: Building2,       roles: SUPER, placement: 'main',   mobile: 'bar' },
+  { id: 'super-planos',        to: '/super/plans',     label: 'Planos',        icon: CreditCard,      roles: SUPER, placement: 'main',   mobile: 'bar' },
+  { id: 'super-relatorios',    to: '/super/metrics',   label: 'Relatórios',    icon: BarChart3,       roles: SUPER, placement: 'main',   mobile: 'bar' },
+  { id: 'super-configuracoes', to: '/super/account',   label: 'Configurações', icon: Settings,        roles: SUPER, placement: 'footer', mobile: 'more', activeFor: ['/super/access-help'] },
+  // O profissional entra na config na etapa 5.
 ];
 
 /** Cada área do app, o prefixo de rota e quem pode entrar. Os guards do App usam isto. */

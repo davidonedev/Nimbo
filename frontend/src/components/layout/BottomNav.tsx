@@ -7,7 +7,7 @@ export type BottomNavItem = Pick<NavItem, 'to' | 'label' | 'icon' | 'activeFor'>
 interface Props {
   items: readonly BottomNavItem[];
   accentColor: string;
-  /** Abre o menu completo (itens que não cabem na barra). */
+  /** Abre a folha do "Mais" (itens que não cabem na barra). */
   onMore: () => void;
   moreOpen?: boolean;
 }
@@ -45,7 +45,7 @@ export function BottomNav({ items, accentColor, onMore, moreOpen = false }: Prop
         type="button"
         onClick={onMore}
         aria-expanded={moreOpen}
-        aria-controls="admin-sidebar"
+        aria-haspopup="dialog"
         className={`${base} ${moreOpen ? '' : 'text-muted-foreground'}`}
         style={moreOpen ? { color: accentColor } : undefined}
       >

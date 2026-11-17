@@ -14,6 +14,12 @@ export const SETTINGS_TABS: readonly SectionTab[] = [
   { to: '/admin/settings/access-help', label: 'Pedidos de acesso' },
 ];
 
+/** Configurações do super admin: conta e pedidos de acesso (que saíram do menu lateral). */
+export const SUPER_SETTINGS_TABS: readonly SectionTab[] = [
+  { to: '/super/account', label: 'Conta', end: true },
+  { to: '/super/access-help', label: 'Pedidos de acesso' },
+];
+
 /** Hoje só há a aba Financeiro; comissões entram aqui quando existirem no sistema. */
 export const REPORTS_TABS: readonly SectionTab[] = [
   { to: '/admin/reports', label: 'Financeiro', end: true },

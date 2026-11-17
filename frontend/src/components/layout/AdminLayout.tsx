@@ -7,6 +7,7 @@ import { AdminSearch } from './admin/AdminSearch';
 import { OpenStatus } from './admin/OpenStatus';
 import { UserMenu } from './admin/UserMenu';
 import { BottomNav } from './BottomNav';
+import { MoreSheet } from './MoreSheet';
 import { Sidebar } from './Sidebar';
 import { Fab } from '@/components/ui/fab';
 import { useAuth, IMPERSONATION_BACKUP_KEY } from '@/context/AuthContext';
@@ -15,7 +16,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed';
 import { hexToHslVars } from '@/lib/utils';
 import { useAppointmentNotifications } from '@/hooks/useAppointmentNotifications';
-import { bottomBarItems, navItemsFor } from '@/config/navigation';
+import { bottomBarItems, moreItems, navItemsFor } from '@/config/navigation';
 
 export default function AdminLayout() {
   const { logout, user }                            = useAuth();
@@ -24,7 +25,7 @@ export default function AdminLayout() {
   const { collapsed, toggle: toggleCollapsed }      = useSidebarCollapsed();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const [open, setOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const [impersonating] = useState<string | null>(() => {
     try { return localStorage.getItem(IMPERSONATION_BACKUP_KEY) ? (tenant?.name ?? 'tenant') : null; } catch { return null; }
@@ -70,7 +71,6 @@ export default function AdminLayout() {
       className="flex h-dvh bg-muted/30 overflow-hidden"
       style={{ '--primary': hsl, '--primary-foreground': fgHsl, '--ring': hsl } as React.CSSProperties}
     >
-      {open && <div className="fixed inset-0 bg-black/40 z-[35] md:hidden" onClick={() => setOpen(false)} />}
 
       <Sidebar
         id="admin-sidebar"
@@ -79,8 +79,6 @@ export default function AdminLayout() {
         accentColor={accentColor}
         collapsed={collapsed}
         onToggleCollapsed={toggleCollapsed}
-        open={open}
-        onClose={() => setOpen(false)}
         homeTo="/admin/dashboard"
         homeLabel="Nimbo — ir para o Painel"
       />
@@ -133,7 +131,8 @@ export default function AdminLayout() {
       </div>
 
       {/* Celular: navegação inferior e botão flutuante (no desktop valem a sidebar e o "Novo" da navbar) */}
-      <BottomNav items={bottomBarItems(role)} accentColor={accentColor} onMore={() => setOpen(true)} moreOpen={open} />
+      <BottomNav items={bottomBarItems(role)} accentColor={accentColor} onMore={() => setMoreOpen(true)} moreOpen={moreOpen} />
+      <MoreSheet items={moreItems(role)} open={moreOpen} onOpenChange={setMoreOpen} accentColor={accentColor} />
       {/* Só no Painel: nas demais telas a própria página já tem seu botão de criar. TODO: abrir o fluxo de novo agendamento; por ora leva à Agenda */}
       {pathname === '/admin/dashboard' && <Fab label="Novo agendamento" to="/admin/agenda" />}
     </div>

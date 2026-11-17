@@ -80,3 +80,48 @@ describe('item ativo', () => {
     expect(isNavItemActive(navItemsFor('tenant_admin')[0], '/admin/dashboard-x')).toBe(false);
   });
 });
+
+describe('menu do super admin (super_admin)', () => {
+  it('lista Painel, Empresas, Planos e Relatórios, nesta ordem', () => {
+    expect(labels(navItemsFor('super_admin', 'main'))).toEqual(['Painel', 'Empresas', 'Planos', 'Relatórios']);
+    expect(navItemsFor('super_admin', 'main').map(i => i.to)).toEqual([
+      '/super/dashboard', '/super/tenants', '/super/plans', '/super/metrics',
+    ]);
+  });
+
+  it('o rodapé tem só Configurações', () => {
+    expect(labels(navItemsFor('super_admin', 'footer'))).toEqual(['Configurações']);
+  });
+
+  it('não tem Usuário nem Sair; Pedidos de acesso não é item, mas segue alcançável por Configurações', () => {
+    const items = navItemsFor('super_admin');
+    expect(labels(items).join('|').toLowerCase()).not.toMatch(/sair|usuário|usuario|logout|pedidos/);
+    const cfg = items.find(i => i.label === 'Configurações')!;
+    expect(isNavItemActive(cfg, '/super/access-help')).toBe(true);
+    expect(isNavItemActive(cfg, '/super/account')).toBe(true);
+  });
+
+  it('Empresas fica ativa também no detalhe de uma empresa', () => {
+    const emp = navItemsFor('super_admin').find(i => i.label === 'Empresas')!;
+    expect(isNavItemActive(emp, '/super/tenants/abc')).toBe(true);
+  });
+
+  it('super_admin e tenant_admin não se misturam', () => {
+    const sup = navItemsFor('super_admin').map(i => i.id);
+    const adm = navItemsFor('tenant_admin').map(i => i.id);
+    expect(sup.filter(id => adm.includes(id))).toEqual([]);
+    expect(navItemsFor('super_admin').every(i => i.to.startsWith('/super/'))).toBe(true);
+    expect(navItemsFor('tenant_admin').every(i => i.to.startsWith('/admin/'))).toBe(true);
+  });
+
+  it('celular: 4 itens na barra e Configurações no "Mais"', () => {
+    expect(labels(bottomBarItems('super_admin'))).toEqual(['Painel', 'Empresas', 'Planos', 'Relatórios']);
+    expect(labels(moreItems('super_admin'))).toEqual(['Configurações']);
+  });
+
+  it('canEnterArea: super_admin só entra em /super', () => {
+    expect(canEnterArea('super_admin', 'super')).toBe(true);
+    expect(canEnterArea('tenant_admin', 'super')).toBe(false);
+    expect(canEnterArea('professional', 'super')).toBe(false);
+  });
+});

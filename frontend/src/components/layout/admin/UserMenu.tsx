@@ -13,8 +13,8 @@ interface Props {
   onLogout: () => void;
   /** "Minha Conta". */
   accountPath: string;
-  /** "Meu horário". */
-  schedulePath: string;
+  /** "Meu horário" (só aparece quando informado; o super admin não tem horário). */
+  schedulePath?: string;
   /** "Aparência": alterna entre tema claro e escuro. */
   onToggleTheme: () => void;
   isDark?: boolean;
@@ -46,7 +46,9 @@ export function UserMenu({ name, email, photoUrl, accentColor, onLogout, account
           {email && <p className="truncate text-xs text-muted-foreground">{email}</p>}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => navigate(schedulePath)} className="gap-2"><Clock className="h-4 w-4 text-muted-foreground" aria-hidden />Meu horário</DropdownMenuItem>
+        {schedulePath && (
+          <DropdownMenuItem onSelect={() => navigate(schedulePath)} className="gap-2"><Clock className="h-4 w-4 text-muted-foreground" aria-hidden />Meu horário</DropdownMenuItem>
+        )}
         <DropdownMenuItem onSelect={onToggleTheme} className="gap-2"><Palette className="h-4 w-4 text-muted-foreground" aria-hidden />Aparência: {isDark ? 'tema escuro' : 'tema claro'}</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => navigate(accountPath)} className="gap-2"><UserCircle className="h-4 w-4 text-muted-foreground" aria-hidden />Minha Conta</DropdownMenuItem>
         <DropdownMenuItem className="gap-2"><CircleHelp className="h-4 w-4 text-muted-foreground" aria-hidden />Ajuda</DropdownMenuItem>

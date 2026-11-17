@@ -29,6 +29,7 @@ const ProfessionalLayout = lazy(() => import('./components/layout/ProfessionalLa
 const ClientLayout = lazy(() => import('./components/layout/ClientLayout'));
 const Dashboard = lazy(() => import('./components/admin/Dashboard'));
 const AgendaView = lazy(() => import('./components/admin/AgendaView'));
+const AppointmentsView = lazy(() => import('./components/admin/AppointmentsView'));
 const AdminAgenda = lazy(() => import('./components/admin/agenda/AdminAgenda'));
 const ProfessionalAgenda = lazy(() => import('./components/admin/agenda/ProfessionalAgenda'));
 const ClientsView = lazy(() => import('./components/admin/ClientsView'));
@@ -52,7 +53,8 @@ const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
 import { SectionLayout } from './components/layout/SectionTabs';
-import { SERVICES_TABS, SETTINGS_TABS, REPORTS_TABS } from './config/sectionTabs';
+import { SERVICES_TABS, SETTINGS_TABS, REPORTS_TABS, SUPER_SETTINGS_TABS } from './config/sectionTabs';
+import { canEnterArea } from './config/navigation';
 import { LEGACY_ADMIN_REDIRECTS } from './config/legacyRoutes';
 import { LoginSplashHost }       from './motion/LoginSplashHost';
 import { PwaHost }               from './pwa/PwaHost';
@@ -61,21 +63,21 @@ import { PwaHost }               from './pwa/PwaHost';
 function SuperGuard({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   if (!user)                       return <Navigate to="/login" replace />;
-  if (user.role !== 'super_admin') return <Navigate to="/login" replace />;
+  if (!canEnterArea(user.role, 'super')) return <Navigate to="/login" replace />;
   return <PlatformProvider>{children}</PlatformProvider>;
 }
 
 function TenantGuard({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   if (!user)                        return <Navigate to="/login" replace />;
-  if (user.role !== 'tenant_admin') return <Navigate to="/login" replace />;
+  if (!canEnterArea(user.role, 'admin')) return <Navigate to="/login" replace />;
   return <TenantProvider>{children}</TenantProvider>;
 }
 
 function ProfessionalGuard({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   if (!user)                        return <Navigate to="/login" replace />;
-  if (user.role !== 'professional') return <Navigate to="/login" replace />;
+  if (!canEnterArea(user.role, 'professional')) return <Navigate to="/login" replace />;
   return <ProfessionalProvider>{children}</ProfessionalProvider>;
 }
 
@@ -105,8 +107,11 @@ function AppRoutes() {
         <Route path="tenants/:tenantId" element={<TenantDetailView />} />
         <Route path="metrics"     element={<PlatformMetricsView />} />
         <Route path="plans"       element={<PlansView />} />
-        <Route path="account"     element={<SuperAccountView />} />
-        <Route path="access-help" element={<AccessHelpList scope="super" />} />
+        {/* Configurações do super admin: conta e pedidos de acesso (abas) */}
+        <Route element={<SectionLayout tabs={SUPER_SETTINGS_TABS} label="Configurações" />}>
+          <Route path="account"     element={<SuperAccountView />} />
+          <Route path="access-help" element={<AccessHelpList scope="super" />} />
+        </Route>
       </Route>
 
       {/* Tenant admin */}
@@ -114,7 +119,7 @@ function AppRoutes() {
         <Route index                 element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard"      element={<Dashboard />} />
         <Route path="agenda"         element={<AgendaView only="calendar" />} />
-        <Route path="appointments"   element={<AgendaView only="table" />} />
+        <Route path="appointments"   element={<AppointmentsView />} />
         {/* Nova Agenda em desenvolvimento: assume /admin/agenda quando tiver paridade (etapa 3) */}
         <Route path="agenda-beta"    element={<AdminAgenda />} />
         <Route path="clients"        element={<ClientsView />} />
