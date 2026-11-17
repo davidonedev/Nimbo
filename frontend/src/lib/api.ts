@@ -4,8 +4,25 @@
 // - Lança erros estruturados com mensagem vinda do backend
 
 import { OFFLINE_WRITE_MESSAGE, clearOfflineCaches, isOfflineWrite } from '../pwa/offline';
+import { resolveApiBaseUrl } from './apiUrl';
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3333/api';
+// Aceita VITE_API_URL com ou sem o sufixo /api (ver apiUrl.ts)
+const BASE_URL = resolveApiBaseUrl(import.meta.env.VITE_API_URL);
+
+/**
+ * Tempo máximo esperando a resposta. O Render gratuito dorme por inatividade e a primeira chamada pode levar
+ * de 50 a 90 s para ser atendida, então 90 s evita desistir antes de o servidor acordar.
+ */
+export const REQUEST_TIMEOUT_MS = 90_000;
+
+const RETRY_STATUSES = new Set([502, 503, 504]); // o proxy não alcançou o servidor (acordando/reiniciando)
+
+export const NETWORK_ERROR_MESSAGE =
+  'Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.';
+export const TIMEOUT_ERROR_MESSAGE =
+  'O servidor demorou demais para responder. Tente novamente em instantes.';
+export const UNAVAILABLE_ERROR_MESSAGE =
+  'O servidor está indisponível no momento (ele pode estar iniciando). Tente novamente em instantes.';
 
 const SESSION_KEY = 'agendepro_session';
 
@@ -59,29 +76,84 @@ export class ApiError extends Error {
   }
 }
 
+/** Opções extras por chamada (além do RequestInit do fetch). */
+export interface RequestExtra {
+  /** Tempo máximo esperando a resposta, em ms. Padrão: REQUEST_TIMEOUT_MS. */
+  timeoutMs?: number;
+  /**
+   * Tentativas extras quando a chamada nem chegou ao servidor (falha de rede) ou o proxy respondeu
+   * 502/503/504 (servidor acordando). NÃO repete em timeout nem em erro do servidor (4xx/500): nesses casos a
+   * requisição pode já ter sido processada, e repetir um cadastro criaria duplicidade.
+   */
+  retries?: number;
+  /** Espera antes da 1ª nova tentativa, em ms (cresce linearmente a cada tentativa). Padrão: 4000. */
+  retryDelayMs?: number;
+  /** Avisa a tela de que vai tentar de novo (para mostrar "estamos acordando o servidor"). */
+  onRetry?: (attempt: number, totalRetries: number) => void;
+}
+
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+
+/** fetch com timeout; falhas de rede e timeout viram ApiError com mensagem em português (code NETWORK/TIMEOUT). */
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch {
+    if (controller.signal.aborted) throw new ApiError(TIMEOUT_ERROR_MESSAGE, 0, 'TIMEOUT');
+    throw new ApiError(NETWORK_ERROR_MESSAGE, 0, 'NETWORK');
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function fallbackMessage(status: number): string {
+  if (RETRY_STATUSES.has(status)) return UNAVAILABLE_ERROR_MESSAGE;
+  if (status >= 500) return 'Erro interno do servidor. Tente novamente em instantes.';
+  return `Erro ${status}`;
+}
+
 // ─── Fetch wrapper ────────────────────────────────────────────────────────────
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit & RequestExtra = {}
 ): Promise<T> {
+  const { timeoutMs = REQUEST_TIMEOUT_MS, retries = 0, retryDelayMs = 4000, onRetry, ...init } = options;
+
   // Mudar agendamentos offline arriscaria conflito de horário: bloqueia antes de tentar
-  if (isOfflineWrite(options.method, navigator.onLine)) throw new ApiError(OFFLINE_WRITE_MESSAGE, 0, 'OFFLINE');
+  if (isOfflineWrite(init.method, navigator.onLine)) throw new ApiError(OFFLINE_WRITE_MESSAGE, 0, 'OFFLINE');
 
   const token = getToken();
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string>),
+    ...(init.headers as Record<string, string>),
   };
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  let res: Response;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      res = await fetchWithTimeout(`${BASE_URL}${path}`, { ...init, headers }, timeoutMs);
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'NETWORK' && attempt < retries) {
+        onRetry?.(attempt + 1, retries);
+        await sleep(retryDelayMs * (attempt + 1));
+        continue;
+      }
+      throw err;
+    }
+    if (RETRY_STATUSES.has(res.status) && attempt < retries) {
+      onRetry?.(attempt + 1, retries);
+      await sleep(retryDelayMs * (attempt + 1));
+      continue;
+    }
+    break;
+  }
 
   // 204 No Content
   if (res.status === 204) return undefined as T;
@@ -90,7 +162,7 @@ async function request<T>(
 
   if (!res.ok) {
     throw new ApiError(
-      body.error ?? `Erro ${res.status}`,
+      body.error ?? fallbackMessage(res.status),
       res.status,
       body.code,
       body.details
@@ -105,10 +177,11 @@ async function request<T>(
 export const api = {
   get: <T>(path: string) => request<T>(path, { method: 'GET' }),
 
-  post: <T>(path: string, body: unknown) =>
+  post: <T>(path: string, body: unknown, extra?: RequestExtra) =>
     request<T>(path, {
       method: 'POST',
       body: JSON.stringify(body),
+      ...extra,
     }),
 
   patch: <T>(path: string, body: unknown) =>

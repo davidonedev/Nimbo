@@ -63,7 +63,8 @@ Portal público do cliente (agendamento): http://localhost:5173/barber-kings
 
 ## Problemas comuns
 
-- Erro de rede ou CORS → o backend não está rodando, ou `VITE_API_URL` está errado ou sem `/api`.
+- Erro de rede ou CORS → o backend não está rodando, a origem do front não está em `CORS_ALLOWED_ORIGINS` no backend, ou `VITE_API_URL` está errado (o `/api` no fim é opcional: o front acrescenta se faltar).
+- Primeira chamada demora até ~1 minuto em produção → o Render gratuito dorme por inatividade; o cadastro mostra "Estamos acordando o servidor" e tenta de novo sozinho.
 - Mudou o `.env` e nada mudou → pare e rode `npm run dev` de novo.
 - Login falha com contas de demonstração → o banco do backend estava com dados e o seed não rodou (ele só roda com o banco vazio).
 

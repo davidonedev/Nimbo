@@ -33,11 +33,27 @@ class RateLimitFilterTest {
         assertThat(call("POST", "/api/auth/reset-password", "10.0.1.1")).isEqualTo(429);
     }
 
+    @Test
+    void optionsPreflightIsNeverCountedNorRejected() throws Exception {
+        RateLimitFilter strict = new RateLimitFilter(1, 15, 1, 1).withRouteLimit("/api/auth/login", 1, 15);
+        for (int i = 0; i < 50; i++) {
+            assertThat(callOn(strict, "OPTIONS", "/api/auth/login", "10.0.2.1")).isEqualTo(200);
+            assertThat(callOn(strict, "OPTIONS", "/api/public/register/business", "10.0.2.1")).isEqualTo(200);
+        }
+        // a cota de 1 requisição real continua intacta
+        assertThat(callOn(strict, "GET", "/api/public/login-data", "10.0.2.1")).isEqualTo(200);
+        assertThat(callOn(strict, "GET", "/api/public/login-data", "10.0.2.1")).isEqualTo(429);
+    }
+
     private int call(String method, String path, String ip) throws Exception {
+        return callOn(filter, method, path, ip);
+    }
+
+    private int callOn(RateLimitFilter target, String method, String path, String ip) throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest(method, path);
         request.setRemoteAddr(ip);
         MockHttpServletResponse response = new MockHttpServletResponse();
-        filter.doFilter(request, response, new MockFilterChain());
+        target.doFilter(request, response, new MockFilterChain());
         return response.getStatus();
     }
 }
