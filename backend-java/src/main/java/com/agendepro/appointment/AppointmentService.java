@@ -68,7 +68,18 @@ public class AppointmentService {
     }
 
     @Transactional
-    public AppointmentResponse create(UUID tenantId, AppointmentCreateRequest request) {
+    public AppointmentResponse create(UUID tenantId, AuthenticatedUser authUser, AppointmentCreateRequest request) {
+        boolean isProfessional = authUser.role() == UserRole.PROFESSIONAL;
+        if (isProfessional) {
+            // O profissional só agenda na própria agenda; nunca em nome de um colega.
+            if (authUser.professionalId() == null) {
+                throw new AppException("Profissional não identificado no token", 400, "MISSING_PROFESSIONAL");
+            }
+            if (!authUser.professionalId().equals(request.professionalId())) {
+                throw AppException.forbidden("Acesso negado a esta agenda");
+            }
+        }
+
         ServiceOffering service = serviceOfferingRepository.findByIdAndTenantId(request.serviceId(), tenantId)
                 .orElseThrow(() -> AppException.notFound("Serviço não encontrado"));
 
@@ -94,6 +105,11 @@ public class AppointmentService {
         } else {
             clientRepository.findByIdAndTenantId(request.clientId(), tenantId)
                     .orElseThrow(() -> AppException.notFound("Cliente não encontrado neste tenant"));
+            // Profissional só reaproveita clientes que já atendeu (resposta idêntica a "não existe": sem enumeração).
+            if (isProfessional && !appointmentRepository.existsByTenantIdAndProfessionalIdAndClientId(
+                    tenantId, authUser.professionalId(), request.clientId())) {
+                throw AppException.notFound("Cliente não encontrado neste tenant");
+            }
             clientId = request.clientId();
         }
 

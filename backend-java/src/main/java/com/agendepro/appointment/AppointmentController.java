@@ -42,7 +42,7 @@ public class AppointmentController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<AppointmentResponse>> create(@Valid @RequestBody AppointmentCreateRequest request) {
-        var created = appointmentService.create(SecurityUtils.requireTenantId(), request);
+        var created = appointmentService.create(SecurityUtils.requireTenantId(), SecurityUtils.currentUser(), request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(created));
     }
 

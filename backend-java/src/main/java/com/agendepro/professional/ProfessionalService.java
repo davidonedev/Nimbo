@@ -161,14 +161,6 @@ public class ProfessionalService {
         return toResponse(professional, null);
     }
 
-    /** GET /api/professional/professionals — lista do tenant (sem _count). */
-    @Transactional(readOnly = true)
-    public List<ProfessionalResponse> listBasic(UUID tenantId) {
-        return professionalRepository.findByTenantIdOrderByNameAsc(tenantId).stream()
-                .map(p -> toResponse(p, null))
-                .toList();
-    }
-
     /** Auto-atualização do próprio profissional (PATCH /api/professional/me). */
     @Transactional
     public ProfessionalResponse updateSelf(UUID tenantId, UUID professionalId, ProfessionalSelfUpdateRequest request) {
