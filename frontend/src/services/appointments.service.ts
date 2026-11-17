@@ -19,11 +19,14 @@ export interface AppointmentFilters {
   status?: string;
 }
 
-export async function listAppointmentsApi(filters: AppointmentFilters = {}): Promise<Appointment[]> {
+/** Admin e profissional usam o mesmo contrato; o backend limita o profissional à própria agenda. */
+export type AgendaApiScope = 'admin' | 'professional';
+
+export async function listAppointmentsApi(filters: AppointmentFilters = {}, scope: AgendaApiScope = 'admin'): Promise<Appointment[]> {
   const params = new URLSearchParams();
   Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v); });
   const query = params.toString() ? `?${params.toString()}` : '';
-  const data = await api.get<Record<string, unknown>[]>(`/admin/appointments${query}`);
+  const data = await api.get<Record<string, unknown>[]>(`/${scope}/appointments${query}`);
   return data.map(normalize);
 }
 
@@ -76,4 +79,19 @@ export async function updateProfAppointmentStatusApi(
 ): Promise<Appointment> {
   const data = await api.patch<Record<string, unknown>>(`/professional/appointments/${id}/status`, { status });
   return normalize(data);
+}
+
+// ─── Agenda (admin e profissional) ────────────────────────────────────────────
+/** Agendamento com cliente, serviço e profissional resumidos (o backend já os envia aninhados). */
+export interface AgendaAppointment extends Appointment {
+  client?: { id: string; name: string; phone?: string | null };
+  service?: { id: string; name: string; duration?: number };
+  professional?: { id: string; name: string };
+}
+
+export async function listAgendaAppointmentsApi(filters: AppointmentFilters = {}, scope: AgendaApiScope = 'admin'): Promise<AgendaAppointment[]> {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([k, v]) => { if (v) params.set(k, v); });
+  const query = params.toString() ? `?${params.toString()}` : '';
+  return api.get<AgendaAppointment[]>(`/${scope}/appointments${query}`);
 }

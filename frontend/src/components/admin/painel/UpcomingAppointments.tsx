@@ -3,6 +3,7 @@ import { CalendarClock, Check, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { copyText } from '@/lib/clipboard';
 import { relativeDayLabel } from '@/lib/painel';
 import type { DashboardSummary } from '@/services/dashboard.service';
 import { CardError, LinesSkeleton } from './SummaryState';
@@ -18,29 +19,6 @@ interface Props {
 }
 
 const STATUS_LABEL = { pending: 'Pendente', confirmed: 'Confirmado' } as const;
-
-/** Cópia com fallback: clipboard moderno e, se bloqueado, execCommand. Retorna false se nada funcionar. */
-async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    try {
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.setAttribute('readonly', '');
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      const ok = document.execCommand('copy');
-      document.body.removeChild(ta);
-      return ok;
-    } catch {
-      return false;
-    }
-  }
-}
 
 function CopyLinkButton({ url }: { url: string }) {
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');

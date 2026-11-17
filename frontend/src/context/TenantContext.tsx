@@ -152,7 +152,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
   if (!tenant && !loading) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4 px-6 text-center" role="alert">
+      <div className="flex h-dvh flex-col items-center justify-center gap-4 px-6 text-center" role="alert">
         <p className="text-lg font-semibold text-foreground">
           {loadError ? 'Não foi possível carregar os dados do seu estabelecimento.' : 'Não encontramos um estabelecimento vinculado à sua conta.'}
         </p>
@@ -175,7 +175,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
   if (loading || !tenant) {
     return (
-      <div className="flex h-screen items-center justify-center text-muted-foreground">
+      <div className="flex h-dvh items-center justify-center text-muted-foreground">
         Carregando...
       </div>
     );

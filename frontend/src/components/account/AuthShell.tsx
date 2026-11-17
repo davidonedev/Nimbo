@@ -24,7 +24,7 @@ export function AuthShell({ title, subtitle, children, wide = false }: {
 }) {
   return (
     <div className="lp-root">
-      <div className="min-h-screen bg-lp-alt">
+      <div className="min-h-dvh bg-lp-alt">
         <AuthHeader right={<Link to="/login" className={headerLinkClass}><ArrowLeft className="h-4 w-4" aria-hidden /> Voltar ao login</Link>} />
         <main className="flex justify-center px-4 pb-16 pt-8 sm:pt-14">
           <div className={`w-full ${wide ? 'max-w-[520px]' : 'max-w-[440px]'}`}>

@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { useSwipe } from '@/hooks/useSwipe';
 import { format, addDays, subDays, startOfWeek, addWeeks, subWeeks, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -218,6 +220,7 @@ export default function AgendaView() {
     updateAppointmentStatus, cancelAppointment, addAppointment,
   } = useTenant();
 
+  const { isMobile } = useBreakpoint();
   const [view, setView] = useState<'calendar' | 'table'>('table');
 
   // ── Calendar state ──────────────────────────────────────────────────────────
@@ -276,8 +279,11 @@ export default function AgendaView() {
   // ── Calendar helpers ────────────────────────────────────────────────────────
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 6 }, (_, i) => addDays(weekStart, i));
-  const displayDays = calMode === 'day' ? [currentDate] : weekDays;
-  const filteredProfs = selectedProf === 'all' ? professionals : professionals.filter(p => p.id === selectedProf);
+  // Celular: sempre a visão Dia e um profissional por vez (a semana não cabe na tela)
+  const mode = isMobile ? 'day' : calMode;
+  const profFilter = isMobile && selectedProf === 'all' ? (professionals[0]?.id ?? 'all') : selectedProf;
+  const displayDays = mode === 'day' ? [currentDate] : weekDays;
+  const filteredProfs = profFilter === 'all' ? professionals : professionals.filter(p => p.id === profFilter);
 
   const getSlotItems = (date: Date, profId: string, hour: string) => {
     const dateStr = format(date, 'yyyy-MM-dd');
@@ -294,9 +300,11 @@ export default function AgendaView() {
   };
 
   const navigate = (dir: 1 | -1) => {
-    if (calMode === 'day') setCurrentDate(p => dir === 1 ? addDays(p, 1) : subDays(p, 1));
+    if (mode === 'day') setCurrentDate(p => dir === 1 ? addDays(p, 1) : subDays(p, 1));
     else setCurrentDate(p => dir === 1 ? addWeeks(p, 1) : subWeeks(p, 1));
   };
+
+  const swipe = useSwipe(navigate, isMobile && view === 'calendar');
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const handleBlock = async () => {
@@ -396,7 +404,7 @@ export default function AgendaView() {
           <p className="text-muted-foreground text-sm">
             {view === 'table'
               ? `${tableRows.length} agendamento${tableRows.length !== 1 ? 's' : ''} encontrado${tableRows.length !== 1 ? 's' : ''}`
-              : calMode === 'week'
+              : mode === 'week'
                 ? `${format(weekStart, "d 'de' MMM", { locale: ptBR })} – ${format(addDays(weekStart, 5), "d 'de' MMM", { locale: ptBR })}`
                 : format(currentDate, "EEEE, d 'de' MMMM", { locale: ptBR })}
           </p>
@@ -416,20 +424,22 @@ export default function AgendaView() {
 
           {view === 'calendar' && (
             <>
-              <Select value={selectedProf} onValueChange={setSelectedProf}>
-                <SelectTrigger className="w-44"><SelectValue placeholder="Profissional" /></SelectTrigger>
+              <Select value={profFilter} onValueChange={setSelectedProf}>
+                <SelectTrigger className="w-full sm:w-44"><SelectValue placeholder="Profissional" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
+                  {!isMobile && <SelectItem value="all">Todos</SelectItem>}
                   {professionals.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <div className="flex items-center border rounded-md overflow-hidden">
-                <Button variant="ghost" size="sm" className="rounded-none border-r" onClick={() => setCalMode('day')}>Dia</Button>
-                <Button variant="ghost" size="sm" className="rounded-none" onClick={() => setCalMode('week')}>Semana</Button>
+              <div className="hidden items-center border rounded-md overflow-hidden md:flex">
+                <Button variant="ghost" size="sm" className={`rounded-none border-r ${calMode === 'day' ? 'bg-muted' : ''}`} aria-pressed={calMode === 'day'} onClick={() => setCalMode('day')}>Dia</Button>
+                <Button variant="ghost" size="sm" className={`rounded-none ${calMode === 'week' ? 'bg-muted' : ''}`} aria-pressed={calMode === 'week'} onClick={() => setCalMode('week')}>Semana</Button>
               </div>
-              <Button variant="ghost" size="icon" onClick={() => navigate(-1)}><ChevronLeft className="h-4 w-4" /></Button>
-              <Button variant="ghost" size="sm" onClick={() => setCurrentDate(new Date())}>Hoje</Button>
-              <Button variant="ghost" size="icon" onClick={() => navigate(1)}><ChevronRight className="h-4 w-4" /></Button>
+              <div className="flex w-full items-center justify-between gap-1 sm:w-auto">
+                <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label={mode === 'day' ? 'Dia anterior' : 'Semana anterior'}><ChevronLeft className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="sm" className="min-h-11 flex-1 sm:flex-none" onClick={() => setCurrentDate(new Date())}>Hoje</Button>
+                <Button variant="ghost" size="icon" onClick={() => navigate(1)} aria-label={mode === 'day' ? 'Próximo dia' : 'Próxima semana'}><ChevronRight className="h-4 w-4" /></Button>
+              </div>
               <Button variant="outline" size="sm" onClick={() => setBlockDialog(true)}>
                 <Plus className="h-4 w-4 mr-1" /> Bloquear
               </Button>
@@ -600,7 +610,7 @@ export default function AgendaView() {
 
       {/* ── CALENDAR VIEW ─────────────────────────────────────────────────────── */}
       {view === 'calendar' && filteredProfs.map(prof => (
-        <Card key={prof.id}>
+        <Card key={prof.id} className="touch-pan-y" {...swipe}>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <div className="h-8 w-8 rounded-full flex items-center justify-center text-white text-sm font-bold" style={{ backgroundColor: 'hsl(var(--primary))' }}>
@@ -611,7 +621,7 @@ export default function AgendaView() {
             </CardTitle>
           </CardHeader>
           <CardContent className="overflow-x-auto">
-            <div className="min-w-[600px]">
+            <div className={mode === 'week' ? 'min-w-[600px]' : ''}>
               <div className="flex">
                 <div className="w-16 shrink-0" />
                 {displayDays.map(day => (
@@ -630,9 +640,9 @@ export default function AgendaView() {
                         {appts.length === 0 && blocks.length === 0 && (
                           <button
                             onClick={() => openApptDialog(format(day, 'yyyy-MM-dd'), prof.id)}
-                            className="w-full h-full min-h-[40px] rounded border-2 border-dashed border-transparent group-hover/cell:border-primary/30 group-hover/cell:bg-primary/5 transition-all flex items-center justify-center opacity-0 group-hover/cell:opacity-100"
+                            className="w-full h-full min-h-[40px] rounded border-2 border-dashed border-transparent group-hover/cell:border-primary/30 group-hover/cell:bg-primary/5 transition-all flex items-center justify-center md:opacity-0 group-hover/cell:opacity-100 max-md:border-primary/20"
                           >
-                            <Plus className="h-3 w-3 text-primary/50" />
+                            <Plus className="h-4 w-4 text-primary/50" aria-label="Novo agendamento neste horário" />
                           </button>
                         )}
                         {blocks.map(b => (

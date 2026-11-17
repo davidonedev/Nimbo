@@ -364,7 +364,7 @@ export default function SignupPage() {
 
   return (
     <div className="lp-root">
-      <div className="flex min-h-screen flex-col bg-lp-alt">
+      <div className="flex min-h-dvh flex-col bg-lp-alt">
         <AuthHeader
           right={<Link to="/login" className={headerLinkClass}>Já tenho conta <ArrowRight className="h-4 w-4" aria-hidden /></Link>}
         />

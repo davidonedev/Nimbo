@@ -72,7 +72,7 @@ export function PublicTenantProvider({ children }: { children: React.ReactNode }
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center text-muted-foreground">
+      <div className="flex h-dvh items-center justify-center text-muted-foreground">
         Carregando...
       </div>
     );
@@ -80,7 +80,7 @@ export function PublicTenantProvider({ children }: { children: React.ReactNode }
 
   if (notFound) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4 text-muted-foreground">
+      <div className="flex h-dvh flex-col items-center justify-center gap-4 text-muted-foreground">
         <p className="text-xl font-semibold">Barbearia não encontrada</p>
         <p className="text-sm">Verifique o link e tente novamente.</p>
       </div>
@@ -89,7 +89,7 @@ export function PublicTenantProvider({ children }: { children: React.ReactNode }
 
   if (suspended) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4">
+      <div className="flex h-dvh flex-col items-center justify-center gap-4">
         <p className="text-xl font-semibold text-destructive">Estabelecimento inativo</p>
         <p className="text-sm text-muted-foreground">
           Este estabelecimento está temporariamente indisponível para agendamentos.
@@ -100,7 +100,7 @@ export function PublicTenantProvider({ children }: { children: React.ReactNode }
 
   if (!data) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4 text-muted-foreground">
+      <div className="flex h-dvh flex-col items-center justify-center gap-4 text-muted-foreground">
         <p className="text-xl font-semibold">Algo deu errado</p>
         <p className="text-sm">Não foi possível carregar o portal. Tente novamente.</p>
       </div>

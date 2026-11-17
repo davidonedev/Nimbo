@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { NavLink, Link, useNavigate, Outlet } from 'react-router-dom';
+import { NavLink, Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import {
-  LayoutDashboard, Calendar, Users, UserCog, BarChart3, LogOut, Menu, X,
+  LayoutDashboard, Calendar, Users, UserCog, BarChart3, LogOut, X,
   Settings, Sun, Moon, ExternalLink, Scissors, Package, Bell,
   UserCircle, Globe, Clock, ChevronDown, ChevronLeft, ChevronRight, Plus, Copy, CheckCircle, LifeBuoy, Shield,
 } from 'lucide-react';
@@ -11,6 +11,8 @@ import { NotificationBell } from '@/components/ui/NotificationBell';
 import { AdminSearch } from './admin/AdminSearch';
 import { OpenStatus } from './admin/OpenStatus';
 import { UserMenu } from './admin/UserMenu';
+import { BottomNav } from './BottomNav';
+import { Fab } from '@/components/ui/fab';
 import { useAuth, IMPERSONATION_BACKUP_KEY } from '@/context/AuthContext';
 import { useTenant } from '@/context/TenantContext';
 import { useTheme } from '@/hooks/useTheme';
@@ -42,6 +44,7 @@ export default function AdminLayout() {
   const { isDark, toggle }                          = useTheme();
   const { collapsed, toggle: toggleCollapsed }      = useSidebarCollapsed();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [open, setOpen]             = useState(false);
   const [accountOpen, setAccountOpen] = useState(true);
   const [copied, setCopied]         = useState(false);
@@ -101,7 +104,7 @@ export default function AdminLayout() {
   const hideWhenCollapsed = collapsed ? 'md:hidden' : '';
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `group relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
+    `group relative flex items-center gap-3 px-3 py-3 md:py-2.5 rounded-lg text-sm font-medium transition-colors
     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
     ${collapsed ? 'md:justify-center md:px-0' : ''}
     ${isActive ? 'text-white' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`;
@@ -121,10 +124,10 @@ export default function AdminLayout() {
 
   return (
     <div
-      className="flex h-screen bg-muted/30 overflow-hidden"
+      className="flex h-dvh bg-muted/30 overflow-hidden"
       style={{ '--primary': hsl, '--primary-foreground': fgHsl, '--ring': hsl } as React.CSSProperties}
     >
-      {open && <div className="fixed inset-0 bg-black/40 z-30 md:hidden" onClick={() => setOpen(false)} />}
+      {open && <div className="fixed inset-0 bg-black/40 z-[35] md:hidden" onClick={() => setOpen(false)} />}
 
       <aside
         id="admin-sidebar"
@@ -234,15 +237,12 @@ export default function AdminLayout() {
 
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <header className="h-14 border-b bg-card flex items-center px-4 gap-3 shrink-0">
-          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setOpen(true)} aria-label="Abrir menu" aria-controls="admin-sidebar" aria-expanded={open}>
-            <Menu className="h-5 w-5" aria-hidden />
-          </Button>
+        <header className="h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] border-b bg-card flex items-center px-4 gap-3 shrink-0">
           <AdminSearch />
           <div className="flex-1" />
           <OpenStatus />
           {/* TODO: abrir o fluxo de novo agendamento (solicitação do zero). Por ora, só o botão. */}
-          <Button type="button" size="sm" className="gap-1.5" aria-label="Novo agendamento" onClick={() => { /* TODO */ }}>
+          <Button type="button" size="sm" className="hidden gap-1.5 md:inline-flex" aria-label="Novo agendamento" onClick={() => { /* TODO */ }}>
             <Plus className="h-4 w-4" aria-hidden /> <span className="hidden sm:inline">Novo</span>
           </Button>
           <Button variant="ghost" size="icon" onClick={toggle} aria-label={isDark ? "Ativar tema claro" : "Ativar tema escuro"} title={isDark ? "Tema claro" : "Tema escuro"}>
@@ -274,10 +274,15 @@ export default function AdminLayout() {
             </Button>
           </div>
         )}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-4 pb-[calc(9rem+env(safe-area-inset-bottom))] md:p-6">
           <Outlet />
         </main>
       </div>
+
+      {/* Celular: navegação inferior e botão flutuante (no desktop valem a sidebar e o "Novo" da navbar) */}
+      <BottomNav items={NAV_ITEMS.slice(0, 3)} accentColor={accentColor} onMore={() => setOpen(true)} moreOpen={open} />
+      {/* Só no Painel: nas demais telas a própria página já tem seu botão de criar. TODO: abrir o fluxo de novo agendamento; por ora leva à Agenda */}
+      {pathname === '/admin/dashboard' && <Fab label="Novo agendamento" to="/admin/agenda" />}
     </div>
   );
 }
