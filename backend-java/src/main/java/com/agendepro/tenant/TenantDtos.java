@@ -15,6 +15,9 @@ public final class TenantDtos {
     private TenantDtos() {
     }
 
+    /** Limite do texto de uma imagem (data URL base64 ≈ 1,5 MB de arquivo). */
+    public static final int MAX_IMAGE_CHARS = 2_000_000;
+
     public record TenantResponse(
             UUID id, String slug, String name, String ownerName, String email, String phone, String address,
             TenantStatus status, TenantPlan plan, Double monthlyPrice, String primaryColor, String adminColor,
@@ -67,21 +70,26 @@ public final class TenantDtos {
         }
     }
 
+    /**
+     * Campo ausente (null) = não mexe. Texto vazio ("") = limpa o campo opcional (logo, banner, telefone, cor do
+     * painel, WhatsApp...). Os limites de tamanho espelham as colunas, para o painel receber 422 com mensagem
+     * em vez de um erro genérico do banco.
+     */
     public record UpdateSettingsRequest(
-            @Size(min = 2) String name,
-            @Size(min = 2) String ownerName,
-            String phone,
-            String address,
-            @Pattern(regexp = "^#[0-9A-Fa-f]{6}$") String primaryColor,
-            @Pattern(regexp = "^#[0-9A-Fa-f]{6}$") String adminColor,
-            String logoUrl,
-            String bannerUrl,
+            @Size(min = 2, max = 150, message = "O nome deve ter entre 2 e 150 caracteres") String name,
+            @Size(min = 2, max = 150, message = "O nome do responsável deve ter entre 2 e 150 caracteres") String ownerName,
+            @Size(max = 30, message = "O telefone deve ter no máximo 30 caracteres") String phone,
+            @Size(max = 255, message = "O endereço deve ter no máximo 255 caracteres") String address,
+            @Pattern(regexp = "^#[0-9A-Fa-f]{6}$", message = "Cor inválida (use o formato #RRGGBB)") String primaryColor,
+            @Pattern(regexp = "^(#[0-9A-Fa-f]{6})?$", message = "Cor inválida (use o formato #RRGGBB)") String adminColor,
+            @Size(max = MAX_IMAGE_CHARS, message = "A imagem do logo é grande demais (máx. ~1,5 MB)") String logoUrl,
+            @Size(max = MAX_IMAGE_CHARS, message = "A imagem do banner é grande demais (máx. ~1,5 MB)") String bannerUrl,
             Boolean isOpen,
             @Min(0) @Max(1440) Integer minAdvanceMinutes,
-            String whatsappApiUrl,
-            String whatsappApiKey,
-            String whatsappInstance,
-            @Size(max = 2000) String whatsappTemplate
+            @Size(max = 300, message = "A URL da API do WhatsApp deve ter no máximo 300 caracteres") String whatsappApiUrl,
+            @Size(max = 300, message = "A chave da API do WhatsApp deve ter no máximo 300 caracteres") String whatsappApiKey,
+            @Size(max = 150, message = "O nome da instância deve ter no máximo 150 caracteres") String whatsappInstance,
+            @Size(max = 2000, message = "O template do WhatsApp deve ter no máximo 2000 caracteres") String whatsappTemplate
     ) {
     }
 

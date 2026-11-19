@@ -144,7 +144,28 @@ public class AppointmentService {
         }
 
         appointment.setStatus(request.status());
+        if (request.status() != AppointmentStatus.PENDING) appointment.setConfirmBy(null); // decidido: não expira mais
         return toResponse(appointmentRepository.save(appointment));
+    }
+
+    /** Resultado da confirmação em massa: quantos foram confirmados e quantos já não estavam pendentes. */
+    public record BulkConfirmResult(int confirmed, int skipped, List<UUID> confirmedIds) {
+    }
+
+    /** Confirma vários agendamentos pendentes do estabelecimento de uma vez; os que não estão pendentes são ignorados. */
+    @Transactional
+    public BulkConfirmResult bulkConfirm(UUID tenantId, List<UUID> ids) {
+        List<UUID> distinct = ids.stream().distinct().toList();
+        List<Appointment> found = appointmentRepository.findByTenantIdAndIdIn(tenantId, distinct);
+        List<UUID> confirmedIds = new java.util.ArrayList<>();
+        for (Appointment a : found) {
+            if (a.getStatus() != AppointmentStatus.PENDING) continue;
+            a.setStatus(AppointmentStatus.CONFIRMED);
+            a.setConfirmBy(null);
+            appointmentRepository.save(a);
+            confirmedIds.add(a.getId());
+        }
+        return new BulkConfirmResult(confirmedIds.size(), distinct.size() - confirmedIds.size(), confirmedIds);
     }
 
     @Transactional
@@ -192,6 +213,6 @@ public class AppointmentService {
                 a.getId(), a.getTenantId(), a.getClientId(), a.getProfessionalId(), a.getServiceId(),
                 a.getDate(), a.getStartTime(), a.getEndTime(), a.getStatus(), a.getPrice(), a.getNotes(),
                 a.getCreatedAt(), a.getUpdatedAt(), clientSummary, professionalSummary, serviceResponse,
-                a.getPaymentStatus(), a.getPaymentId());
+                a.getPaymentStatus(), a.getPaymentId(), a.getConfirmBy(), a.getClientConfirmedAt());
     }
 }

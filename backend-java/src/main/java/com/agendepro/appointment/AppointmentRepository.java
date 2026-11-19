@@ -21,6 +21,29 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
 
     long countByTenantIdAndStatus(UUID tenantId, AppointmentStatus status);
 
+    /** Horários que o cliente (por celular) deixou aguardando confirmação — trava de abuso. */
+    long countByTenantIdAndClientIdAndStatusAndConfirmByIsNotNull(UUID tenantId, UUID clientId, AppointmentStatus status);
+
+    /** Pendentes que o cliente já confirmou pelo WhatsApp e aguardam o dono (sem prazo) — também contam no limite por celular. */
+    long countByTenantIdAndClientIdAndStatusAndClientConfirmedAtIsNotNull(UUID tenantId, UUID clientId, AppointmentStatus status);
+
+    /** Pendentes que o cliente já confirmou, nas datas informadas — base dos avisos ao dono (OwnerPendingReminderService). */
+    List<Appointment> findByStatusAndClientConfirmedAtIsNotNullAndDateIn(AppointmentStatus status, java.util.Collection<String> dates);
+
+    List<Appointment> findByTenantIdAndIdIn(UUID tenantId, java.util.Collection<UUID> ids);
+
+    /**
+     * Libera os horários que ninguém confirmou até o prazo (pendente + confirm_by vencido → cancelado).
+     * Devolve quantos foram liberados.
+     */
+    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true)
+    @Query("""
+            UPDATE Appointment a SET a.status = com.agendepro.appointment.AppointmentStatus.CANCELLED, a.updatedAt = :now
+            WHERE a.status = com.agendepro.appointment.AppointmentStatus.PENDING
+              AND a.confirmBy IS NOT NULL AND a.confirmBy < :now
+            """)
+    int expireUnconfirmed(@Param("now") java.time.Instant now);
+
     long countByTenantId(UUID tenantId);
 
     /** Agendamentos que mudaram para o status informado na janela [from, to) (usa updatedAt). */

@@ -91,6 +91,26 @@ public class EmailService {
         send(to, "Seu e-mail de acesso foi alterado — Nimbo", "email/email-changed", context, "Aviso de e-mail alterado", null);
     }
 
+    /** Um agendamento da lista de "falta confirmar" enviada ao dono. */
+    public record OwnerReminderItem(String clientName, String clientPhone, String service, String when) {
+    }
+
+    /**
+     * Avisa o dono de que há agendamentos que o cliente já confirmou pelo WhatsApp mas que ele ainda não confirmou.
+     * {@code timeLeft}: "2 horas" ou "1 hora" (quanto falta para o horário).
+     */
+    @Async
+    public void sendOwnerPendingReminder(String to, String tenantName, String timeLeft, java.util.List<OwnerReminderItem> items, String panelUrl) {
+        Context context = new Context();
+        context.setVariable("tenantName", tenantName);
+        context.setVariable("timeLeft", timeLeft);
+        context.setVariable("items", items);
+        context.setVariable("panelUrl", panelUrl);
+        send(to, (items.size() == 1 ? "Falta confirmar um agendamento" : "Faltam confirmar " + items.size() + " agendamentos")
+                        + " — começa em " + timeLeft + " | " + tenantName,
+                "email/owner-pending-reminder", context, "Aviso: agendamento sem confirmação (" + timeLeft + ")", panelUrl);
+    }
+
     private void send(String to, String subject, String template, Context context, String devLabel, String devLink) {
         if (smtpUser == null || smtpUser.isBlank()) {
             log.warn("\n─────────────────────────────────────────────\n" +

@@ -45,7 +45,8 @@ public class MercadoPagoService {
                 "transaction_amount", appointment.getPrice(),
                 "description", description,
                 "payment_method_id", "pix",
-                "payer", Map.of("email", client.getEmail()),
+                // Cliente do agendamento por celular não tem e-mail; o Mercado Pago exige um e-mail do pagador.
+                "payer", Map.of("email", client.getEmail() != null ? client.getEmail() : "cliente-" + client.getId() + "@nimbo.app"),
                 "notification_url", appUrl + "/api/webhooks/mercadopago",
                 "external_reference", appointment.getId().toString(),
                 "date_of_expiration", expiresAt

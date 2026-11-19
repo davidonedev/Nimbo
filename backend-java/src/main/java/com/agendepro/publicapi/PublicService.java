@@ -76,7 +76,7 @@ public class PublicService {
 
     // ─── Helpers ────────────────────────────────────────────────────────────────
 
-    private Tenant resolveTenant(String slug) {
+    Tenant resolveTenant(String slug) {
         Tenant tenant = tenantRepository.findBySlug(slug)
                 .orElseThrow(() -> AppException.notFound("Barbearia não encontrada"));
         if (tenant.getStatus() == TenantStatus.SUSPENDED) {
@@ -221,13 +221,20 @@ public class PublicService {
         return appointmentService.toResponses(created);
     }
 
-    private List<ServiceOffering> orderServices(List<UUID> ids, List<ServiceOffering> services) {
+    List<ServiceOffering> orderServices(List<UUID> ids, List<ServiceOffering> services) {
         Map<UUID, ServiceOffering> byId = services.stream().collect(Collectors.toMap(ServiceOffering::getId, s -> s));
         return ids.stream().map(byId::get).toList();
     }
 
-    private List<Appointment> createChainedAppointments(UUID tenantId, UUID clientId, UUID professionalId,
+    List<Appointment> createChainedAppointments(UUID tenantId, UUID clientId, UUID professionalId,
                                                           List<ServiceOffering> ordered, String date, String startTime, String notes) {
+        return createChainedAppointments(tenantId, clientId, professionalId, ordered, date, startTime, notes, null);
+    }
+
+    /** {@code confirmBy}: prazo para confirmar (agendamento pendente por celular); null = sem prazo. */
+    List<Appointment> createChainedAppointments(UUID tenantId, UUID clientId, UUID professionalId,
+                                                          List<ServiceOffering> ordered, String date, String startTime, String notes,
+                                                          java.time.Instant confirmBy) {
         List<Appointment> created = new ArrayList<>();
         String current = startTime;
         for (ServiceOffering svc : ordered) {
@@ -235,7 +242,7 @@ public class PublicService {
             Appointment appt = appointmentRepository.save(Appointment.builder()
                     .tenantId(tenantId).clientId(clientId).professionalId(professionalId).serviceId(svc.getId())
                     .date(date).startTime(current).endTime(end).price(svc.getPrice()).notes(notes)
-                    .status(AppointmentStatus.PENDING).build());
+                    .status(AppointmentStatus.PENDING).confirmBy(confirmBy).build());
             created.add(appt);
             current = end;
         }

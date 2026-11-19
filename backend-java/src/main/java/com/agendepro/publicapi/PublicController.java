@@ -28,6 +28,7 @@ import static com.agendepro.publicapi.PublicDtos.*;
 public class PublicController {
 
     private final PublicService publicService;
+    private final PhoneBookingService phoneBookingService;
     private final ProductService productService;
     private final TenantRepository tenantRepository;
 
@@ -75,6 +76,63 @@ public class PublicController {
             @PathVariable String slug, @Valid @RequestBody BookingRequest request) {
         var created = publicService.createPublicBooking(slug, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(created));
+    }
+
+    // ─── Agendamento por celular (tela padrão: Nome + Celular + código por WhatsApp) ────
+
+    @GetMapping("/{slug}/book/slots")
+    public ResponseEntity<ApiResponse<List<String>>> bookSlots(
+            @PathVariable String slug, @RequestParam String serviceIds, @RequestParam String date,
+            @RequestParam(required = false) UUID professionalId) {
+        return ResponseEntity.ok(ApiResponse.ok(phoneBookingService.slots(slug, parseIds(serviceIds), date, professionalId)));
+    }
+
+    @GetMapping("/{slug}/book/days")
+    public ResponseEntity<ApiResponse<List<String>>> bookDays(
+            @PathVariable String slug, @RequestParam String serviceIds, @RequestParam String from,
+            @RequestParam(defaultValue = "14") int count, @RequestParam(required = false) UUID professionalId) {
+        return ResponseEntity.ok(ApiResponse.ok(phoneBookingService.daysWithSlots(slug, parseIds(serviceIds), professionalId, from, count)));
+    }
+
+    @GetMapping("/{slug}/book/possession")
+    public ResponseEntity<ApiResponse<PhoneBookingDtos.PossessionResponse>> possession(
+            @PathVariable String slug, @RequestHeader(value = "X-Device-Token", required = false) String deviceToken) {
+        return ResponseEntity.ok(ApiResponse.ok(phoneBookingService.possession(slug, deviceToken)));
+    }
+
+    @PostMapping("/{slug}/book")
+    public ResponseEntity<ApiResponse<PhoneBookingDtos.BookResponse>> book(
+            @PathVariable String slug, @RequestHeader(value = "X-Device-Token", required = false) String deviceToken,
+            @Valid @RequestBody PhoneBookingDtos.BookRequest request, jakarta.servlet.http.HttpServletRequest http) {
+        return ResponseEntity.ok(ApiResponse.ok(phoneBookingService.book(slug, deviceToken, request, com.agendepro.common.ClientIp.of(http))));
+    }
+
+    @PostMapping("/{slug}/book/client-confirmed")
+    public ResponseEntity<ApiResponse<PhoneBookingDtos.ClientConfirmedResponse>> clientConfirmed(
+            @PathVariable String slug, @Valid @RequestBody PhoneBookingDtos.ClientConfirmedRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(phoneBookingService.clientConfirmed(slug, request.appointmentIds())));
+    }
+
+    @PostMapping("/{slug}/book/verify")
+    public ResponseEntity<ApiResponse<PhoneBookingDtos.BookResponse>> bookVerify(
+            @PathVariable String slug, @Valid @RequestBody PhoneBookingDtos.VerifyRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(phoneBookingService.verify(slug, request)));
+    }
+
+    @PostMapping("/{slug}/book/resend")
+    public ResponseEntity<ApiResponse<PhoneBookingDtos.ResendResponse>> bookResend(
+            @PathVariable String slug, @Valid @RequestBody PhoneBookingDtos.ResendRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(phoneBookingService.resend(slug, request.challengeId())));
+    }
+
+    private static List<UUID> parseIds(String csv) {
+        try {
+            List<UUID> ids = java.util.Arrays.stream(csv.split(",")).map(String::trim).filter(s -> !s.isEmpty()).map(UUID::fromString).toList();
+            if (ids.isEmpty() || ids.size() > 5) throw AppException.badRequest("Informe de 1 a 5 serviços.");
+            return ids;
+        } catch (IllegalArgumentException e) {
+            throw AppException.badRequest("Serviço inválido.");
+        }
     }
 
     @GetMapping("/{slug}/products")

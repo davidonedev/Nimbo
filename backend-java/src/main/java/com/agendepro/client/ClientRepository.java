@@ -14,6 +14,9 @@ public interface ClientRepository extends JpaRepository<Client, UUID> {
 
     Optional<Client> findByIdAndTenantId(UUID id, UUID tenantId);
 
+    /** Cliente do tenant dono do celular (o mais antigo, se o cadastro antigo tiver duplicados). */
+    Optional<Client> findFirstByTenantIdAndPhoneE164OrderByCreatedAtAsc(UUID tenantId, String phoneE164);
+
     long countByTenantId(UUID tenantId);
 
     /** Clientes cadastrados na janela [from, to). */

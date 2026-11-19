@@ -68,7 +68,7 @@ public class CorsConfig {
         configuration.setAllowedOrigins(exact);
         configuration.setAllowedOriginPatterns(patterns);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Content-Type", "Authorization", "Accept"));
+        configuration.setAllowedHeaders(List.of("Content-Type", "Authorization", "Accept", "X-Device-Token"));
         configuration.setAllowCredentials(false);
         configuration.setMaxAge(3600L); // o navegador reaproveita o preflight por 1 h: menos OPTIONS, menos chance de falha
         return configuration;
