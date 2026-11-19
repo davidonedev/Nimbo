@@ -97,6 +97,16 @@ class ProdProfileStartupIntegrationTest extends AbstractIntegrationTest {
         assertThat(context.getBean(com.agendepro.reminder.ReminderService.class)).isNotNull();
     }
 
+    @Test
+    void pendingBookingSchedulersAreNeverLazyEither() {
+        // Liberar pendentes vencidos e avisar o dono também são @Scheduled sem ninguém que os injete. O Spring Boot já exclui
+        // da inicialização preguiçosa os beans com @Scheduled (ScheduledBeanLazyInitializationExcludeFilter); este teste
+        // garante que isso continue valendo em produção para os jobs do agendamento pendente.
+        DefaultListableBeanFactory bf = (DefaultListableBeanFactory) context.getBeanFactory();
+        assertThat(bf.containsSingleton("pendingExpiryService")).isTrue();
+        assertThat(bf.containsSingleton("ownerPendingReminderService")).isTrue();
+    }
+
     // ─── configuração de produção ──────────────────────────────────────────────
 
     @Test
