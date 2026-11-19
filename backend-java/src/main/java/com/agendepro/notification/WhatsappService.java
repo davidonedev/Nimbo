@@ -1,6 +1,7 @@
 package com.agendepro.notification;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -90,27 +91,82 @@ public class WhatsappService {
         }
     }
 
+    /** Existe um WhatsApp (do estabelecimento ou da plataforma) pronto para enviar? */
+    public boolean isAvailable(TenantWhatsappConfig tenantConfig) {
+        TenantWhatsappConfig cfg = effectiveConfig(tenantConfig);
+        return cfg != null && cfg.isConfigured();
+    }
+
+    public enum SendResult {
+        /** A API aceitou a mensagem (2xx). */
+        SENT,
+        /** Nem o estabelecimento nem a plataforma têm WhatsApp configurado: nada foi enviado (só logado). */
+        NOT_CONFIGURED,
+        /** A API respondeu erro ou ficou fora do ar. */
+        FAILED
+    }
+
+    /** WhatsApp padrão da plataforma (variáveis WHATSAPP_DEFAULT_*): reserva para quem não configurou o próprio. */
+    @Value("${app.whatsapp.default-api-url:}")
+    private String defaultApiUrl;
+    @Value("${app.whatsapp.default-api-key:}")
+    private String defaultApiKey;
+    @Value("${app.whatsapp.default-instance:}")
+    private String defaultInstance;
+
+    /** A do estabelecimento, se completa; senão a da plataforma, se completa; senão a (incompleta) do estabelecimento. */
+    public TenantWhatsappConfig effectiveConfig(TenantWhatsappConfig tenantConfig) {
+        if (tenantConfig != null && tenantConfig.isConfigured()) return tenantConfig;
+        TenantWhatsappConfig platform = new TenantWhatsappConfig(defaultApiUrl, defaultApiKey, defaultInstance);
+        return platform.isConfigured() ? platform : tenantConfig;
+    }
+
+    /**
+     * Envio síncrono para quem precisa saber se a mensagem saiu (ex.: código de confirmação do agendamento).
+     * Diferente de {@link #sendMessage}, devolve o resultado em vez de engolir a falha.
+     */
+    public SendResult sendNow(TenantWhatsappConfig config, String to, String text) {
+        TenantWhatsappConfig cfg = effectiveConfig(config);
+        if (cfg == null || !cfg.isConfigured()) {
+            logUnsent(to, text);
+            return SendResult.NOT_CONFIGURED;
+        }
+        try {
+            post(cfg, to, text);
+            return SendResult.SENT;
+        } catch (Exception ex) {
+            log.error("[whatsapp] Falha ao enviar mensagem: {}", ex.getMessage());
+            return SendResult.FAILED;
+        }
+    }
+
+    private void logUnsent(String to, String text) {
+        log.info("\n──────────────────────────────────────────────────────\n" +
+                        "[WHATSAPP] Mensagem (sem API configurada)\n  Para: {}\n  Mensagem:\n{}\n" +
+                        "──────────────────────────────────────────────────────",
+                to, text.lines().map(l -> "    " + l).reduce("", (a, b) -> a + "\n" + b));
+    }
+
+    private void post(TenantWhatsappConfig config, String to, String text) {
+        String url = config.apiUrl().replaceAll("/$", "") + "/message/sendText/" + config.instance();
+        restClient.post()
+                .uri(url)
+                .header("Content-Type", "application/json")
+                .header("apikey", config.apiKey())
+                .body(Map.of("number", normalizePhone(to), "text", text))
+                .retrieve()
+                .toBodilessEntity();
+    }
+
     @Async
     public void sendMessage(TenantWhatsappConfig config, String to, String text) {
         if (config == null || !config.isConfigured()) {
-            log.info("\n──────────────────────────────────────────────────────\n" +
-                            "[WHATSAPP] Mensagem (sem API configurada)\n  Para: {}\n  Mensagem:\n{}\n" +
-                            "──────────────────────────────────────────────────────",
-                    to, text.lines().map(l -> "    " + l).reduce("", (a, b) -> a + "\n" + b));
+            logUnsent(to, text);
             return;
         }
 
-        String normalized = normalizePhone(to);
-        String url = config.apiUrl().replaceAll("/$", "") + "/message/sendText/" + config.instance();
-
         try {
-            restClient.post()
-                    .uri(url)
-                    .header("Content-Type", "application/json")
-                    .header("apikey", config.apiKey())
-                    .body(Map.of("number", normalized, "text", text))
-                    .retrieve()
-                    .toBodilessEntity();
+            post(config, to, text);
         } catch (Exception ex) {
             log.error("[whatsapp] Falha ao enviar mensagem: {}", ex.getMessage());
         }

@@ -76,6 +76,31 @@ app:
   mail-from: ${SMTP_FROM:Nimbo <noreply@agendepro.com>}
   seed:
     enabled: ${SEED_ENABLED:false}
+  # WhatsApp padrão da plataforma (Evolution API): usado no código de confirmação do agendamento quando o
+  # estabelecimento não configurou o próprio (Configurações → Portal do Cliente → Integração WhatsApp).
+  whatsapp:
+    default-api-url: ${WHATSAPP_DEFAULT_API_URL:}
+    default-api-key: ${WHATSAPP_DEFAULT_API_KEY:}
+    default-instance: ${WHATSAPP_DEFAULT_INSTANCE:}
+  # Agendamento por celular. Com WhatsApp configurado (do estabelecimento ou o padrão acima) o cliente confirma com um
+  # código. Sem WhatsApp, o horário fica PENDENTE e o cliente confirma mandando uma mensagem ao WhatsApp do
+  # estabelecimento. O cliente tem confirm-minutes para isso; se não tocar, o horário é liberado. Depois que ele toca, o
+  # horário fica reservado sem prazo até o dono confirmar.
+  pending:
+    confirm-minutes: ${PENDING_CONFIRM_MINUTES:180}   # prazo do CLIENTE para tocar em "Confirmar no WhatsApp" (nunca passa do horário)
+    expiry-enabled: true
+    expiry-check-ms: 60000
+  # Aviso ao dono (e-mail) de agendamento que o cliente já confirmou e ele ainda não: 2 h e 1 h antes do horário.
+  owner-reminders:
+    enabled: ${OWNER_REMINDERS_ENABLED:true}
+    check-interval-ms: 60000
+  booking:
+    max-attempts-per-ip: ${BOOKING_MAX_ATTEMPTS_PER_IP:10}   # pedidos de agendamento por IP...
+    window-minutes: 15                                        # ...nesta janela
+    max-pending-per-client: 3                                 # horários pendentes ao mesmo tempo por celular
+  # Captcha gratuito (Cloudflare Turnstile). Sem a chave secreta a checagem é pulada: em produção defina TURNSTILE_SECRET_KEY.
+  captcha:
+    turnstile-secret: ${TURNSTILE_SECRET_KEY:}
   rate-limit:
     auth-capacity: 20
     auth-refill-minutes: 15

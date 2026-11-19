@@ -16,6 +16,7 @@ import {
   EMPTY_FILTERS, filterAppointments, hasActiveFilters, statusActionsFor,
   type AppointmentFilters, type StatusAction,
 } from '@/lib/appointmentFilters';
+import PendingConfirmations from '@/components/admin/PendingConfirmations';
 import type { Appointment, AppointmentStatus } from '@/types';
 
 const STATUS_OPTIONS: AppointmentStatus[] = ['pending', 'confirmed', 'completed', 'no_show', 'cancelled'];
@@ -124,6 +125,9 @@ export default function AppointmentsView() {
           {count === 0 ? 'Nenhum agendamento encontrado' : `${count} agendamento${count !== 1 ? 's' : ''} encontrado${count !== 1 ? 's' : ''}`}
         </p>
       </div>
+
+      {/* Reservas sem código aguardando o cliente confirmar pelo WhatsApp */}
+      <PendingConfirmations />
 
       {/* Filtros */}
       <form role="search" aria-label="Filtrar agendamentos" onSubmit={e => e.preventDefault()} className="space-y-3">

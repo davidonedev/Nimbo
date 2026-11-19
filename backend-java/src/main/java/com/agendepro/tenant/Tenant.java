@@ -60,10 +60,11 @@ public class Tenant {
     @Column(name = "admin_color", length = 9)
     private String adminColor;
 
-    @Column(name = "logo_url", length = 500)
+    /** URL ou imagem em data URL (base64): por isso TEXT (V9). */
+    @Column(name = "logo_url", columnDefinition = "text")
     private String logoUrl;
 
-    @Column(name = "banner_url", length = 500)
+    @Column(name = "banner_url", columnDefinition = "text")
     private String bannerUrl;
 
     @Column(name = "is_open", nullable = false)

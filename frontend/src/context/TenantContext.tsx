@@ -9,7 +9,8 @@ import { useAuth } from './AuthContext';
 import { ApiError } from '../lib/api';
 
 import { getMyTenantApi, updateTenantSettingsApi } from '../services/tenant.service';
-import { listAppointmentsApi, createAppointmentApi, updateAppointmentStatusApi } from '../services/appointments.service';
+import { listAppointmentsApi, createAppointmentApi, updateAppointmentStatusApi, bulkConfirmAppointmentsApi } from '../services/appointments.service';
+import type { BulkConfirmResult } from '../services/appointments.service';
 import { listBlockedSlotsApi, createBlockedSlotApi, deleteBlockedSlotApi } from '../services/blockedSlots.service';
 import { listClientsApi, createClientApi, updateClientApi, deleteClientApi } from '../services/clients.service';
 import { listProfessionalsApi, createProfessionalApi, updateProfessionalApi, deleteProfessionalApi } from '../services/professionals.service';
@@ -41,6 +42,8 @@ interface TenantContextType extends TenantData {
   // Appointments
   addAppointment:          (payload: CreateAppointmentPayload) => Promise<Appointment>;
   updateAppointmentStatus: (apptId: string, status: Appointment['status']) => Promise<void>;
+  /** Confirma vários pendentes de uma vez (o servidor ignora os que já não estão pendentes). */
+  confirmAppointments: (ids: string[]) => Promise<BulkConfirmResult>;
   cancelAppointment:       (apptId: string) => Promise<void>;
 
   // Blocked slots
@@ -209,7 +212,14 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
   const updateAppointmentStatus = async (apptId: string, status: Appointment['status']) => {
     await updateAppointmentStatusApi(apptId, status);
-    setAppointments((prev) => prev.map((a) => (a.id === apptId ? { ...a, status } : a)));
+    setAppointments((prev) => prev.map((a) => (a.id === apptId ? { ...a, status, confirmBy: status === 'pending' ? a.confirmBy : null } : a)));
+  };
+
+  const confirmAppointments = async (ids: string[]) => {
+    const result = await bulkConfirmAppointmentsApi(ids);
+    const done = new Set(result.confirmedIds);
+    setAppointments((prev) => prev.map((a) => (done.has(a.id) ? { ...a, status: 'confirmed', confirmBy: null } : a)));
+    return result;
   };
 
   const cancelAppointment = (apptId: string) => updateAppointmentStatus(apptId, 'cancelled');
@@ -344,6 +354,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     canAddService: services.length < limits.services,
     addAppointment,
     updateAppointmentStatus,
+    confirmAppointments,
     cancelAppointment,
     addBlockedSlot,
     removeBlockedSlot,

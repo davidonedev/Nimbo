@@ -74,22 +74,37 @@ public class TenantService {
         Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> AppException.notFound("Tenant não encontrado"));
 
-        if (request.name() != null) tenant.setName(request.name());
-        if (request.ownerName() != null) tenant.setOwnerName(request.ownerName());
-        if (request.phone() != null) tenant.setPhone(request.phone());
-        if (request.address() != null) tenant.setAddress(request.address());
+        // Ausente (null) = não mexe. Nos campos opcionais, "" = limpa (blankToNull).
+        if (request.name() != null) tenant.setName(request.name().trim());
+        if (request.ownerName() != null) tenant.setOwnerName(request.ownerName().trim());
+        if (request.phone() != null) tenant.setPhone(blankToNull(request.phone()));
+        if (request.address() != null) tenant.setAddress(blankToNull(request.address()));
         if (request.primaryColor() != null) tenant.setPrimaryColor(request.primaryColor());
-        if (request.adminColor() != null) tenant.setAdminColor(request.adminColor());
-        if (request.logoUrl() != null) tenant.setLogoUrl(request.logoUrl());
-        if (request.bannerUrl() != null) tenant.setBannerUrl(request.bannerUrl());
+        if (request.adminColor() != null) tenant.setAdminColor(blankToNull(request.adminColor()));
+        if (request.logoUrl() != null) tenant.setLogoUrl(imageOrNull(request.logoUrl(), "logo"));
+        if (request.bannerUrl() != null) tenant.setBannerUrl(imageOrNull(request.bannerUrl(), "banner"));
         if (request.isOpen() != null) tenant.setIsOpen(request.isOpen());
         if (request.minAdvanceMinutes() != null) tenant.setMinAdvanceMinutes(request.minAdvanceMinutes());
-        if (request.whatsappApiUrl() != null) tenant.setWhatsappApiUrl(request.whatsappApiUrl());
-        if (request.whatsappApiKey() != null) tenant.setWhatsappApiKey(request.whatsappApiKey());
-        if (request.whatsappInstance() != null) tenant.setWhatsappInstance(request.whatsappInstance());
-        if (request.whatsappTemplate() != null) tenant.setWhatsappTemplate(request.whatsappTemplate());
+        if (request.whatsappApiUrl() != null) tenant.setWhatsappApiUrl(blankToNull(request.whatsappApiUrl()));
+        if (request.whatsappApiKey() != null) tenant.setWhatsappApiKey(blankToNull(request.whatsappApiKey()));
+        if (request.whatsappInstance() != null) tenant.setWhatsappInstance(blankToNull(request.whatsappInstance()));
+        if (request.whatsappTemplate() != null) tenant.setWhatsappTemplate(blankToNull(request.whatsappTemplate()));
 
         return TenantResponse.from(tenantRepository.save(tenant));
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    /** Logo/banner: endereço http(s) ou imagem em data URL; qualquer outra coisa (ex.: javascript:) é recusada. */
+    private static String imageOrNull(String value, String label) {
+        if (value.isBlank()) return null;
+        String v = value.trim();
+        boolean ok = v.startsWith("https://") || v.startsWith("http://")
+                || v.matches("(?s)^data:image/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]*$");
+        if (!ok) throw new AppException("A imagem do " + label + " precisa ser PNG, JPG, WebP ou GIF.", 422, "VALIDATION_ERROR");
+        return v;
     }
 
     @Transactional(readOnly = true)

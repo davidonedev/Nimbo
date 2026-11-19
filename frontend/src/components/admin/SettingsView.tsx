@@ -10,6 +10,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useTenant } from '@/context/TenantContext';
 import { useAuth } from '@/context/AuthContext';
+import { prepareImage } from '@/lib/imageResize';
+import { onlyChanged } from '@/lib/settingsPayload';
+import { useSaveState } from './useSaveState';
 import { ChangeEmailCard } from '@/components/account/ChangeEmailCard';
 import type { Professional } from '@/types';
 
@@ -23,16 +26,22 @@ const PLAN_FEATURES = {
 
 // ─── Image upload ─────────────────────────────────────────────────────────────
 function ImageUpload({
-  label, description, value, onChange, aspectClass = 'aspect-video',
+  label, description, value, onChange, aspectClass = 'aspect-video', maxWidth, maxHeight,
 }: {
-  label: string; description: string; value?: string;
+  label: string; description: string; value?: string | null;
   onChange: (dataUrl: string | undefined) => void; aspectClass?: string;
+  /** Tamanho máximo (px) depois de redimensionar; a imagem sai leve para o portal público. */
+  maxWidth: number; maxHeight: number;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const handleFile = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = e => onChange(e.target?.result as string);
-    reader.readAsDataURL(file);
+  const [error, setError] = useState('');
+  const [processing, setProcessing] = useState(false);
+  const handleFile = async (file: File) => {
+    setError('');
+    setProcessing(true);
+    try { onChange(await prepareImage(file, maxWidth, maxHeight)); }
+    catch (err) { setError(err instanceof Error ? err.message : 'Não foi possível usar essa imagem.'); }
+    finally { setProcessing(false); }
   };
   return (
     <div className="space-y-2">
@@ -42,7 +51,7 @@ function ImageUpload({
         className={`relative border-2 border-dashed rounded-xl overflow-hidden cursor-pointer hover:border-primary/60 transition-colors ${aspectClass}`}
         onClick={() => inputRef.current?.click()}
         onDragOver={e => e.preventDefault()}
-        onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
+        onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) void handleFile(f); }}
       >
         {value ? (
           <>
@@ -55,13 +64,14 @@ function ImageUpload({
         ) : (
           <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground p-4">
             <Upload className="h-8 w-8 opacity-40" />
-            <p className="text-sm font-medium">Clique ou arraste uma imagem</p>
+            <p className="text-sm font-medium">{processing ? 'Processando…' : 'Clique ou arraste uma imagem'}</p>
             <p className="text-xs">PNG, JPG, WebP — máx. 5 MB</p>
           </div>
         )}
       </div>
-      <input ref={inputRef} type="file" accept="image/*" className="hidden"
-        onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }} />
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) void handleFile(f); e.target.value = ''; }} />
     </div>
   );
 }
@@ -203,33 +213,47 @@ export default function SettingsView({ section = 'account' }: Props) {
     }
   };
 
+  // O logo aparece nas abas Conta e Portal: é UM estado só, senão salvar numa aba desfazia o logo da outra.
+  const [logoUrl, setLogoUrl] = useState<string | undefined>(tenant.logoUrl ?? undefined);
+
   // Account form
   const [adminForm, setAdminForm] = useState({
     name:       tenant.name,
     phone:      tenant.phone ?? '',
     address:    tenant.address ?? '',
     adminColor: tenant.adminColor ?? tenant.primaryColor,
-    logoUrl:    tenant.logoUrl,
   });
-  const [adminSaved, setAdminSaved] = useState(false);
+  const adminSave = useSaveState();
 
   // Portal form
   const [portalForm, setPortalForm] = useState({
     primaryColor: tenant.primaryColor,
-    bannerUrl:    tenant.bannerUrl,
-    logoUrl:      tenant.logoUrl,
+    bannerUrl:    tenant.bannerUrl ?? undefined,
   });
-  const [portalSaved, setPortalSaved] = useState(false);
+  const portalSave = useSaveState();
   const [openSaving, setOpenSaving] = useState(false);
   const [openError, setOpenError] = useState('');
   const [copied, setCopied] = useState(false);
 
   const portalUrl = `${window.location.origin}/${tenant.slug}`;
 
-  const saveAdmin = async () => {
-    try { await updateSettings(adminForm); setAdminSaved(true); setTimeout(() => setAdminSaved(false), 2500); }
-    catch (err) { console.error(err); }
+  /** Manda só o que mudou; sem mudança nenhuma não faz chamada (e o botão mostra "Salvo!"). */
+  const saveChanges = async (patch: Parameters<typeof onlyChanged>[0]) => {
+    const changes = onlyChanged(patch, tenant);
+    if (Object.keys(changes).length > 0) await updateSettings(changes);
   };
+
+  const saveAdmin = () => adminSave.run(() => {
+    if (adminForm.name.trim().length < 2) throw new Error('O nome do estabelecimento precisa ter ao menos 2 letras.');
+    return saveChanges({
+      name:    adminForm.name.trim(),
+      phone:   adminForm.phone.trim(),
+      address: adminForm.address.trim(),
+      // Sem cor própria o painel usa a do portal: só grava se a pessoa escolheu outra.
+      adminColor: adminForm.adminColor === (tenant.adminColor ?? tenant.primaryColor) ? undefined : adminForm.adminColor,
+      logoUrl: logoUrl ?? '',
+    });
+  });
 
   /** O interruptor vale na hora (não espera "Salvar alterações"): o navbar e o portal do cliente seguem o mesmo valor. */
   const toggleOpen = async (isOpen: boolean) => {
@@ -240,10 +264,11 @@ export default function SettingsView({ section = 'account' }: Props) {
     finally { setOpenSaving(false); }
   };
 
-  const savePortal = async () => {
-    try { await updateSettings(portalForm); setPortalSaved(true); setTimeout(() => setPortalSaved(false), 2500); }
-    catch (err) { console.error(err); }
-  };
+  const savePortal = () => portalSave.run(() => saveChanges({
+    primaryColor: portalForm.primaryColor,
+    bannerUrl:    portalForm.bannerUrl ?? '',
+    logoUrl:      logoUrl ?? '',
+  }));
 
   const handleCopy = () => {
     navigator.clipboard.writeText(portalUrl).catch(() => {});
@@ -265,30 +290,24 @@ export default function SettingsView({ section = 'account' }: Props) {
     whatsappTemplate: tenant.whatsappTemplate ?? DEFAULT_WA_TEMPLATE,
   });
   const [waShowKey, setWaShowKey] = useState(false);
-  const [waSaved,   setWaSaved]   = useState(false);
+  const waSave = useSaveState();
 
-  const saveWhatsapp = async () => {
-    try {
-      await updateSettings({
-        whatsappApiUrl:   waForm.whatsappApiUrl   || null,
-        whatsappApiKey:   waForm.whatsappApiKey   || null,
-        whatsappInstance: waForm.whatsappInstance || null,
-        whatsappTemplate: waForm.whatsappTemplate || null,
-      });
-      setWaSaved(true);
-      setTimeout(() => setWaSaved(false), 2500);
-    } catch (err) { console.error(err); }
-  };
+  const saveWhatsapp = () => waSave.run(() => saveChanges({
+    whatsappApiUrl:   waForm.whatsappApiUrl.trim(),
+    whatsappApiKey:   waForm.whatsappApiKey.trim(),
+    whatsappInstance: waForm.whatsappInstance.trim(),
+    // O template padrão mostrado no campo só vira "do estabelecimento" se a pessoa o editar.
+    whatsappTemplate: waForm.whatsappTemplate === DEFAULT_WA_TEMPLATE && !tenant.whatsappTemplate ? undefined : waForm.whatsappTemplate,
+  }));
 
   const [advanceMinutes, setAdvanceMinutes] = useState(tenant.minAdvanceMinutes ?? 0);
-  const [advanceSaved, setAdvanceSaved] = useState(false);
-  const saveAdvance = async () => {
-    try {
-      await updateSettings({ minAdvanceMinutes: advanceMinutes });
-      setAdvanceSaved(true);
-      setTimeout(() => setAdvanceSaved(false), 2500);
-    } catch (err) { console.error(err); }
-  };
+  const advanceSave = useSaveState();
+  const saveAdvance = () => advanceSave.run(async () => {
+    if (!Number.isFinite(advanceMinutes) || advanceMinutes < 0 || advanceMinutes > 1440) {
+      throw new Error('Informe um valor entre 0 e 1440 minutos.');
+    }
+    await saveChanges({ minAdvanceMinutes: advanceMinutes });
+  });
 
   // ── Section: Configurações da Conta ──────────────────────────────────────
   if (section === 'account') return (
@@ -305,7 +324,7 @@ export default function SettingsView({ section = 'account' }: Props) {
         </CardHeader>
         <CardContent>
           <ImageUpload label="Logo" description="Recomendado: quadrado, mínimo 200×200 px"
-            value={adminForm.logoUrl} onChange={url => setAdminForm(f => ({ ...f, logoUrl: url }))}
+            value={logoUrl} onChange={setLogoUrl} maxWidth={512} maxHeight={512}
             aspectClass="aspect-square max-w-[200px]" />
         </CardContent>
       </Card>
@@ -466,9 +485,12 @@ export default function SettingsView({ section = 'account' }: Props) {
         </CardContent>
       </Card>
 
-      <Button onClick={saveAdmin} className="gap-2" style={{ backgroundColor: adminForm.adminColor }}>
-        {adminSaved ? <><CheckCircle className="h-4 w-4" /> Salvo!</> : 'Salvar alterações'}
-      </Button>
+      <div className="space-y-2">
+        <Button onClick={saveAdmin} disabled={adminSave.saving} className="gap-2" style={{ backgroundColor: adminForm.adminColor }}>
+          {adminSave.saving ? 'Salvando...' : adminSave.saved ? <><CheckCircle className="h-4 w-4" /> Salvo!</> : 'Salvar alterações'}
+        </Button>
+        {adminSave.error && <p role="alert" className="text-sm text-destructive">{adminSave.error}</p>}
+      </div>
     </div>
   );
 
@@ -479,6 +501,26 @@ export default function SettingsView({ section = 'account' }: Props) {
         <h2 className="text-2xl font-bold tracking-tight">Portal do Cliente</h2>
         <p className="text-muted-foreground text-sm">Aparência e configurações do portal público de agendamento</p>
       </div>
+
+      {!(tenant.whatsappApiUrl && tenant.whatsappApiKey && tenant.whatsappInstance) && (
+        <div role="status" className="flex items-start gap-3 rounded-lg border border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-700 p-4 text-sm text-yellow-900 dark:text-yellow-200">
+          <MessageCircle className="h-4 w-4 mt-0.5 shrink-0" />
+          <div>
+            <p className="font-medium">Como seus clientes confirmam o agendamento</p>
+            <p className="mt-0.5">
+              Sem a <a href="#whatsapp" className="underline">Integração WhatsApp</a> abaixo, o cliente reserva o horário e confirma
+              mandando uma mensagem para o telefone do seu estabelecimento (ele tem 3 horas para isso; se não confirmar, o horário
+              volta a ficar livre). Você confirma na tela <strong>Agendamentos</strong>, um a um ou vários de uma vez, sem pressa:
+              o horário fica reservado até você decidir. Com a integração, o cliente confirma sozinho por um código.
+            </p>
+            {!tenant.phone && (
+              <p className="mt-1 font-medium">
+                Cadastre o telefone do estabelecimento na aba Conta: sem ele, o cliente não tem para onde enviar a confirmação.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       <Card>
         <CardHeader>
@@ -533,7 +575,7 @@ export default function SettingsView({ section = 'account' }: Props) {
         </CardHeader>
         <CardContent>
           <ImageUpload label="Logo" description="Recomendado: quadrado, mínimo 200×200 px"
-            value={portalForm.logoUrl} onChange={url => setPortalForm(f => ({ ...f, logoUrl: url }))}
+            value={logoUrl} onChange={setLogoUrl} maxWidth={512} maxHeight={512}
             aspectClass="aspect-square max-w-[200px]" />
         </CardContent>
       </Card>
@@ -546,7 +588,7 @@ export default function SettingsView({ section = 'account' }: Props) {
         <CardContent>
           <ImageUpload label="Banner" description="Recomendado: 1200×400 px (proporção 3:1)"
             value={portalForm.bannerUrl} onChange={url => setPortalForm(f => ({ ...f, bannerUrl: url }))}
-            aspectClass="aspect-[3/1]" />
+            maxWidth={1600} maxHeight={600} aspectClass="aspect-[3/1]" />
         </CardContent>
       </Card>
 
@@ -571,12 +613,15 @@ export default function SettingsView({ section = 'account' }: Props) {
         </CardContent>
       </Card>
 
-      <Button onClick={savePortal} className="gap-2">
-        {portalSaved ? <><CheckCircle className="h-4 w-4" /> Salvo!</> : 'Salvar alterações'}
-      </Button>
+      <div className="space-y-2">
+        <Button onClick={savePortal} disabled={portalSave.saving} className="gap-2">
+          {portalSave.saving ? 'Salvando...' : portalSave.saved ? <><CheckCircle className="h-4 w-4" /> Salvo!</> : 'Salvar alterações'}
+        </Button>
+        {portalSave.error && <p role="alert" className="text-sm text-destructive">{portalSave.error}</p>}
+      </div>
 
       {/* ── WhatsApp ── */}
-      <div className="pt-4">
+      <div className="pt-4" id="whatsapp">
         <h3 className="text-lg font-semibold flex items-center gap-2">
           <MessageCircle className="h-5 w-5 text-green-500" />
           Integração WhatsApp
@@ -668,9 +713,12 @@ export default function SettingsView({ section = 'account' }: Props) {
         </CardContent>
       </Card>
 
-      <Button onClick={saveWhatsapp} className="gap-2 bg-green-600 hover:bg-green-700 text-white">
-        {waSaved ? <><CheckCircle className="h-4 w-4" /> Salvo!</> : <><MessageCircle className="h-4 w-4" /> Salvar configuração WhatsApp</>}
-      </Button>
+      <div className="space-y-2">
+        <Button onClick={saveWhatsapp} disabled={waSave.saving} className="gap-2 bg-green-600 hover:bg-green-700 text-white">
+          {waSave.saving ? 'Salvando...' : waSave.saved ? <><CheckCircle className="h-4 w-4" /> Salvo!</> : <><MessageCircle className="h-4 w-4" /> Salvar configuração WhatsApp</>}
+        </Button>
+        {waSave.error && <p role="alert" className="text-sm text-destructive">{waSave.error}</p>}
+      </div>
     </div>
   );
 
@@ -728,9 +776,10 @@ export default function SettingsView({ section = 'account' }: Props) {
               </button>
             ))}
           </div>
-          <Button onClick={saveAdvance} size="sm" className="gap-2">
-            {advanceSaved ? <><CheckCircle className="h-4 w-4" /> Salvo!</> : 'Salvar'}
+          <Button onClick={saveAdvance} disabled={advanceSave.saving} size="sm" className="gap-2">
+            {advanceSave.saving ? 'Salvando...' : advanceSave.saved ? <><CheckCircle className="h-4 w-4" /> Salvo!</> : 'Salvar'}
           </Button>
+          {advanceSave.error && <p role="alert" className="text-sm text-destructive">{advanceSave.error}</p>}
         </CardContent>
       </Card>
 

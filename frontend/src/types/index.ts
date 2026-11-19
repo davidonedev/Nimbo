@@ -50,6 +50,10 @@ export interface Appointment {
   status: AppointmentStatus;
   price: number;
   notes?: string;
+  /** Prazo para confirmar um agendamento pendente (cliente pelo WhatsApp); passou, o horário é liberado. */
+  confirmBy?: string | null;
+  /** Quando o cliente tocou em "Confirmar no WhatsApp" (disse que mandou a mensagem); null/ausente = ainda não. */
+  clientConfirmedAt?: string | null;
   createdAt: string;
   updatedAt?: string;
 }

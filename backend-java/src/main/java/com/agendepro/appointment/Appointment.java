@@ -64,6 +64,22 @@ public class Appointment {
     @Column(name = "reminder_2h_sent_at")
     private Instant reminder2hSentAt;
 
+    /** Prazo para confirmar (agendamento por celular sem código); passou e segue pendente, o horário é liberado. */
+    @Column(name = "confirm_by")
+    private Instant confirmBy;
+
+    /** Quando o cliente tocou em "Confirmar no WhatsApp" (disse que mandou a mensagem); null = ainda não. */
+    @Column(name = "client_confirmed_at")
+    private Instant clientConfirmedAt;
+
+    /** Quando o dono foi avisado (2 h antes) de que falta confirmar este agendamento; null = ainda não. */
+    @Column(name = "owner_remind_2h_at")
+    private Instant ownerRemind2hAt;
+
+    /** Idem, 1 h antes (só se ele continuou sem confirmar). */
+    @Column(name = "owner_remind_1h_at")
+    private Instant ownerRemind1hAt;
+
     @Column(name = "payment_status", length = 50)
     private String paymentStatus;
 

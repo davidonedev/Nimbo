@@ -31,10 +31,15 @@ public class Client {
     @Column(nullable = false, length = 150)
     private String name;
 
-    @Column(nullable = false, length = 180)
+    /** null = cliente criado pelo agendamento por celular (sem e-mail). */
+    @Column(length = 180)
     private String email;
 
     private String phone;
+
+    /** Celular só com dígitos e DDI 55 (formato de WhatsappService.normalizePhone); chave do agendamento por celular. */
+    @Column(name = "phone_e164", length = 20)
+    private String phoneE164;
 
     /** null = autenticado via Google. */
     @Column(name = "password_hash")
@@ -57,10 +62,20 @@ public class Client {
         Instant now = Instant.now();
         if (createdAt == null) createdAt = now;
         updatedAt = now;
+        phoneE164 = normalizePhone(phone);
     }
 
     @PreUpdate
     void preUpdate() {
         updatedAt = Instant.now();
+        phoneE164 = normalizePhone(phone);
+    }
+
+    /** "(19) 98179-4567" → "5519981794567"; null se não houver dígitos suficientes (DDD + número). Mesma regra da V8. */
+    public static String normalizePhone(String phone) {
+        if (phone == null) return null;
+        String digits = phone.replaceAll("\\D", "");
+        if (digits.length() < 10) return null;
+        return digits.startsWith("55") && digits.length() >= 12 ? digits : "55" + digits;
     }
 }

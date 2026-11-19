@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useParams } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { GOOGLE_CLIENT_ID } from './lib/googleAuth';
 import { PlatformProvider }        from './context/PlatformContext';
@@ -47,8 +47,13 @@ const ServicesView = lazy(() => import('./components/admin/ServicesView'));
 const ProductsView = lazy(() => import('./components/admin/ProductsView'));
 const BlockedSlotsView = lazy(() => import('./components/admin/BlockedSlotsView'));
 const RemindersView = lazy(() => import('./components/admin/RemindersView'));
-const ServicesPage = lazy(() => import('./components/client/ServicesPage'));
-const BookingFlow = lazy(() => import('./components/client/BookingFlow'));
+// Agendamento público padrão de todos os tenants (Nome + Celular + código por WhatsApp)
+const BookLayout = lazy(() => import('./components/booking/BookLayout'));
+const StepServices = lazy(() => import('./components/booking/StepServices'));
+const StepTime = lazy(() => import('./components/booking/StepTime'));
+const StepContact = lazy(() => import('./components/booking/StepContact'));
+const StepVerify = lazy(() => import('./components/booking/StepVerify'));
+const StepDone = lazy(() => import('./components/booking/StepDone'));
 const MyAppointments = lazy(() => import('./components/client/MyAppointments'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const ProfessionalRegisterPage = lazy(() => import('./pages/ProfessionalRegisterPage'));
@@ -62,6 +67,11 @@ import { LEGACY_ADMIN_REDIRECTS } from './config/legacyRoutes';
 import { LoginSplashHost }       from './motion/LoginSplashHost';
 import { PwaHost }               from './pwa/PwaHost';
 import { RouteErrorBoundary }    from './components/RouteErrorBoundary';
+
+function BookingRedirect() {
+  const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  return <Navigate to={`/${tenantSlug}`} replace />;
+}
 
 // ─── Route guards ─────────────────────────────────────────────────────────────
 function SuperGuard({ children }: { children: React.ReactNode }) {
@@ -172,13 +182,24 @@ function AppRoutes() {
       </Route>
 
       {/* Public client portal — /:tenantSlug */}
-      <Route path=":tenantSlug" element={<PublicTenantProvider><PublicClientProvider><ClientLayout /></PublicClientProvider></PublicTenantProvider>}>
-        <Route index                           element={<ServicesPage />} />
-        <Route path="booking"                  element={<BookingFlow />} />
-        <Route path="register"                 element={<RegisterPage />} />
-        <Route path="professional-register"    element={<ProfessionalRegisterPage />} />
-        <Route path="my-appointments"          element={<MyAppointments />} />
-        <Route path="verify-email"             element={<VerifyEmailPage />} />
+      <Route path=":tenantSlug" element={<PublicTenantProvider><PublicClientProvider><Outlet /></PublicClientProvider></PublicTenantProvider>}>
+        {/* Agendamento: /:slug → /horario → /dados → /codigo → /confirmado (a seleção vai na URL) */}
+        <Route element={<BookLayout />}>
+          <Route index                           element={<StepServices />} />
+          <Route path="horario"                  element={<StepTime />} />
+          <Route path="dados"                    element={<StepContact />} />
+          <Route path="codigo"                   element={<StepVerify />} />
+          <Route path="confirmado"               element={<StepDone />} />
+        </Route>
+        {/* Links antigos (/:slug/booking) caem no agendamento novo */}
+        <Route path="booking"                  element={<BookingRedirect />} />
+        {/* Telas antigas do portal: fora do caminho principal, seguem acessíveis por URL */}
+        <Route element={<ClientLayout />}>
+          <Route path="register"                 element={<RegisterPage />} />
+          <Route path="professional-register"    element={<ProfessionalRegisterPage />} />
+          <Route path="my-appointments"          element={<MyAppointments />} />
+          <Route path="verify-email"             element={<VerifyEmailPage />} />
+        </Route>
       </Route>
 
       {/* Fallback */}

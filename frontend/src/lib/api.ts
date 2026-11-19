@@ -90,6 +90,8 @@ export interface RequestExtra {
   retryDelayMs?: number;
   /** Avisa a tela de que vai tentar de novo (para mostrar "estamos acordando o servidor"). */
   onRetry?: (attempt: number, totalRetries: number) => void;
+  /** Cabeçalhos extras desta chamada (ex.: X-Device-Token do agendamento público). */
+  headers?: Record<string, string>;
 }
 
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
@@ -175,7 +177,8 @@ async function request<T>(
 
 // ─── Métodos HTTP ─────────────────────────────────────────────────────────────
 export const api = {
-  get: <T>(path: string) => request<T>(path, { method: 'GET' }),
+  get: <T>(path: string, extra?: RequestExtra) =>
+    request<T>(path, { method: 'GET', ...extra }),
 
   post: <T>(path: string, body: unknown, extra?: RequestExtra) =>
     request<T>(path, {

@@ -55,6 +55,17 @@ export async function updateAppointmentStatusApi(
   return normalize(data);
 }
 
+export interface BulkConfirmResult {
+  confirmed: number;
+  skipped: number;
+  confirmedIds: string[];
+}
+
+/** Confirma de uma vez os agendamentos pendentes escolhidos (os que não estão mais pendentes são ignorados). */
+export async function bulkConfirmAppointmentsApi(ids: string[]): Promise<BulkConfirmResult> {
+  return api.post<BulkConfirmResult>('/admin/appointments/bulk-confirm', { ids });
+}
+
 export async function deleteAppointmentApi(id: string): Promise<void> {
   return api.delete(`/admin/appointments/${id}`);
 }

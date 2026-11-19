@@ -14,6 +14,9 @@ vi.mock('./motion/LoginSplashHost', () => ({ LoginSplashHost: () => null }));
 
 const TENANT_ID = 't1';
 const PROF_ID = 'p1';
+const brDay = (n: number) => new Date(Date.now() + n * 86_400_000).toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+const brToday = brDay(0);
+const brTomorrow = brDay(1);
 const day = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
 
 const service = { id: 's1', tenantId: TENANT_ID, name: 'Corte feminino', description: null, price: 80, duration: 60, category: null, isActive: true };
@@ -28,7 +31,7 @@ const tenantDto = {
   isOpen: true, minAdvanceMinutes: 0, whatsappApiUrl: null, whatsappApiKey: null, whatsappInstance: null, whatsappTemplate: null,
   createdAt: '2026-01-01T00:00:00Z', updatedAt: null,
 };
-const publicTenantDto = { id: TENANT_ID, slug: 'studio', name: 'Studio Nimbo', primaryColor: '#7c3aed', logoUrl: null, bannerUrl: null, isOpen: true, status: 'active', address: null, phone: null, minAdvanceMinutes: 0 };
+const publicTenantDto = { id: TENANT_ID, slug: 'studio', name: 'Studio Nimbo', primaryColor: '#7c3aed', logoUrl: null, bannerUrl: null, isOpen: true, status: 'active', address: null, phone: '(11) 98888-7777', minAdvanceMinutes: 0 };
 // O back permite cliente SEM telefone (reserva pública sem phone): a tela não pode quebrar com null.
 const clientsDto = [
   { id: 'c1', tenantId: TENANT_ID, name: 'Ana Lima', email: 'ana@email.com', phone: '(11) 91111-1111', emailVerified: true, createdAt: '2026-01-01T00:00:00Z', updatedAt: null, appointmentCount: 2 },
@@ -39,6 +42,15 @@ const apptDto = (id: string, clientId: string, date: string, startTime: string, 
   createdAt: '2026-01-01T00:00:00Z', updatedAt: null, client: { id: clientId, name: 'Ana Lima', phone: null }, professional: { id: PROF_ID, name: 'Marina Souza' }, service,
   paymentStatus: null, paymentId: null,
 });
+
+/** Resposta do agendamento criado (mesmo formato do backend). */
+const booked = {
+  booking: {
+    date: brToday, professionalId: PROF_ID, professionalName: 'Marina Souza', totalDuration: 60, totalPrice: 80,
+    items: [{ id: 'x1', serviceId: 's1', serviceName: 'Corte feminino', startTime: '09:00', endTime: '10:00', price: 80 }],
+  },
+  client: { id: 'c9', name: 'Ana Lima', phone: '(11) 91111-1111' },
+};
 
 /** Corpo por método+caminho. Qualquer rota não prevista vira 404 (e o teste acusa). */
 function respond(method: string, path: string): { status: number; body: unknown } {
@@ -60,24 +72,43 @@ function respond(method: string, path: string): { status: number; body: unknown 
     if (path === '/api/public/studio/professionals') return ok([{ ...professionalDto, appointmentCount: undefined }]);
     if (path === '/api/public/studio/products') return ok([]);
     if (path === '/api/public/studio/availability') return ok(['09:00', '10:00']);
+    if (path === '/api/public/studio/book/possession') return ok({ recognized: false, fullName: null, phone: null, lastServiceId: null });
+    if (path === '/api/public/studio/book/days') return ok([brToday, brTomorrow]);
+    if (path === '/api/public/studio/book/slots') return ok(['09:00', '14:30', '19:00']);
     if (path === '/api/public/studio/my-appointments') return ok([apptDto('a1', 'c1', day(1), '09:00')]);
     if (path === '/api/public/studio/verify-email') return ok({ id: 'c1', name: 'Ana Lima', email: 'ana@email.com', phone: null });
+  }
+  if (method === 'POST') {
+    if (path === '/api/public/studio/book' && bookMode === 'pending') {
+      return ok({ kind: 'pending_confirmation', ...booked, confirmBy: new Date(Date.now() + 3 * 3600_000).toISOString() });
+    }
+    if (path === '/api/public/studio/book') {
+      return ok({ kind: 'challenge_required', challengeId: 'ch1', maskedPhone: '(11) •••••-••11', expiresAt: '2030-01-01T00:00:00Z' });
+    }
+    if (path === '/api/public/studio/book/verify') return ok({ kind: 'booked', ...booked, deviceToken: 'tok' });
+    if (path === '/api/public/studio/book/client-confirmed') return ok({ confirmed: 1 });
   }
   return { status: 404, body: { success: false, error: `rota inesperada ${method} ${path}`, code: 'NOT_FOUND' } };
 }
 
 let unexpected: string[] = [];
+let posted: string[] = [];
+/** 'challenge' = estabelecimento com WhatsApp (código); 'pending' = sem código (reserva pendente + confirmação pelo WhatsApp). */
+let bookMode: 'challenge' | 'pending' = 'challenge';
 
 beforeEach(() => {
   sessionStorage.clear();
   localStorage.clear();
   unexpected = [];
+  posted = [];
+  bookMode = 'challenge';
   setViewportWidth(1280);
   Element.prototype.scrollIntoView = vi.fn(); // jsdom não implementa
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
     const { status, body } = respond((init?.method ?? 'GET').toUpperCase(), url.pathname);
     if (status === 404) unexpected.push(`${init?.method ?? 'GET'} ${url.pathname}`);
+    if ((init?.method ?? 'GET').toUpperCase() === 'POST') posted.push(url.pathname);
     return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
   }));
 });
@@ -140,16 +171,63 @@ describe('falha ao carregar os dados do profissional', { timeout: 30000 }, () =>
 });
 
 describe('portal público do cliente', { timeout: 60000 }, () => {
-  it('/:slug lista os serviços', async () => {
+  it('/:slug abre o agendamento padrão com os serviços (categoria nula não quebra)', async () => {
     open('/studio');
-    await waitFor(() => expect(screen.getAllByText('Corte feminino').length).toBeGreaterThan(0), T);
+    expect(await screen.findByText('Qual serviço você quer agendar?', undefined, T)).toBeTruthy();
+    expect(screen.getAllByText('Corte feminino').length).toBeGreaterThan(0);
+    expect(screen.getByText(/R\$\s?80,00/)).toBeTruthy();
     expect(unexpected).toEqual([]);
   });
 
-  it('/:slug/booking abre o agendamento', async () => {
+  it('/:slug/booking (link antigo) cai no agendamento novo', async () => {
     open('/studio/booking');
-    await waitFor(() => expect(screen.getAllByText(/Corte feminino|Marina Souza|Studio Nimbo/).length).toBeGreaterThan(0), T);
-    expect(screen.queryByText('Barbearia não encontrada')).toBeNull();
+    expect(await screen.findByText('Qual serviço você quer agendar?', undefined, T)).toBeTruthy();
+    expect(window.location.pathname).toBe('/studio');
+    expect(unexpected).toEqual([]);
+  });
+
+  /** Serviço → horário → dados (nome + celular) e envia; devolve para o teste seguir na tela seguinte. */
+  async function fillAndSubmitBooking() {
+    const { fireEvent } = await import('@testing-library/react');
+    open('/studio');
+    fireEvent.click(await screen.findByText('Corte feminino', undefined, T));
+    expect(await screen.findByText('Escolha data e horário', undefined, T)).toBeTruthy();
+    expect(window.location.search).toContain('s=s1');
+    fireEvent.click(await screen.findByRole('button', { name: '09:00' }, T));
+    expect(await screen.findByText('Seus dados', undefined, T)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/Nome completo/), { target: { value: 'Ana Lima' } });
+    fireEvent.change(screen.getByLabelText(/Celular/), { target: { value: '11911111111' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar agendamento' }));
+  }
+
+  it('com WhatsApp do estabelecimento: serviço → horário → dados → código → confirmado', async () => {
+    const { fireEvent } = await import('@testing-library/react');
+    await fillAndSubmitBooking();
+
+    expect(await screen.findByText('Confirme seu número', undefined, T)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Código'), { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
+
+    expect(await screen.findByText('Agendamento confirmado!', undefined, T)).toBeTruthy();
+    expect(localStorage.getItem('nimbo_device_studio')).toBe('tok'); // aparelho reconhecido para a próxima vez
+    expect(unexpected).toEqual([]);
+  });
+
+  it('sem código automático: reserva pendente, botão do WhatsApp do estabelecimento e aviso ao servidor ao tocar', async () => {
+    const { fireEvent } = await import('@testing-library/react');
+    bookMode = 'pending';
+    await fillAndSubmitBooking();
+
+    expect(await screen.findByText('Falta só um passo!', undefined, T)).toBeTruthy();
+    expect(screen.queryByText('Confirme seu número')).toBeNull(); // sem tela de código
+    expect(localStorage.getItem('nimbo_device_studio')).toBeNull(); // celular não verificado: aparelho NÃO é reconhecido
+    const link = screen.getByRole('link', { name: /Confirmar no WhatsApp/ });
+    expect(link.getAttribute('href')).toContain('https://wa.me/5511988887777?text=');
+
+    fireEvent.click(link);
+    expect(await screen.findByText(/Pronto, Ana!/, undefined, T)).toBeTruthy();
+    expect(posted).toContain('/api/public/studio/book/client-confirmed');
+    expect(screen.getByRole('link', { name: /Abrir o WhatsApp de novo/ })).toBeTruthy();
     expect(unexpected).toEqual([]);
   });
 

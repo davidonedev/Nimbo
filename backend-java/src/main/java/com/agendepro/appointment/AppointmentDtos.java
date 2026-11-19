@@ -29,7 +29,8 @@ public final class AppointmentDtos {
             String date, String startTime, String endTime, AppointmentStatus status, Double price, String notes,
             Instant createdAt, Instant updatedAt,
             ClientSummary client, ProfessionalSummary professional, ServiceOfferingDtos.ServiceResponse service,
-            String paymentStatus, String paymentId
+            String paymentStatus, String paymentId,
+            Instant confirmBy, Instant clientConfirmedAt
     ) {
     }
 
