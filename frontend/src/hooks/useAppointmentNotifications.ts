@@ -3,7 +3,10 @@ import type { Appointment, Client, Service } from '@/types';
 
 export interface AppNotification {
   id: string;
-  type: 'new_booking' | 'cancelled';
+  /** pending_reminder = o cliente já confirmou pelo WhatsApp e o dono ainda não confirmou (perto do horário). */
+  type: 'new_booking' | 'cancelled' | 'pending_reminder';
+  /** Só em pending_reminder: aviso de 2 horas ou de 1 hora antes do horário. */
+  reminder?: '2h' | '1h';
   clientName: string;
   serviceName: string;
   date: string;
@@ -87,12 +90,65 @@ export function useAppointmentNotifications(
 
   const [activeToasts, setActiveToasts] = useState<AppNotification[]>([]);
   const prevRef      = useRef<Appointment[] | null>(null);
+  const appointmentsRef = useRef(appointments);
   const clientsRef   = useRef(clients);
   const servicesRef  = useRef(services);
   useLayoutEffect(() => {
     clientsRef.current  = clients;
     servicesRef.current = services;
+    appointmentsRef.current = appointments;
   });
+
+  // Avisos "falta confirmar" (mesma regra do e-mail do servidor): agendamento pendente que o cliente já confirmou pelo
+  // WhatsApp. Aviso 2 h antes e, se ainda pendente, 1 h antes. Só dispara com o painel aberto; o e-mail cobre o resto.
+  useEffect(() => {
+    const firedKey = `${storageKey}_pending_reminders`;
+    const load = (): Set<string> => {
+      try { return new Set<string>(JSON.parse(localStorage.getItem(firedKey) ?? '[]')); } catch { return new Set<string>(); }
+    };
+    const fired = load();
+
+    const tick = () => {
+      const now = Date.now();
+      const toAdd: AppNotification[] = [];
+      for (const a of appointmentsRef.current) {
+        if (a.status !== 'pending' || !a.clientConfirmedAt) continue;
+        const left = (new Date(`${a.date}T${a.startTime}:00-03:00`).getTime() - now) / 60000; // horário de Brasília (UTC-3)
+        if (!(left > 0 && left <= 120)) continue;
+
+        let reminder: '2h' | '1h' | null = null;
+        if (left <= 60 && !fired.has(`${a.id}:1h`)) {
+          reminder = '1h';
+          fired.add(`${a.id}:1h`); fired.add(`${a.id}:2h`); // depois do de 1 h não vem o de 2 h
+        } else if (left > 60 && !fired.has(`${a.id}:2h`) && !fired.has(`${a.id}:1h`)) {
+          reminder = '2h';
+          fired.add(`${a.id}:2h`);
+        }
+        if (!reminder) continue;
+
+        toAdd.push({
+          id: `n-${now}-${a.id}-${reminder}`,
+          type: 'pending_reminder', reminder,
+          clientName:  clientsRef.current.find(c => c.id === a.clientId)?.name ?? '—',
+          serviceName: servicesRef.current.find(s => s.id === a.serviceId)?.name ?? '—',
+          date: a.date, time: a.startTime, timestamp: now, read: false,
+        });
+      }
+      if (toAdd.length === 0) return;
+      try { localStorage.setItem(firedKey, JSON.stringify([...fired].slice(-300))); } catch { /* quota */ }
+      setNotifications(ns => [...toAdd, ...ns].slice(0, 100));
+      setActiveToasts(ts => [...ts, ...toAdd]);
+      playSound('cancelled'); // tom de alerta
+      toAdd.forEach(n => browserNotify(
+        n.reminder === '1h' ? '⏰ Falta confirmar — começa em 1 hora' : '⏰ Falta confirmar — começa em 2 horas',
+        `${n.clientName} · ${n.serviceName} às ${n.time}`,
+      ));
+    };
+
+    const first = setTimeout(tick, 1500);
+    const timer = setInterval(tick, 30_000);
+    return () => { clearTimeout(first); clearInterval(timer); };
+  }, [storageKey]);
 
   // Persiste sempre que a lista muda
   useEffect(() => {
@@ -144,7 +200,7 @@ export function useAppointmentNotifications(
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setNotifications(ns => [...toAdd, ...ns].slice(0, 100));
       setActiveToasts(ts => [...ts, ...toAdd]);
-      playSound(toAdd[0].type);
+      playSound(toAdd[0].type === 'new_booking' ? 'new_booking' : 'cancelled');
       toAdd.forEach(n => {
         const title = n.type === 'new_booking'
           ? '📅 Novo agendamento!'

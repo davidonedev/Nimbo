@@ -1,9 +1,38 @@
 import { useState, useEffect, useRef } from 'react';
-import { Bell, CalendarPlus, XCircle, X, Trash2 } from 'lucide-react';
+import { Bell, CalendarPlus, Clock, XCircle, X, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { AppNotification } from '@/hooks/useAppointmentNotifications';
+
+/** Aparência e textos de cada tipo de notificação. */
+function metaOf(n: AppNotification) {
+  switch (n.type) {
+    case 'new_booking':
+      return {
+        Icon: CalendarPlus, toastTitle: 'Novo agendamento!', listTitle: 'Novo agendamento',
+        toast: 'bg-green-50  border-green-200  dark:bg-green-900/40 dark:border-green-700',
+        toastIcon: 'text-green-600 dark:text-green-400', toastText: 'text-green-800 dark:text-green-200',
+        chip: 'bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-400',
+      };
+    case 'pending_reminder': {
+      const when = n.reminder === '1h' ? '1 hora' : '2 horas';
+      return {
+        Icon: Clock, toastTitle: `Falta confirmar — começa em ${when}`, listTitle: `Falta confirmar (${when} para o horário)`,
+        toast: 'bg-yellow-50 border-yellow-300 dark:bg-yellow-900/40 dark:border-yellow-700',
+        toastIcon: 'text-yellow-600 dark:text-yellow-400', toastText: 'text-yellow-900 dark:text-yellow-200',
+        chip: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400',
+      };
+    }
+    default:
+      return {
+        Icon: XCircle, toastTitle: 'Agendamento cancelado', listTitle: 'Cancelamento',
+        toast: 'bg-red-50   border-red-200   dark:bg-red-900/40  dark:border-red-700',
+        toastIcon: 'text-red-500 dark:text-red-400', toastText: 'text-red-800 dark:text-red-200',
+        chip: 'bg-red-100  text-red-500  dark:bg-red-900/40  dark:text-red-400',
+      };
+  }
+}
 
 // ─── Toast individual ─────────────────────────────────────────────────────────
 function Toast({ notif, onDismiss }: { notif: AppNotification; onDismiss: () => void }) {
@@ -12,22 +41,19 @@ function Toast({ notif, onDismiss }: { notif: AppNotification; onDismiss: () => 
     return () => clearTimeout(t);
   }, [onDismiss]);
 
-  const isNew = notif.type === 'new_booking';
+  const m = metaOf(notif);
 
   return (
     <div
       className={`flex items-start gap-3 p-4 rounded-xl border shadow-xl w-full pointer-events-auto
-        animate-in slide-in-from-bottom-4 fade-in duration-300
-        ${isNew
-          ? 'bg-green-50  border-green-200  dark:bg-green-900/40 dark:border-green-700'
-          : 'bg-red-50   border-red-200   dark:bg-red-900/40  dark:border-red-700'}`}
+        animate-in slide-in-from-bottom-4 fade-in duration-300 ${m.toast}`}
     >
-      <div className={`mt-0.5 shrink-0 ${isNew ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
-        {isNew ? <CalendarPlus className="h-5 w-5" /> : <XCircle className="h-5 w-5" />}
+      <div className={`mt-0.5 shrink-0 ${m.toastIcon}`}>
+        <m.Icon className="h-5 w-5" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className={`text-sm font-semibold ${isNew ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200'}`}>
-          {isNew ? 'Novo agendamento!' : 'Agendamento cancelado'}
+        <p className={`text-sm font-semibold ${m.toastText}`}>
+          {m.toastTitle}
         </p>
         <p className="text-xs text-muted-foreground mt-0.5 truncate">
           {notif.clientName} · {notif.serviceName}
@@ -127,8 +153,8 @@ export function NotificationBell({ notifications, unreadCount, markAllRead, acti
                 </div>
               ) : (
                 notifications.map(n => {
-                  const isNew = n.type === 'new_booking';
-                  const ago   = formatDistanceToNow(n.timestamp, { locale: ptBR, addSuffix: true });
+                  const m   = metaOf(n);
+                  const ago = formatDistanceToNow(n.timestamp, { locale: ptBR, addSuffix: true });
 
                   return (
                     <div
@@ -137,16 +163,14 @@ export function NotificationBell({ notifications, unreadCount, markAllRead, acti
                         ${!n.read ? 'bg-primary/5' : ''}`}
                     >
                       {/* Ícone */}
-                      <div className={`mt-0.5 shrink-0 p-1.5 rounded-lg
-                        ${isNew ? 'bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-400'
-                                : 'bg-red-100  text-red-500  dark:bg-red-900/40  dark:text-red-400'}`}>
-                        {isNew ? <CalendarPlus className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
+                      <div className={`mt-0.5 shrink-0 p-1.5 rounded-lg ${m.chip}`}>
+                        <m.Icon className="h-3.5 w-3.5" />
                       </div>
 
                       {/* Conteúdo */}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium leading-tight">
-                          {isNew ? 'Novo agendamento' : 'Cancelamento'}
+                          {m.listTitle}
                         </p>
                         <p className="text-xs text-muted-foreground truncate mt-0.5">
                           {n.clientName} · {n.serviceName}
