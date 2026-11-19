@@ -12,7 +12,7 @@ export interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElemen
   hint?: ReactNode;
   /** Conteúdo à direita do rótulo (ex.: link "Esqueci minha senha"). */
   labelAside?: ReactNode;
-  /** Texto fixo dentro do campo, à esquerda (ex.: "agendepro.com/"). */
+  /** Texto fixo dentro do campo, à esquerda (ex.: "seudominio.com/"). */
   prefixText?: string;
   /** Elemento dentro do campo, à direita (ex.: botão de mostrar senha). */
   trailing?: ReactNode;

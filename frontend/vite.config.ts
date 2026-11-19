@@ -1,12 +1,37 @@
 import { defineConfig } from 'vitest/config'
+import { loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 import { VitePWA } from 'vite-plugin-pwa'
+
+/**
+ * Injeta <link rel="canonical"> e og:url no index.html SÓ quando VITE_SITE_URL está definida (o domínio próprio, na
+ * Vercel). Sem a variável as tags simplesmente não aparecem — nunca sai placeholder no HTML publicado.
+ */
+function siteMeta(): Plugin {
+  let url = ''
+  return {
+    name: 'nimbo-site-meta',
+    configResolved(config) {
+      const fromFile = loadEnv(config.mode, config.envDir || process.cwd(), 'VITE_').VITE_SITE_URL
+      const raw = (process.env.VITE_SITE_URL ?? fromFile ?? '').trim()
+      if (raw) url = (/^https?:\/\//i.test(raw) ? raw : `https://${raw}`).replace(/\/+$/, '')
+    },
+    transformIndexHtml() {
+      if (!url) return []
+      return [
+        { tag: 'link', attrs: { rel: 'canonical', href: `${url}/` }, injectTo: 'head' },
+        { tag: 'meta', attrs: { property: 'og:url', content: `${url}/` }, injectTo: 'head' },
+      ]
+    },
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
+    siteMeta(),
     VitePWA({
       registerType: 'prompt', // o usuário decide quando atualizar ("Nova versão disponível")
       includeAssets: ['icons/apple-touch-icon.png', 'images/favicon-32.png'],

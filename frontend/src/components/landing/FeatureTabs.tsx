@@ -1,6 +1,7 @@
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import { Link2, MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { siteHost } from '@/lib/site';
 import { FEATURES, FEATURE_TAB_LABELS, SEGMENTS } from './content';
 import { LpButton, Section } from './ui';
 
@@ -14,7 +15,7 @@ const Panel = ({ children }: { children: React.ReactNode }) => (
 function BookingVisual() {
   return (
     <Panel>
-      <p className="flex items-center gap-2 rounded-xl bg-lp-white px-4 py-2.5 text-sm text-lp-black/70"><Link2 className="h-4 w-4 text-lp-primary" />agendepro.com/<b className="text-lp-black">seu-negocio</b></p>
+      <p className="flex items-center gap-2 rounded-xl bg-lp-white px-4 py-2.5 text-sm text-lp-black/70"><Link2 className="h-4 w-4 text-lp-primary" />{siteHost()}/<b className="text-lp-black">seu-negocio</b></p>
       <p className="text-sm text-lp-black/70">Horários livres no sábado</p>
       <div className="grid grid-cols-4 gap-2">
         {['09:00', '09:30', '10:30', '11:00', '13:30', '14:00', '15:30', '16:00'].map((h, i) => (
