@@ -41,6 +41,8 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
                                    @Param("today") String today, @Param("nowTime") String nowTime,
                                    org.springframework.data.domain.Pageable pageable);
 
+    boolean existsByTenantIdAndProfessionalIdAndClientId(UUID tenantId, UUID professionalId, UUID clientId);
+
     long countByProfessionalId(UUID professionalId);
 
     long countByClientId(UUID clientId);

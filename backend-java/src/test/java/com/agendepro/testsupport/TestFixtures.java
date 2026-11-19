@@ -1,5 +1,7 @@
 package com.agendepro.testsupport;
 
+import com.agendepro.appointment.Appointment;
+import com.agendepro.appointment.AppointmentRepository;
 import com.agendepro.blockedslot.BlockedSlot;
 import com.agendepro.blockedslot.BlockedSlotRepository;
 import com.agendepro.catalog.ServiceOffering;
@@ -32,6 +34,7 @@ public class TestFixtures {
     private final ServiceOfferingRepository serviceOfferingRepository;
     private final ClientRepository clientRepository;
     private final BlockedSlotRepository blockedSlotRepository;
+    private final AppointmentRepository appointmentRepository;
     private final PasswordEncoder passwordEncoder;
 
     public Tenant tenant(TenantPlan plan) {
@@ -80,6 +83,12 @@ public class TestFixtures {
         String unique = UUID.randomUUID().toString().substring(0, 8);
         return clientRepository.save(Client.builder()
                 .tenantId(tenant.getId()).name("Client " + unique).email("client-" + unique + "@example.com").build());
+    }
+
+    public Appointment appointment(Tenant tenant, Professional professional, Client client, ServiceOffering service, String date, String start, String end) {
+        return appointmentRepository.save(Appointment.builder()
+                .tenantId(tenant.getId()).professionalId(professional.getId()).clientId(client.getId())
+                .serviceId(service.getId()).date(date).startTime(start).endTime(end).price(service.getPrice()).build());
     }
 
     public BlockedSlot blockedSlot(Tenant tenant, Professional professional, String date, String start, String end) {

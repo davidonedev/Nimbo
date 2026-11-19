@@ -50,19 +50,24 @@ public class ProfessionalSelfController {
         UUID tenantId = SecurityUtils.requireTenantId();
         Tenant tenant = tenantRepository.findById(tenantId)
                 .orElseThrow(() -> AppException.notFound("Tenant não encontrado"));
-        return ResponseEntity.ok(ApiResponse.ok(TenantDtos.TenantResponse.from(tenant)));
+        return ResponseEntity.ok(ApiResponse.ok(TenantDtos.TenantResponse.forProfessional(tenant)));
     }
 
+    /** Só os clientes que já têm agendamento com o próprio profissional (nunca a base inteira do tenant). */
     @GetMapping("/clients")
     public ResponseEntity<ApiResponse<List<ClientDtos.ClientResponse>>> clients() {
         UUID tenantId = SecurityUtils.requireTenantId();
-        var data = clientRepository.search(tenantId, null).stream().map(ClientDtos.ClientResponse::from).toList();
+        UUID professionalId = SecurityUtils.requireProfessionalId();
+        var data = clientRepository.findByTenantIdAndProfessionalId(tenantId, professionalId).stream()
+                .map(ClientDtos.ClientResponse::from).toList();
         return ResponseEntity.ok(ApiResponse.ok(data));
     }
 
+    /** Antes listava todos os colegas do tenant; agora devolve só o próprio profissional (lista de um item). */
     @GetMapping("/professionals")
     public ResponseEntity<ApiResponse<List<ProfessionalResponse>>> professionals() {
-        UUID tenantId = SecurityUtils.requireTenantId();
-        return ResponseEntity.ok(ApiResponse.ok(professionalService.listBasic(tenantId)));
+        var user = SecurityUtils.currentUser();
+        UUID professionalId = SecurityUtils.requireProfessionalId();
+        return ResponseEntity.ok(ApiResponse.ok(List.of(professionalService.getSelf(user.tenantId(), professionalId))));
     }
 }

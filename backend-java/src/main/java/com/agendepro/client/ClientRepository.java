@@ -45,6 +45,19 @@ public interface ClientRepository extends JpaRepository<Client, UUID> {
         return findByTenantIdAndPattern(tenantId, "%" + escaped + "%");
     }
 
+    /**
+     * Clientes que têm ao menos um agendamento com o profissional informado (papel PROFESSIONAL:
+     * nunca vê a base inteira do tenant). Filtra por tenant_id E professional_id.
+     */
+    @Query("""
+            SELECT c FROM Client c
+            WHERE c.tenantId = :tenantId
+              AND EXISTS (SELECT 1 FROM Appointment a
+                          WHERE a.clientId = c.id AND a.tenantId = :tenantId AND a.professionalId = :professionalId)
+            ORDER BY c.name ASC
+            """)
+    List<Client> findByTenantIdAndProfessionalId(@Param("tenantId") UUID tenantId, @Param("professionalId") UUID professionalId);
+
     /** Porta de reminder.controller.ts — clientes com telefone cadastrado. */
     List<Client> findByTenantIdAndPhoneIsNotNullOrderByNameAsc(UUID tenantId);
 
