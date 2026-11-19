@@ -10,6 +10,7 @@ import { TextField, PasswordField } from '@/components/auth/TextField';
 import { ChoiceGroup, type Choice } from '@/components/auth/ChoiceGroup';
 import { Stepper } from '@/components/auth/Stepper';
 import { Spinner } from '@/components/auth/Spinner';
+import { siteHost, tenantLink } from '@/lib/site';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -59,7 +60,7 @@ function slugify(text: string): string {
  * Extrai apenas o slug a partir de qualquer entrada do usuário:
  * - "barber-kings"                  → "barber-kings"
  * - "http://localhost:5173/barber-kings" → "barber-kings"
- * - "agendepro.com/barber-kings"    → "barber-kings"
+ * - "seudominio.com/barber-kings"   → "barber-kings" (qualquer domínio colado, inclusive o antigo)
  * - "barber-kings/booking"          → "barber-kings"
  */
 function extractSlug(input: string): string {
@@ -72,7 +73,7 @@ function extractSlug(input: string): string {
     } catch { return ''; }
   }
   // Has a real domain with dot + slash → skip hostname, take first path segment
-  // e.g. "agendepro.com/barber-kings" → "barber-kings"
+  // e.g. "seudominio.com/barber-kings" → "barber-kings"
   if (/\.[a-z]/.test(s) && s.includes('/')) {
     const parts = s.split('/').filter(Boolean);
     return (parts[1] ?? '').replace(/[^a-z0-9-]/g, '');
@@ -130,7 +131,7 @@ function ClientFindStep({ onBack }: { onBack: () => void }) {
 
       <form onSubmit={handleSubmit} noValidate className="space-y-6">
         <TextField
-          id="client-slug" label="Link do estabelecimento" prefixText="agendepro.com/" placeholder="barber-kings"
+          id="client-slug" label="Link do estabelecimento" prefixText={`${siteHost()}/`} placeholder="barber-kings"
           value={slug} onChange={e => { setSlug(e.target.value); setError(''); }}
           error={error} required autoFocus
         />
@@ -302,9 +303,9 @@ function BusinessFormStep({
             value={form.address} onChange={set('address')} error={errors.address}
           />
           <TextField
-            id={`${uid}-slug`} label="URL do seu perfil" prefixText="agendepro.com/" placeholder="seu-negocio"
+            id={`${uid}-slug`} label="URL do seu perfil" prefixText={`${siteHost()}/`} placeholder="seu-negocio"
             value={form.slug} onChange={handleSlugChange} error={errors.slug}
-            hint={form.slug ? <>Clientes acessarão: <span className="font-mono text-lp-black">agendepro.com/{form.slug}</span></> : undefined}
+            hint={form.slug ? <>Clientes acessarão: <span className="font-mono text-lp-black">{tenantLink(form.slug)}</span></> : undefined}
           />
         </fieldset>
 
@@ -357,7 +358,7 @@ function SuccessStep({ slug }: { slug: string }) {
         <p className="mb-2 text-sm text-lp-muted">
           Sua conta está no plano <strong className="text-lp-black">Trial</strong>. Faça login para configurar seu estabelecimento.
         </p>
-        <p className="mb-8 font-mono text-sm text-lp-black">agendepro.com/{slug}</p>
+        <p className="mb-8 font-mono text-sm text-lp-black">{tenantLink(slug)}</p>
 
         <LpButton onClick={() => navigate('/login')} size="lg" className="w-full">
           Ir para o login <ArrowRight className="h-4 w-4" aria-hidden />

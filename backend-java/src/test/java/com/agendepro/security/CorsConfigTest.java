@@ -44,6 +44,21 @@ class CorsConfigTest {
     }
 
     @Test
+    void transitionListWithCustomDomainWwwAndOldVercelAddress() {
+        CorsConfiguration c = CorsConfig.buildConfiguration(
+                "https://seudominio.com, https://www.seudominio.com/ ,https://nimbo-dusky.vercel.app,https://nimbo-*.vercel.app");
+
+        assertThat(c.getAllowedOrigins()).containsExactly(
+                "https://seudominio.com", "https://www.seudominio.com", "https://nimbo-dusky.vercel.app");
+        assertThat(c.checkOrigin("https://seudominio.com")).isNotNull();
+        assertThat(c.checkOrigin("https://www.seudominio.com")).isNotNull();
+        assertThat(c.checkOrigin("https://nimbo-dusky.vercel.app")).isNotNull();
+        assertThat(c.checkOrigin("https://seudominio.com.evil.com")).isNull();
+        assertThat(c.checkOrigin("https://app.seudominio.com")).isNull(); // subdomínio não listado
+        assertThat(c.getAllowedHeaders()).contains("X-Device-Token");
+    }
+
+    @Test
     void emptyListAllowsNoOrigin() {
         for (String raw : new String[]{"", "  ", " , ,", null}) {
             CorsConfiguration c = CorsConfig.buildConfiguration(raw);
