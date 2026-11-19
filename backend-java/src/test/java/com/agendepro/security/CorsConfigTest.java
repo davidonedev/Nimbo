@@ -22,6 +22,20 @@ class CorsConfigTest {
     }
 
     @Test
+    void toleratesQuotesAndPathsPastedIntoTheEnvVar() {
+        for (String raw : new String[]{
+                "\"https://nimbo-dusky.vercel.app\"", "'https://nimbo-dusky.vercel.app'",
+                "https://nimbo-dusky.vercel.app/api", "\"https://nimbo-dusky.vercel.app/\"",
+                " https://nimbo-dusky.vercel.app/api/ "}) {
+            CorsConfiguration c = CorsConfig.buildConfiguration(raw);
+            assertThat(c.getAllowedOrigins()).as(raw).containsExactly("https://nimbo-dusky.vercel.app");
+            assertThat(c.checkOrigin("https://nimbo-dusky.vercel.app")).as(raw).isNotNull();
+        }
+        assertThat(CorsConfig.buildConfiguration("\"https://nimbo-*.vercel.app\"").getAllowedOriginPatterns())
+                .containsExactly("https://nimbo-*.vercel.app");
+    }
+
+    @Test
     void wildcardThatWouldAllowEverythingIsIgnored() {
         for (String raw : new String[]{"*", "https://*", "http://**", "https://*.*", "https://nimbo-dusky.vercel.app,*"}) {
             CorsConfiguration c = CorsConfig.buildConfiguration(raw);

@@ -46,8 +46,7 @@ public class CorsConfig {
         List<String> patterns = new ArrayList<>();
 
         for (String entry : (rawOrigins == null ? "" : rawOrigins).split(",")) {
-            String origin = entry.trim();
-            while (origin.endsWith("/")) origin = origin.substring(0, origin.length() - 1);
+            String origin = normalizeOrigin(entry);
             if (origin.isEmpty()) continue;
 
             if (origin.contains("*")) {
@@ -73,6 +72,18 @@ public class CorsConfig {
         configuration.setAllowCredentials(false);
         configuration.setMaxAge(3600L); // o navegador reaproveita o preflight por 1 h: menos OPTIONS, menos chance de falha
         return configuration;
+    }
+
+    /**
+     * Deixa só "esquema://host[:porta]", que é o que o navegador envia no cabeçalho Origin. Corrige o que costuma
+     * ser colado errado no painel do Render: espaços, aspas ao redor ("https://x.app"), barra final e caminho
+     * (https://x.app/api). Sem isso a origem nunca bate e o navegador mostra só "Erro de CORS".
+     */
+    static String normalizeOrigin(String raw) {
+        String origin = raw.trim().replaceAll("^[\"']+|[\"']+$", "").trim();
+        origin = origin.replaceFirst("^([a-zA-Z][a-zA-Z0-9+.-]*://[^/]*).*$", "$1");
+        while (origin.endsWith("/")) origin = origin.substring(0, origin.length() - 1);
+        return origin;
     }
 
     /** "*", "https://*", "http://**"... liberam qualquer site. */

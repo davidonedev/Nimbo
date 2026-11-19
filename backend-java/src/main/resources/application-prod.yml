@@ -48,3 +48,6 @@ logging:
     com.agendepro.security.JwtAuthenticationFilter: INFO
     com.agendepro.ratelimit.RateLimitFilter: INFO
     org.hibernate.SQL: WARN
+    # Registra "Reject: '<origem>' origin is not allowed" quando o CORS barra uma chamada: o log do Render passa a
+    # mostrar qual origem o navegador enviou (só aparece em rejeição, não em cada requisição).
+    org.springframework.web.cors.DefaultCorsProcessor: DEBUG
