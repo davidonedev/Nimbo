@@ -9,6 +9,7 @@ import { resendVerificationEmailApi } from '@/services/public.service';
 import { usePublicClient } from '@/context/PublicClientContext';
 import { usePublicTenant } from '@/context/PublicTenantContext';
 import GoogleSignInButton from './GoogleSignInButton';
+import { isGoogleLoginEnabled } from '@/lib/googleAuth';
 
 interface ClientLoginDialogProps {
   open: boolean;
@@ -147,7 +148,7 @@ export default function ClientLoginDialog({ open, onClose }: ClientLoginDialogPr
                 disabled={loading}
               />
 
-              <Divider />
+              {isGoogleLoginEnabled && <Divider />}
 
               {/* E-mail + senha */}
               <form onSubmit={handleSubmit} noValidate className="space-y-3">

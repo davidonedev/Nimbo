@@ -4,7 +4,7 @@ import { useSwipe } from '@/hooks/useSwipe';
 import { format, addDays, subDays, startOfWeek, addWeeks, subWeeks, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  Bell, ChevronLeft, ChevronRight, Plus, Trash2, CalendarPlus, X,
+  Bell, ChevronLeft, ChevronRight, Plus, Trash2, CalendarPlus,
   ThumbsUp, ThumbsDown, Table2, Calendar, Search, CheckCircle, Loader2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,11 +12,12 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTenant } from '@/context/TenantContext';
 import { formatCurrency } from '@/lib/utils';
+import { isPastInBrasilia, nowBrasilia } from '@/lib/scheduling';
+import { NewAppointmentDialog } from './NewAppointmentDialog';
 import { AppointmentCardList, type ApptCardData } from '@/components/ui/AppointmentCards';
 import type { Appointment, AppointmentStatus } from '@/types';
 
@@ -56,69 +57,6 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const HOURS = Array.from({ length: 11 }, (_, i) => `${String(i + 8).padStart(2, '0')}:00`);
-
-function addMinutes(time: string, minutes: number) {
-  const [h, m] = time.split(':').map(Number);
-  const total = h * 60 + m + minutes;
-  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
-}
-
-/** Retorna data e hora atual no fuso de Brasília (America/Sao_Paulo). */
-function nowBrasilia(): { date: string; time: string } {
-  const now = new Date();
-  const datePart = now.toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }); // "YYYY-MM-DD"
-  const timePart = now.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false }); // "HH:mm"
-  return { date: datePart, time: timePart };
-}
-
-/** Retorna true se a data+hora escolhida já passou em Brasília. */
-function isPastInBrasilia(date: string, time: string): boolean {
-  const { date: todayBR, time: nowTimeBR } = nowBrasilia();
-  if (date < todayBR) return true;
-  if (date === todayBR && time <= nowTimeBR) return true;
-  return false;
-}
-
-function isSlotConflict(
-  date: string, profId: string, startTime: string, endTime: string,
-  appointments: Appointment[], blockedSlots: { professionalId: string; date: string; startTime: string; endTime: string }[],
-  excludeId?: string
-): boolean {
-  const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
-  const sMin = toMin(startTime), eMin = toMin(endTime);
-  return (
-    appointments.some(a =>
-      a.id !== excludeId && a.professionalId === profId && a.date === date &&
-      a.status !== 'cancelled' && sMin < toMin(a.endTime) && eMin > toMin(a.startTime)
-    ) ||
-    blockedSlots.some(b =>
-      b.professionalId === profId && b.date === date &&
-      sMin < toMin(b.endTime) && eMin > toMin(b.startTime)
-    )
-  );
-}
-
-interface ApptForm {
-  // cliente existente
-  clientId: string;
-  clientSearch: string;
-  // novo cliente
-  newClientMode: boolean;
-  newName: string;
-  newEmail: string;
-  newPhone: string;
-  // agendamento
-  professionalId: string; serviceId: string;
-  date: string; startTime: string; notes: string; status: AppointmentStatus;
-}
-const emptyForm = (): ApptForm => ({
-  clientId: '', clientSearch: '',
-  newClientMode: false,
-  newName: '', newEmail: '', newPhone: '',
-  professionalId: '', serviceId: '',
-  date: format(new Date(), 'yyyy-MM-dd'), startTime: '09:00',
-  notes: '', status: 'confirmed',
-});
 
 // ─── Table row — status inline editable ──────────────────────────────────────
 function TableRow({
@@ -213,15 +151,24 @@ function TableRow({
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function AgendaView() {
+interface AgendaViewProps {
+  /**
+   * Fixa a visão: `calendar` é a Agenda (calendário visual) e `table` é a lista de Agendamentos.
+   * Sem a prop, mantém o seletor Tabela/Calendário de antes.
+   */
+  only?: 'calendar' | 'table';
+}
+
+export default function AgendaView({ only }: AgendaViewProps = {}) {
   const {
     appointments, professionals, clients, services,
     blockedSlots, addBlockedSlot, removeBlockedSlot,
-    updateAppointmentStatus, cancelAppointment, addAppointment,
+    updateAppointmentStatus, cancelAppointment,
   } = useTenant();
 
   const { isMobile } = useBreakpoint();
-  const [view, setView] = useState<'calendar' | 'table'>('table');
+  const [viewState, setView] = useState<'calendar' | 'table'>('table');
+  const view = only ?? viewState;
 
   // ── Calendar state ──────────────────────────────────────────────────────────
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -241,9 +188,7 @@ export default function AgendaView() {
     professionalId: '', date: format(new Date(), 'yyyy-MM-dd'),
     startTime: '12:00', endTime: '13:00', reason: '',
   });
-  const [apptDialog, setApptDialog] = useState(false);
-  const [apptForm, setApptForm] = useState<ApptForm>(emptyForm());
-  const [apptError, setApptError] = useState('');
+  const [apptDialog, setApptDialog] = useState<{ date?: string; professionalId?: string } | null>(null);
   const [detailAppt, setDetailAppt] = useState<Appointment | null>(null);
   const [rejectId, setRejectId] = useState<string | null>(null);
 
@@ -318,76 +263,7 @@ export default function AgendaView() {
     } catch (err) { console.error(err); }
   };
 
-  const selectedService = services.find(s => s.id === apptForm.serviceId);
-  const availableProfs = useMemo(() =>
-    apptForm.serviceId ? professionals.filter(p => p.services.includes(apptForm.serviceId)) : professionals,
-    [professionals, apptForm.serviceId]);
-
-  const handleApptSave = async () => {
-    setApptError('');
-    if (!apptForm.professionalId || !apptForm.serviceId || !apptForm.date || !apptForm.startTime) {
-      setApptError('Preencha todos os campos obrigatórios.'); return;
-    }
-    if (apptForm.newClientMode) {
-      if (!apptForm.newName.trim() || !apptForm.newEmail.trim() || !apptForm.newPhone.trim()) {
-        setApptError('Preencha nome, e-mail e telefone do novo cliente.'); return;
-      }
-    } else {
-      if (!apptForm.clientId) {
-        setApptError('Selecione um cliente.'); return;
-      }
-    }
-    if (isPastInBrasilia(apptForm.date, apptForm.startTime)) {
-      setApptError('Não é possível agendar em um horário que já passou.'); return;
-    }
-    if (!selectedService) return;
-    const endTime = addMinutes(apptForm.startTime, selectedService.duration);
-    if (isSlotConflict(apptForm.date, apptForm.professionalId, apptForm.startTime, endTime, appointments, blockedSlots)) {
-      setApptError('Conflito de horário: o profissional já tem um compromisso neste intervalo.'); return;
-    }
-    try {
-      // Garante formato HH:mm independente do browser (alguns retornam HH:mm:ss)
-      const startTime = apptForm.startTime.slice(0, 5);
-
-      const base = {
-        professionalId: apptForm.professionalId,
-        serviceId:      apptForm.serviceId,
-        date:           apptForm.date,
-        startTime,
-        notes:          apptForm.notes.trim() || undefined,
-      };
-
-      const payload = apptForm.newClientMode
-        ? {
-            ...base,
-            clientName:  apptForm.newName.trim(),
-            clientEmail: apptForm.newEmail.trim(),
-            clientPhone: apptForm.newPhone.trim() || undefined,
-          }
-        : {
-            ...base,
-            clientId: apptForm.clientId,
-          };
-
-      await addAppointment(payload);
-      setApptDialog(false); setApptForm(emptyForm());
-    } catch (err) {
-      if (err && typeof err === 'object' && 'details' in err) {
-        const details = (err as { details?: { field: string; message: string }[] }).details;
-        if (details?.length) {
-          setApptError(details.map(d => `${d.field}: ${d.message}`).join(' | '));
-          return;
-        }
-      }
-      setApptError(err instanceof Error ? err.message : 'Erro ao criar agendamento.');
-    }
-  };
-
-  const openApptDialog = (date?: string, profId?: string) => {
-    setApptError('');
-    setApptForm({ ...emptyForm(), date: date ?? format(new Date(), 'yyyy-MM-dd'), professionalId: profId ?? '' });
-    setApptDialog(true);
-  };
+  const openApptDialog = (date?: string, profId?: string) => setApptDialog({ date, professionalId: profId });
 
   const handleTableSave = async (id: string, status: AppointmentStatus) => {
     await updateAppointmentStatus(id, status);
@@ -400,7 +276,7 @@ export default function AgendaView() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Agenda</h2>
+          <h2 className="text-2xl font-bold tracking-tight">{only === 'table' ? 'Agendamentos' : 'Agenda'}</h2>
           <p className="text-muted-foreground text-sm">
             {view === 'table'
               ? `${tableRows.length} agendamento${tableRows.length !== 1 ? 's' : ''} encontrado${tableRows.length !== 1 ? 's' : ''}`
@@ -410,8 +286,8 @@ export default function AgendaView() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {/* View toggle */}
-          <div className="flex items-center border rounded-md overflow-hidden">
+          {/* View toggle (só quando a tela não está fixada em Agenda ou Agendamentos) */}
+          <div className={`items-center border rounded-md overflow-hidden ${only ? 'hidden' : 'flex'}`}>
             <Button variant="ghost" size="sm" className={`rounded-none border-r gap-1.5 ${view === 'table' ? 'bg-muted' : ''}`}
               onClick={() => setView('table')}>
               <Table2 className="h-3.5 w-3.5" /> Tabela
@@ -723,202 +599,14 @@ export default function AgendaView() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={apptDialog} onOpenChange={o => { setApptDialog(o); if (!o) { setApptError(''); setApptForm(emptyForm()); } }}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CalendarPlus className="h-5 w-5 text-primary" /> Novo Agendamento
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-
-            {/* Serviço */}
-            <div className="space-y-1">
-              <Label>Serviço *</Label>
-              <Select value={apptForm.serviceId} onValueChange={v => setApptForm(f => ({ ...f, serviceId: v, professionalId: '' }))}>
-                <SelectTrigger><SelectValue placeholder="Selecione o serviço…" /></SelectTrigger>
-                <SelectContent>
-                  {services.map(s => <SelectItem key={s.id} value={s.id}>{s.name} — {formatCurrency(s.price)} · {s.duration} min</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Profissional */}
-            <div className="space-y-1">
-              <Label>Profissional *</Label>
-              <Select value={apptForm.professionalId} onValueChange={v => setApptForm(f => ({ ...f, professionalId: v }))} disabled={!apptForm.serviceId}>
-                <SelectTrigger><SelectValue placeholder={apptForm.serviceId ? 'Selecione…' : 'Selecione o serviço primeiro'} /></SelectTrigger>
-                <SelectContent>
-                  {availableProfs.map(p => <SelectItem key={p.id} value={p.id}>{p.name} — {p.specialty}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Cliente — busca ou novo */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Cliente *</Label>
-                <button
-                  type="button"
-                  className="text-xs text-primary underline underline-offset-2"
-                  onClick={() => setApptForm(f => ({
-                    ...f,
-                    newClientMode: !f.newClientMode,
-                    clientId: '', clientSearch: '',
-                    newName: '', newEmail: '', newPhone: '',
-                  }))}
-                >
-                  {apptForm.newClientMode ? '← Buscar cliente existente' : '+ Novo cliente'}
-                </button>
-              </div>
-
-              {!apptForm.newClientMode ? (
-                /* ── Busca de cliente existente ── */
-                <div className="space-y-1">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      className="pl-9"
-                      placeholder="Digite o nome do cliente…"
-                      value={apptForm.clientSearch}
-                      onChange={e => setApptForm(f => ({ ...f, clientSearch: e.target.value, clientId: '' }))}
-                    />
-                  </div>
-                  {apptForm.clientSearch.trim().length > 0 && (
-                    <div className="border rounded-md max-h-44 overflow-y-auto bg-popover shadow-md">
-                      {clients
-                        .filter(c => c.name.toLowerCase().startsWith(apptForm.clientSearch.toLowerCase()))
-                        .slice(0, 20)
-                        .map(c => (
-                          <button
-                            key={c.id}
-                            type="button"
-                            className={`w-full text-left px-3 py-2.5 text-sm hover:bg-muted transition-colors border-b last:border-0 ${apptForm.clientId === c.id ? 'bg-primary/10 font-semibold' : ''}`}
-                            onClick={() => setApptForm(f => ({ ...f, clientId: c.id, clientSearch: c.name }))}
-                          >
-                            <span className="font-medium">{c.name}</span>
-                            <span className="text-muted-foreground text-xs ml-2">{c.phone}</span>
-                          </button>
-                        ))}
-                      {clients.filter(c => c.name.toLowerCase().startsWith(apptForm.clientSearch.toLowerCase())).length === 0 && (
-                        <p className="px-3 py-2 text-sm text-muted-foreground">Nenhum cliente encontrado.</p>
-                      )}
-                    </div>
-                  )}
-                  {apptForm.clientId && (
-                    <p className="text-xs text-green-600 font-medium">
-                      ✓ {clients.find(c => c.id === apptForm.clientId)?.name} selecionado
-                    </p>
-                  )}
-                </div>
-              ) : (
-                /* ── Novo cliente ── */
-                <div className="space-y-3 p-3 rounded-lg border bg-muted/30">
-                  <p className="text-xs text-muted-foreground">Preencha os dados do novo cliente:</p>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Nome completo *</Label>
-                    <Input
-                      placeholder="João Silva"
-                      value={apptForm.newName}
-                      onChange={e => setApptForm(f => ({ ...f, newName: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">E-mail *</Label>
-                    <Input
-                      type="email"
-                      placeholder="joao@email.com"
-                      value={apptForm.newEmail}
-                      onChange={e => setApptForm(f => ({ ...f, newEmail: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Telefone *</Label>
-                    <Input
-                      placeholder="(00) 00000-0000"
-                      value={apptForm.newPhone}
-                      onChange={e => {
-                        const digits = e.target.value.replace(/\D/g, '').slice(0, 11);
-                        let masked = '';
-                        if (digits.length === 0) masked = '';
-                        else if (digits.length <= 2) masked = `(${digits}`;
-                        else if (digits.length <= 7) masked = `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-                        else masked = `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
-                        setApptForm(f => ({ ...f, newPhone: masked }));
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Data e Horário */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Data *</Label>
-                <Input type="date" value={apptForm.date}
-                  min={nowBrasilia().date}
-                  onChange={e => setApptForm(f => ({ ...f, date: e.target.value }))} />
-              </div>
-              <div className="space-y-1">
-                <Label>Horário *</Label>
-                <Input type="time" value={apptForm.startTime}
-                  min={apptForm.date === nowBrasilia().date ? nowBrasilia().time : undefined}
-                  onChange={e => setApptForm(f => ({ ...f, startTime: e.target.value }))} />
-              </div>
-            </div>
-
-            {/* Resumo do serviço */}
-            {selectedService && (
-              <p className="text-xs text-muted-foreground bg-muted/50 rounded p-2">
-                Duração: <strong>{selectedService.duration} min</strong> · Término: <strong>{addMinutes(apptForm.startTime, selectedService.duration)}</strong> · Valor: <strong>{formatCurrency(selectedService.price)}</strong>
-              </p>
-            )}
-
-            {/* Status */}
-            <div className="space-y-1">
-              <Label>Status</Label>
-              <Select value={apptForm.status} onValueChange={v => setApptForm(f => ({ ...f, status: v as AppointmentStatus }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="confirmed">Confirmado</SelectItem>
-                  <SelectItem value="pending">Agendado</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Observações */}
-            <div className="space-y-1">
-              <Label>Observações</Label>
-              <Textarea placeholder="Alguma observação…" value={apptForm.notes} onChange={e => setApptForm(f => ({ ...f, notes: e.target.value }))} className="resize-none h-20" />
-            </div>
-
-            {apptError && (
-              <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 rounded-md px-3 py-2">
-                <X className="h-4 w-4 shrink-0" /> {apptError}
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setApptDialog(false); setApptError(''); setApptForm(emptyForm()); }}>Cancelar</Button>
-            <Button
-              onClick={handleApptSave}
-              disabled={
-                !apptForm.serviceId ||
-                !apptForm.professionalId ||
-                !apptForm.date ||
-                !apptForm.startTime ||
-                (apptForm.newClientMode
-                  ? !apptForm.newName.trim() || !apptForm.newEmail.trim() || !apptForm.newPhone.trim()
-                  : !apptForm.clientId)
-              }
-            >
-              Criar Agendamento
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {apptDialog && (
+        <NewAppointmentDialog
+          open
+          onOpenChange={o => { if (!o) setApptDialog(null); }}
+          initialDate={apptDialog.date}
+          initialProfessionalId={apptDialog.professionalId}
+        />
+      )}
 
       <Dialog open={!!rejectId} onOpenChange={o => !o && setRejectId(null)}>
         <DialogContent className="max-w-sm">

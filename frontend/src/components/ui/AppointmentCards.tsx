@@ -45,7 +45,7 @@ export interface ApptCardData {
   price: number;
   notes?: string;
   clientName?: string;
-  clientPhone?: string;
+  clientPhone?: string | null;
   serviceName?: string;
   serviceDuration?: number;
   professionalName?: string; // undefined = don't show (professional's own view)

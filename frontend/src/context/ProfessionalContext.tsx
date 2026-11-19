@@ -3,7 +3,7 @@
  * Carrega agendamentos, serviços e dados do tenant via API.
  * Expõe a mesma interface que antes para os componentes.
  */
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { Appointment, Client, Professional, Service, Tenant } from '../types';
 import { useAuth } from './AuthContext';
 
@@ -16,7 +16,8 @@ import {
 import { listProfServicesApi, createProfServiceApi, updateProfServiceApi, deleteProfServiceApi } from '../services/services.service';
 import type { ServicePayload } from '../services/services.service';
 import { updateProfessionalMeApi, type UpdateMePayload } from '../services/professionals.service';
-import { api } from '../lib/api';
+import { api, ApiError } from '../lib/api';
+import { Button } from '@/components/ui/button';
 
 interface ProfessionalContextType {
   professional: Professional;
@@ -39,7 +40,10 @@ interface ProfessionalContextType {
 const ProfessionalContext = createContext<ProfessionalContextType | null>(null);
 
 export function ProfessionalProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  // `logout` muda de identidade a cada render do AuthProvider; a ref evita refazer a carga por causa disso.
+  const logoutRef = useRef(logout);
+  useEffect(() => { logoutRef.current = logout; });
 
   const [professional, setProfessional] = useState<Professional | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -47,6 +51,7 @@ export function ProfessionalProvider({ children }: { children: React.ReactNode }
   const [services, setServices]         = useState<Service[]>([]);
   const [tenant, setTenant]             = useState<Tenant | null>(null);
   const [loading, setLoading]           = useState(true);
+  const [loadError, setLoadError]       = useState<string | null>(null);
 
   const normalizeProfessional = (p: Record<string, unknown>): Professional => {
     const services = (p.services as { serviceId: string }[] | undefined) ?? [];
@@ -69,6 +74,7 @@ export function ProfessionalProvider({ children }: { children: React.ReactNode }
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [apts, svcs, profRaw, t, cls] = await Promise.all([
         listProfAppointmentsApi(),
@@ -77,11 +83,18 @@ export function ProfessionalProvider({ children }: { children: React.ReactNode }
         api.get<Tenant>('/professional/tenant'),
         api.get<Client[]>('/professional/clients'),
       ]);
-      setAppointments(apts);
+      // Defesa em profundidade: o back já devolve só os dele, mas nunca mostramos agendamento de colega.
+      setAppointments(apts.filter((a) => a.professionalId === (profRaw.id as string)));
       setServices(svcs);
       setProfessional(normalizeProfessional(profRaw));
       setTenant(t);
       setAllClients(cls);
+    } catch (err) {
+      // Sessão vencida/revogada: volta para o login (o guard da rota redireciona quando o usuário some).
+      if (err instanceof ApiError && err.status === 401) { logoutRef.current(); return; }
+      setLoadError(err instanceof ApiError && err.status > 0
+        ? err.message
+        : 'Não foi possível conectar ao servidor. Verifique sua internet.');
     } finally {
       setLoading(false);
     }
@@ -99,10 +112,15 @@ export function ProfessionalProvider({ children }: { children: React.ReactNode }
     );
   }
 
-  if (!professional || !tenant) {
+  if (loadError || !professional || !tenant) {
     return (
-      <div className="flex h-dvh items-center justify-center text-muted-foreground">
-        Profissional não encontrado.
+      <div role="alert" className="flex h-dvh flex-col items-center justify-center gap-4 p-6 text-center">
+        <p className="text-lg font-semibold">Não foi possível carregar o seu painel</p>
+        <p className="max-w-sm text-sm text-muted-foreground">{loadError ?? 'Profissional não encontrado.'}</p>
+        <div className="flex gap-2">
+          <Button onClick={() => { void refresh(); }}>Tentar novamente</Button>
+          <Button variant="outline" onClick={logout}>Sair</Button>
+        </div>
       </div>
     );
   }

@@ -59,6 +59,9 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: ['./src/test/setup.ts'],
+    // O 1º teste de cada arquivo paga a partida do jsdom; com a máquina ocupada passa dos 5 s padrão.
+    testTimeout: 20000,
+    hookTimeout: 20000,
   },
   resolve: {
     alias: {

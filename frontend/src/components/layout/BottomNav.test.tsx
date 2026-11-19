@@ -45,3 +45,11 @@ describe('BottomNav', () => {
     }
   });
 });
+
+describe('BottomNav sem "Mais" (papel sem itens extras)', () => {
+  it('não mostra o botão "Mais" quando onMore não é passado', () => {
+    render(<MemoryRouter initialEntries={['/professional/agenda']}><BottomNav items={items} accentColor="#ff0000" /></MemoryRouter>);
+    expect(screen.queryByRole('button', { name: 'Mais' })).toBeNull();
+    expect(screen.getAllByRole('link')).toHaveLength(3);
+  });
+});

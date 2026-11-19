@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 export interface AbsentClient {
   id: string;
   name: string;
-  phone: string;
+  phone: string | null;
   email: string;
   createdAt: string;
   lastAppointmentDate: string | null;

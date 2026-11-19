@@ -42,33 +42,8 @@ describe('deltaText (novos clientes vs. 7 dias anteriores)', () => {
 });
 
 describe('computeOpenStatus (Aberto/Fechado da navbar)', () => {
-  const ana = { workingDays: [1, 2, 3, 4, 5], workingHours: { start: '09:00', end: '12:00' } };
-  const at = (h: number, m = 0, day = 13) => new Date(2026, 10, day, h, m); // 13/11/2026 = sexta (hora local)
-
-  it('aberto quando o portal aceita agendamentos e alguém trabalha agora', () => {
-    expect(computeOpenStatus({ isOpen: true }, [ana], at(10))).toBe(true);
-    expect(computeOpenStatus({ isOpen: true }, [ana], at(9, 0))).toBe(true);
-  });
-
-  it('fechado no horário de término (fim exclusivo) e antes de abrir', () => {
-    expect(computeOpenStatus({ isOpen: true }, [ana], at(12, 0))).toBe(false);
-    expect(computeOpenStatus({ isOpen: true }, [ana], at(8, 59))).toBe(false);
-  });
-
-  it('fechado em dia de folga', () => {
-    expect(computeOpenStatus({ isOpen: true }, [ana], at(10, 0, 14))).toBe(false); // sábado
-  });
-
-  it('fechado quando o portal está fechado, mesmo dentro do expediente', () => {
-    expect(computeOpenStatus({ isOpen: false }, [ana], at(10))).toBe(false);
-  });
-
-  it('fechado sem profissionais', () => {
-    expect(computeOpenStatus({ isOpen: true }, [], at(10))).toBe(false);
-  });
-
-  it('basta um profissional trabalhando', () => {
-    const bia = { workingDays: [5], workingHours: { start: '13:00', end: '18:00' } };
-    expect(computeOpenStatus({ isOpen: true }, [ana, bia], at(14))).toBe(true);
+  it('segue o interruptor do portal do cliente (tenant.isOpen)', () => {
+    expect(computeOpenStatus({ isOpen: true })).toBe(true);
+    expect(computeOpenStatus({ isOpen: false })).toBe(false);
   });
 });

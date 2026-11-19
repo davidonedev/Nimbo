@@ -4,7 +4,9 @@
  * TenantContext, ProfessionalContext e PublicTenantContext têm seus próprios
  * fetch independentes — não dependem mais deste context.
  */
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { useAuth } from './AuthContext';
+import { ApiError } from '../lib/api';
 import type { TenantData, TenantStatus, PlanConfig, TenantPlan } from '../types';
 import {
   listTenantsApi,
@@ -41,6 +43,10 @@ interface PlatformContextType {
 const PlatformContext = createContext<PlatformContextType | null>(null);
 
 export function PlatformProvider({ children }: { children: React.ReactNode }) {
+  const { logout } = useAuth();
+  // `logout` muda de identidade a cada render do AuthProvider; a ref evita refazer a carga por causa disso.
+  const logoutRef = useRef(logout);
+  useEffect(() => { logoutRef.current = logout; });
   const [tenants, setTenants] = useState<TenantWithCounts[]>([]);
   const [metrics, setMetrics] = useState<PlatformMetrics | null>(null);
   const [planConfigs, setPlanConfigs] = useState<PlanConfig[]>([]);
@@ -60,6 +66,8 @@ export function PlatformProvider({ children }: { children: React.ReactNode }) {
       setMetrics(metricsData);
       setPlanConfigs(plans);
     } catch (err) {
+      // Sessão vencida/revogada: volta para o login em vez de mostrar o erro cru dentro do layout.
+      if (err instanceof ApiError && err.status === 401) { logoutRef.current(); return; }
       setError(err instanceof Error ? err.message : 'Erro ao carregar tenants');
     } finally {
       setLoading(false);

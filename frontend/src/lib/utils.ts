@@ -13,7 +13,9 @@ export function formatCurrency(value: number): string {
  * Converts a hex color (#rrggbb) to the "H S% L%" string used by CSS variables.
  * Returns an object with the HSL string and whether the color is light (for foreground).
  */
-export function hexToHslVars(hex: string): { hsl: string; isLight: boolean } {
+export function hexToHslVars(input: string | null | undefined): { hsl: string; isLight: boolean } {
+  // Cor ausente ou inválida (ex.: vazia vinda do banco) não pode derrubar o layout nem gerar "NaN" no CSS: cai no roxo da marca.
+  const hex = typeof input === 'string' && /^#[0-9a-fA-F]{6}$/.test(input) ? input : '#7c3aed';
   const r = parseInt(hex.slice(1, 3), 16) / 255;
   const g = parseInt(hex.slice(3, 5), 16) / 255;
   const b = parseInt(hex.slice(5, 7), 16) / 255;

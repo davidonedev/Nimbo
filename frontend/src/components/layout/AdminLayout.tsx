@@ -1,17 +1,15 @@
-import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { NavLink, Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
-import {
-  LayoutDashboard, Calendar, Users, UserCog, BarChart3, LogOut, X,
-  Settings, Sun, Moon, ExternalLink, Scissors, Package, Bell,
-  UserCircle, Globe, Clock, ChevronDown, ChevronLeft, ChevronRight, Plus, Copy, CheckCircle, LifeBuoy, Shield,
-} from 'lucide-react';
+import { lazy, Suspense, useState, useEffect } from 'react';
+import { useLocation, useNavigate, Outlet } from 'react-router-dom';
+import { Sun, Moon, Plus, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NotificationBell } from '@/components/ui/NotificationBell';
 import { AdminSearch } from './admin/AdminSearch';
 import { OpenStatus } from './admin/OpenStatus';
 import { UserMenu } from './admin/UserMenu';
 import { BottomNav } from './BottomNav';
+import { MoreSheet } from './MoreSheet';
+import { Sidebar } from './Sidebar';
+import { ScreenSuspense } from './ScreenFallback';
 import { Fab } from '@/components/ui/fab';
 import { useAuth, IMPERSONATION_BACKUP_KEY } from '@/context/AuthContext';
 import { useTenant } from '@/context/TenantContext';
@@ -19,24 +17,10 @@ import { useTheme } from '@/hooks/useTheme';
 import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed';
 import { hexToHslVars } from '@/lib/utils';
 import { useAppointmentNotifications } from '@/hooks/useAppointmentNotifications';
+import { bottomBarItems, moreItems, navItemsFor } from '@/config/navigation';
 
-const NAV_ITEMS = [
-  { to: '/admin/dashboard',     label: 'Painel',        icon: LayoutDashboard },
-  { to: '/admin/agenda',        label: 'Agenda',        icon: Calendar        },
-  { to: '/admin/clients',       label: 'Clientes',      icon: Users           },
-  { to: '/admin/professionals', label: 'Profissionais', icon: UserCog         },
-  { to: '/admin/services',      label: 'Serviços',      icon: Scissors        },
-  { to: '/admin/products',      label: 'Produtos',      icon: Package         },
-  { to: '/admin/reminders',     label: 'Lembretes',     icon: Bell            },
-  { to: '/admin/revenue',       label: 'Faturamento',   icon: BarChart3       },
-  { to: '/admin/access-help',   label: 'Pedidos de acesso', icon: LifeBuoy    },
-];
-
-const ACCOUNT_ITEMS = [
-  { to: '/admin/account',          label: 'Configurações',     icon: Settings },
-  { to: '/admin/account/portal',   label: 'Portal do Cliente', icon: Globe    },
-  { to: '/admin/account/schedule', label: 'Dispon. de Horários ',          icon: Clock    },
-];
+// Só é baixado quando alguém abre o "+ Novo"
+const NewAppointmentDialog = lazy(() => import('@/components/admin/NewAppointmentDialog').then(m => ({ default: m.NewAppointmentDialog })));
 
 export default function AdminLayout() {
   const { logout, user }                            = useAuth();
@@ -45,17 +29,8 @@ export default function AdminLayout() {
   const { collapsed, toggle: toggleCollapsed }      = useSidebarCollapsed();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const [open, setOpen]             = useState(false);
-  const [accountOpen, setAccountOpen] = useState(true);
-  const [copied, setCopied]         = useState(false);
-  // Tooltip dos ícones com a sidebar recolhida: num portal, porque a nav (com rolagem) recortaria o que passa da borda.
-  const [tip, setTip] = useState<{ label: string; top: number } | null>(null);
-  const showTip = (label: string) => (e: React.SyntheticEvent<HTMLElement>) => {
-    if (!collapsed || !window.matchMedia('(min-width: 768px)').matches) return;
-    const r = e.currentTarget.getBoundingClientRect();
-    setTip({ label: label.trim(), top: r.top + r.height / 2 });
-  };
-  const hideTip = () => setTip(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [newApptOpen, setNewApptOpen] = useState(false);
 
   const [impersonating] = useState<string | null>(() => {
     try { return localStorage.getItem(IMPERSONATION_BACKUP_KEY) ? (tenant?.name ?? 'tenant') : null; } catch { return null; }
@@ -94,146 +69,24 @@ export default function AdminLayout() {
     };
   }, [hsl, fgHsl]);
 
-  const handleCopyPortal = () => {
-    navigator.clipboard.writeText(`${window.location.origin}/${tenant.slug}`).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  // `collapsed` só vale do breakpoint md para cima; na gaveta mobile o menu é sempre completo.
-  const hideWhenCollapsed = collapsed ? 'md:hidden' : '';
-
-  const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `group relative flex items-center gap-3 px-3 py-3 md:py-2.5 rounded-lg text-sm font-medium transition-colors
-    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
-    ${collapsed ? 'md:justify-center md:px-0' : ''}
-    ${isActive ? 'text-white' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`;
-
-  const linkStyle = ({ isActive }: { isActive: boolean }) =>
-    isActive ? { backgroundColor: accentColor } : {};
-
-  /** Item de menu: com a sidebar recolhida só o ícone aparece, com tooltip (hover e foco) e aria-label. */
-  const renderLink = ({ to, label, icon: Icon }: { to: string; label: string; icon: typeof Settings }, end?: boolean) => (
-    <NavLink key={to} to={to} end={end} onClick={() => setOpen(false)}
-      className={linkClass} style={linkStyle} aria-label={collapsed ? label.trim() : undefined}
-      onMouseEnter={showTip(label)} onMouseLeave={hideTip} onFocus={showTip(label)} onBlur={hideTip}>
-      <Icon className="h-4 w-4 shrink-0" aria-hidden />
-      <span className={hideWhenCollapsed}>{label}</span>
-    </NavLink>
-  );
+  const role = user?.role;
 
   return (
     <div
       className="flex h-dvh bg-muted/30 overflow-hidden"
       style={{ '--primary': hsl, '--primary-foreground': fgHsl, '--ring': hsl } as React.CSSProperties}
     >
-      {open && <div className="fixed inset-0 bg-black/40 z-[35] md:hidden" onClick={() => setOpen(false)} />}
 
-      <aside
+      <Sidebar
         id="admin-sidebar"
-        className={`fixed md:relative inset-y-0 left-0 z-40 w-64 ${collapsed ? 'md:w-16' : 'md:w-64'} bg-card border-r flex flex-col transform transition-[transform,width] duration-200 motion-reduce:transition-none ${open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
-      >
-        {/* Recolher / expandir (desktop) */}
-        <button
-          type="button"
-          onClick={toggleCollapsed}
-          aria-label={collapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
-          aria-expanded={!collapsed}
-          aria-controls="admin-sidebar"
-          className="absolute -right-3 top-5 z-50 hidden h-6 w-6 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:flex"
-        >
-          {collapsed ? <ChevronRight className="h-3.5 w-3.5" aria-hidden /> : <ChevronLeft className="h-3.5 w-3.5" aria-hidden />}
-        </button>
-
-        {/* Logo da Nimbo (versão escura no tema escuro); recolhida mostra só o ícone */}
-        <div className={`p-4 flex h-14 items-center justify-between ${collapsed ? 'md:justify-center md:px-0' : ''}`}>
-          <Link to="/admin/dashboard" onClick={() => setOpen(false)} aria-label="Nimbo — ir para o Painel" className="flex items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <span className={hideWhenCollapsed}>
-              <img src="/images/nimbo-logo-icon.png" alt="Nimbo" width={181} height={36} className="h-8 w-auto dark:hidden" />
-              <img src="/images/nimbo-logo-branco.png" alt="Nimbo" width={181} height={36} className="hidden h-8 w-auto dark:block" />
-            </span>
-            {collapsed && (
-              <img src="/images/favicon-32.png" alt="Nimbo" width={32} height={32} className="hidden h-8 w-8 rounded-lg md:block" />
-            )}
-          </Link>
-          <Button variant="ghost" size="icon" className="md:hidden shrink-0" onClick={() => setOpen(false)} aria-label="Fechar menu">
-            <X className="h-4 w-4" aria-hidden />
-          </Button>
-        </div>
-
-        {/* Nav */}
-        <nav aria-label="Menu principal" className="flex-1 p-3 space-y-0.5 overflow-y-auto overflow-x-hidden md:overflow-x-visible">
-
-          {/* Itens principais */}
-          {NAV_ITEMS.map(item => renderLink(item))}
-
-          {/* Minha Conta — colapsável; recolhida, os itens aparecem direto como ícones */}
-          <button
-            onClick={() => setAccountOpen(v => !v)}
-            aria-expanded={accountOpen}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${hideWhenCollapsed}`}
-          >
-            <UserCircle className="h-4 w-4 shrink-0" aria-hidden />
-            <span className="flex-1 text-left">Minha Conta</span>
-            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${accountOpen ? 'rotate-180' : ''}`} aria-hidden />
-          </button>
-
-          <div className={`${accountOpen ? '' : collapsed ? 'hidden md:block' : 'hidden'} ml-4 pl-3 border-l border-muted-foreground/20 space-y-0.5 ${collapsed ? 'md:ml-0 md:border-l-0 md:border-t md:pl-0 md:pt-2 md:mt-2' : ''}`}>
-            {ACCOUNT_ITEMS.map(item => renderLink(item, true))}
-          </div>
-
-          {/* Portal do cliente — link rápido no final da nav */}
-          <div className={`pt-2 ${hideWhenCollapsed}`}>
-            <p className="px-3 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-              Portal do Cliente
-            </p>
-            <div className="flex items-center gap-1 px-3 py-2 rounded-lg bg-muted/50 border text-xs">
-              <span className="flex-1 font-mono text-muted-foreground truncate">/{tenant.slug}</span>
-              <button onClick={handleCopyPortal} title="Copiar link" aria-label="Copiar link do portal"
-                className="text-muted-foreground hover:text-foreground transition-colors p-0.5">
-                {copied
-                  ? <CheckCircle className="h-3.5 w-3.5 text-green-600" aria-hidden />
-                  : <Copy className="h-3.5 w-3.5" aria-hidden />}
-              </button>
-              <button onClick={() => { setOpen(false); navigate(`/${tenant.slug}`); }} title="Abrir portal" aria-label="Abrir portal do cliente"
-                className="text-muted-foreground hover:text-foreground transition-colors p-0.5">
-                <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-              </button>
-            </div>
-          </div>
-        </nav>
-
-        {/* Usuário + logout */}
-        <div className="p-3 border-t space-y-1">
-          <div className={`flex items-center gap-2 px-3 py-1.5 ${hideWhenCollapsed}`}>
-            <div className="h-7 w-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
-              style={{ backgroundColor: accentColor }}>
-              {user?.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium truncate">{user?.name}</p>
-              <p className="text-[10px] text-muted-foreground truncate">{user?.email}</p>
-            </div>
-          </div>
-          <Button
-            variant="ghost"
-            className={`w-full justify-start text-muted-foreground gap-2 text-sm ${collapsed ? 'md:justify-center md:px-0' : ''}`}
-            onClick={handleLogout}
-            aria-label="Sair"
-            title={collapsed ? 'Sair' : undefined}
-          >
-            <LogOut className="h-4 w-4" aria-hidden /> <span className={hideWhenCollapsed}>Sair</span>
-          </Button>
-        </div>
-      </aside>
-
-      {tip && createPortal(
-        <div role="tooltip" style={{ position: 'fixed', left: 72, top: tip.top, transform: 'translateY(-50%)' }}
-          className="pointer-events-none z-[60] whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background shadow-md">
-          {tip.label}
-        </div>,
-        document.body,
-      )}
+        items={navItemsFor(role, 'main')}
+        footerItems={navItemsFor(role, 'footer')}
+        accentColor={accentColor}
+        collapsed={collapsed}
+        onToggleCollapsed={toggleCollapsed}
+        homeTo="/admin/dashboard"
+        homeLabel="Nimbo — ir para o Painel"
+      />
 
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
@@ -241,8 +94,7 @@ export default function AdminLayout() {
           <AdminSearch />
           <div className="flex-1" />
           <OpenStatus />
-          {/* TODO: abrir o fluxo de novo agendamento (solicitação do zero). Por ora, só o botão. */}
-          <Button type="button" size="sm" className="hidden gap-1.5 md:inline-flex" aria-label="Novo agendamento" onClick={() => { /* TODO */ }}>
+          <Button type="button" size="sm" className="hidden gap-1.5 md:inline-flex" aria-label="Novo agendamento" onClick={() => setNewApptOpen(true)}>
             <Plus className="h-4 w-4" aria-hidden /> <span className="hidden sm:inline">Novo</span>
           </Button>
           <Button variant="ghost" size="icon" onClick={toggle} aria-label={isDark ? "Ativar tema claro" : "Ativar tema escuro"} title={isDark ? "Tema claro" : "Tema escuro"}>
@@ -256,7 +108,10 @@ export default function AdminLayout() {
             dismissToast={dismissToast}
             clearAll={clearAll}
           />
-          <UserMenu name={user?.name ?? ""} email={user?.email} accentColor={accentColor} onLogout={handleLogout} />
+          <UserMenu
+            name={user?.name ?? ''} email={user?.email} accentColor={accentColor} onLogout={handleLogout}
+            accountPath="/admin/settings" schedulePath="/admin/settings/schedule" onToggleTheme={toggle} isDark={isDark}
+          />
         </header>
         {impersonating && (
           <div className="shrink-0 flex items-center gap-3 border-b bg-amber-50 px-4 py-2 text-sm dark:bg-amber-950/30">
@@ -275,14 +130,21 @@ export default function AdminLayout() {
           </div>
         )}
         <main className="flex-1 overflow-y-auto p-4 pb-[calc(9rem+env(safe-area-inset-bottom))] md:p-6">
-          <Outlet />
+          <ScreenSuspense><Outlet /></ScreenSuspense>
         </main>
       </div>
 
       {/* Celular: navegação inferior e botão flutuante (no desktop valem a sidebar e o "Novo" da navbar) */}
-      <BottomNav items={NAV_ITEMS.slice(0, 3)} accentColor={accentColor} onMore={() => setOpen(true)} moreOpen={open} />
-      {/* Só no Painel: nas demais telas a própria página já tem seu botão de criar. TODO: abrir o fluxo de novo agendamento; por ora leva à Agenda */}
-      {pathname === '/admin/dashboard' && <Fab label="Novo agendamento" to="/admin/agenda" />}
+      <BottomNav items={bottomBarItems(role)} accentColor={accentColor} onMore={() => setMoreOpen(true)} moreOpen={moreOpen} />
+      <MoreSheet items={moreItems(role)} open={moreOpen} onOpenChange={setMoreOpen} accentColor={accentColor} />
+      {/* Só no Painel: nas demais telas a própria página já tem seu botão de criar */}
+      {pathname === '/admin/dashboard' && <Fab label="Novo agendamento" onClick={() => setNewApptOpen(true)} />}
+
+      {newApptOpen && (
+        <Suspense fallback={null}>
+          <NewAppointmentDialog open onOpenChange={setNewApptOpen} />
+        </Suspense>
+      )}
     </div>
   );
 }

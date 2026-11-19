@@ -31,7 +31,8 @@ export interface Client {
   tenantId: string;
   name: string;
   email: string;
-  phone: string;
+  /** O backend aceita cliente sem telefone (reserva pública), então pode vir nulo. */
+  phone?: string | null;
   createdAt: string;
 }
 

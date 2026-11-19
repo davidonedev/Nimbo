@@ -15,6 +15,7 @@ import {
   type PublicBookingPayload,
 } from '../services/public.service';
 import { listPublicProductsApi } from '../services/products.service';
+import { ApiError } from '../lib/api';
 
 interface PublicTenantContextType {
   data: TenantData;
@@ -36,6 +37,8 @@ export function PublicTenantProvider({ children }: { children: React.ReactNode }
   const [loading, setLoading]   = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [suspended, setSuspended] = useState(false);
+  const [failed, setFailed]       = useState(false);
+  const [attempt, setAttempt]     = useState(0);
 
   useEffect(() => {
     if (!tenantSlug) return;
@@ -44,12 +47,14 @@ export function PublicTenantProvider({ children }: { children: React.ReactNode }
     setLoading(true);
     setNotFound(false);
     setSuspended(false);
+    setFailed(false);
 
     Promise.all([
       getPublicTenantApi(tenantSlug),
       getPublicServicesApi(tenantSlug),
       getPublicProfessionalsApi(tenantSlug),
-      listPublicProductsApi(tenantSlug),
+      // Produtos são um extra (upsell): se falharem, o portal abre mesmo assim.
+      listPublicProductsApi(tenantSlug).catch((): Product[] => []),
     ])
       .then(([tenant, services, professionals, prods]) => {
         if (tenant.status === 'suspended') {
@@ -66,9 +71,12 @@ export function PublicTenantProvider({ children }: { children: React.ReactNode }
         });
         setProducts(prods);
       })
-      .catch(() => setNotFound(true))
+      .catch(err => {
+        // Só é "não encontrado" quando o back diz 404; queda de rede/500 pede nova tentativa.
+        if (err instanceof ApiError && err.status === 404) setNotFound(true); else setFailed(true);
+      })
       .finally(() => setLoading(false));
-  }, [tenantSlug]);
+  }, [tenantSlug, attempt]);
 
   if (loading) {
     return (
@@ -83,6 +91,18 @@ export function PublicTenantProvider({ children }: { children: React.ReactNode }
       <div className="flex h-dvh flex-col items-center justify-center gap-4 text-muted-foreground">
         <p className="text-xl font-semibold">Barbearia não encontrada</p>
         <p className="text-sm">Verifique o link e tente novamente.</p>
+      </div>
+    );
+  }
+
+  if (failed) {
+    return (
+      <div role="alert" className="flex h-dvh flex-col items-center justify-center gap-4 p-6 text-center text-muted-foreground">
+        <p className="text-xl font-semibold">Não foi possível carregar a página</p>
+        <p className="text-sm">Verifique sua conexão e tente novamente.</p>
+        <button type="button" onClick={() => setAttempt(a => a + 1)} className="min-h-11 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground">
+          Tentar novamente
+        </button>
       </div>
     );
   }

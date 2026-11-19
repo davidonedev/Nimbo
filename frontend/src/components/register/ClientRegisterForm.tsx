@@ -8,6 +8,7 @@ import { registerClientApi, type ClientSessionData } from '@/services/register.s
 import { ApiError } from '@/lib/api';
 import { maskPhone } from '@/lib/phone';
 import GoogleSignInButton from './GoogleSignInButton';
+import { isGoogleLoginEnabled } from '@/lib/googleAuth';
 
 interface ClientRegisterFormProps {
   onBack: () => void;
@@ -130,7 +131,7 @@ export default function ClientRegisterForm({ onBack, onSuccess, onSwitchToLogin 
         disabled={saving}
       />
 
-      <Divider />
+      {isGoogleLoginEnabled && <Divider />}
 
       {/* Form */}
       <form onSubmit={handleSubmit} noValidate className="space-y-4">

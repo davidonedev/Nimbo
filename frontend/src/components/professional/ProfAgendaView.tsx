@@ -305,12 +305,12 @@ export default function ProfAgendaView() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Minha Agenda</h2>
           <p className="text-muted-foreground text-sm">{professional.name} · {professional.specialty}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* View toggle */}
           <div className="flex border rounded-md overflow-hidden">
             <button
