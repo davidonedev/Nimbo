@@ -289,7 +289,11 @@ public class PublicService {
         String token = createVerificationToken(client.getId());
         sendVerification(t, client, slug, token, null);
 
-        return new MessageResponse("Cadastro iniciado. Verifique seu WhatsApp para ativar sua conta.");
+        // O link vai por WhatsApp quando o cliente informou telefone e por e-mail quando não (ver sendVerification)
+        boolean viaWhatsapp = client.getPhone() != null && !client.getPhone().isBlank();
+        return new MessageResponse(viaWhatsapp
+                ? "Cadastro iniciado. Verifique seu WhatsApp para ativar sua conta."
+                : "Cadastro iniciado. Verifique seu e-mail para ativar sua conta.");
     }
 
     @Transactional(readOnly = true)
