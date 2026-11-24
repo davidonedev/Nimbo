@@ -308,8 +308,13 @@ export default function ProfAgendaView() {
 
         {panelOpen && (
           <div id="prof-filter-panel" className="space-y-3 rounded-2xl border bg-muted/30 p-3 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0">
-            <FilterChips label="Status" value={statusFilter} onChange={setStatusFilter}
-              options={STATUS_CHIPS.map(s => ({ ...s, count: statusCountsMap[s.value] }))} />
+            <div className="min-w-0 space-y-1 lg:max-w-xs">
+              <Label htmlFor="prof-status">Status</Label>
+              <select id="prof-status" className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                value={statusFilter} onChange={e => setStatusFilter(e.target.value as StatusFilter)}>
+                {STATUS_CHIPS.map(s => <option key={s.value} value={s.value}>{s.label} ({statusCountsMap[s.value]})</option>)}
+              </select>
+            </div>
             <div className="grid grid-cols-2 gap-3 lg:max-w-md">
               <div className="min-w-0 space-y-1">
                 <Label htmlFor="prof-from">De</Label>

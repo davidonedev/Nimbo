@@ -9,7 +9,6 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AppointmentCard, type AppointmentCardData } from '@/components/appointments/AppointmentCard';
 import { ConfirmAppointmentDialog } from '@/components/appointments/ConfirmAppointmentDialog';
-import { FilterChips } from '@/components/appointments/FilterChips';
 import { StatusBadge } from '@/components/appointments/StatusBadge';
 import { SummaryStrip } from '@/components/appointments/SummaryStrip';
 import { actionLabel, dayHeading, fmtDate } from '@/components/appointments/appointmentUi';
@@ -136,8 +135,10 @@ export default function AppointmentsView() {
   const panelFilterCount = (filters.dateFrom || filters.dateTo ? 1 : 0) + (filters.professionalId !== 'all' ? 1 : 0) + (filters.serviceId !== 'all' ? 1 : 0);
   const panelOpen = !isMobile || showFilters;
 
+  // 'custom': datas digitadas à mão que não são nenhum dos atalhos.
+  const periodValue: PeriodPreset | 'all' | 'custom' = !filters.dateFrom && !filters.dateTo ? 'all' : (activePreset ?? 'custom');
   const choosePeriod = (key: PeriodPreset | 'all') => {
-    const { dateFrom, dateTo } = key === 'all' || activePreset === key ? { dateFrom: '', dateTo: '' } : periodRange(key, today);
+    const { dateFrom, dateTo } = key === 'all' ? { dateFrom: '', dateTo: '' } : periodRange(key, today);
     setFilters({ ...filters, dateFrom, dateTo });
   };
 
@@ -202,10 +203,22 @@ export default function AppointmentsView() {
           )}
         </div>
 
-        <FilterChips label="Status" value={filters.status} onChange={v => set('status', v)}
-          options={STATUS_CHIPS.map(s => ({ ...s, count: counts[s.value] }))} />
-        <FilterChips label="Período" value={!filters.dateFrom && !filters.dateTo ? 'all' : activePreset} onChange={choosePeriod}
-          options={PERIOD_CHIPS} />
+        {/* Status e período: sempre à vista, em caixas de seleção */}
+        <div className="grid grid-cols-2 gap-3 lg:max-w-xl">
+          <div className="min-w-0 space-y-1">
+            <Label htmlFor={`${uid}-status`}>Status</Label>
+            <select id={`${uid}-status`} className={fieldClass} value={filters.status} onChange={e => set('status', e.target.value as AppointmentStatus | 'all')}>
+              {STATUS_CHIPS.map(s => <option key={s.value} value={s.value}>{s.label} ({counts[s.value]})</option>)}
+            </select>
+          </div>
+          <div className="min-w-0 space-y-1">
+            <Label htmlFor={`${uid}-period`}>Período</Label>
+            <select id={`${uid}-period`} className={fieldClass} value={periodValue} onChange={e => choosePeriod(e.target.value as PeriodPreset | 'all')}>
+              {PERIOD_CHIPS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+              {periodValue === 'custom' && <option value="custom" disabled>Personalizado</option>}
+            </select>
+          </div>
+        </div>
 
         {panelOpen && (
           <div id={`${uid}-panel`} className="grid grid-cols-2 gap-3 rounded-2xl border bg-muted/30 p-3 lg:grid-cols-5 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0">

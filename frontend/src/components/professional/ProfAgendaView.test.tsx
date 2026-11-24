@@ -126,7 +126,7 @@ describe('Minha Agenda (celular)', () => {
     fireEvent.click(toggle);
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
 
-    fireEvent.click(within(screen.getByRole('group', { name: 'Status' })).getByRole('button', { name: /^Confirmados/ }));
+    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'confirmed' } });
     expect(cards()).toHaveLength(1); // só o confirmado de hoje
     expect(screen.getByLabelText('1 filtro ativo')).toBeTruthy();
 
@@ -165,7 +165,7 @@ describe('Minha Agenda (desktop)', () => {
     setup();
     const rows = screen.getAllByRole('row').slice(1);
     expect(rows).toHaveLength(2);
-    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(within(rows[0]).queryByRole('combobox')).toBeNull(); // sem <select> de status em cada linha
     expect(screen.queryByRole('button', { name: 'Salvar' })).toBeNull();
 
     fireEvent.click(within(rows[0]).getByRole('button', { name: /^Confirmar:/ }));
@@ -177,6 +177,6 @@ describe('Minha Agenda (desktop)', () => {
     setup();
     expect(screen.queryByRole('button', { name: /^Filtros/ })).toBeNull();
     expect(screen.getByLabelText('De')).toBeTruthy();
-    expect(screen.getByRole('group', { name: 'Status' })).toBeTruthy();
+    expect(screen.getByLabelText('Status').tagName).toBe('SELECT');
   });
 });
