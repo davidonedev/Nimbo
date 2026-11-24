@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useTenant } from '@/context/TenantContext';
 import { formatCurrency } from '@/lib/utils';
 import { isPastInBrasilia, nowBrasilia } from '@/lib/scheduling';
+import { dayNavLabel } from '@/lib/dayNavLabel';
 import { statusErrorMessage } from '@/lib/appointmentFilters';
 import { useClientNotice } from '@/hooks/useClientNotice';
 import ClientNoticeBar from '@/components/admin/ClientNoticeBar';
@@ -263,6 +264,8 @@ export default function AgendaView({ only }: AgendaViewProps = {}) {
     };
   };
 
+  const navLabel = dayNavLabel(currentDate, new Date(), mode);
+
   const navigate = (dir: 1 | -1) => {
     if (mode === 'day') setCurrentDate(p => dir === 1 ? addDays(p, 1) : subDays(p, 1));
     else setCurrentDate(p => dir === 1 ? addWeeks(p, 1) : subWeeks(p, 1));
@@ -297,13 +300,11 @@ export default function AgendaView({ only }: AgendaViewProps = {}) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">{only === 'table' ? 'Agendamentos' : 'Agenda'}</h2>
-          <p className="text-muted-foreground text-sm">
-            {view === 'table'
-              ? `${tableRows.length} agendamento${tableRows.length !== 1 ? 's' : ''} encontrado${tableRows.length !== 1 ? 's' : ''}`
-              : mode === 'week'
-                ? `${format(weekStart, "d 'de' MMM", { locale: ptBR })} – ${format(addDays(weekStart, 5), "d 'de' MMM", { locale: ptBR })}`
-                : format(currentDate, "EEEE, d 'de' MMMM", { locale: ptBR })}
-          </p>
+          {view === 'table' && (
+            <p className="text-muted-foreground text-sm">
+              {`${tableRows.length} agendamento${tableRows.length !== 1 ? 's' : ''} encontrado${tableRows.length !== 1 ? 's' : ''}`}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* View toggle (só quando a tela não está fixada em Agenda ou Agendamentos) */}
@@ -332,17 +333,19 @@ export default function AgendaView({ only }: AgendaViewProps = {}) {
                 <Button variant="ghost" size="sm" className={`rounded-none ${calMode === 'week' ? 'bg-muted' : ''}`} aria-pressed={calMode === 'week'} onClick={() => setCalMode('week')}>Semana</Button>
               </div>
               <div className="flex w-full items-center justify-between gap-1 sm:w-auto">
-                <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label={mode === 'day' ? 'Dia anterior' : 'Semana anterior'}><ChevronLeft className="h-4 w-4" /></Button>
-                <Button variant="ghost" size="sm" className="min-h-11 flex-1 sm:flex-none" onClick={() => setCurrentDate(new Date())}>Hoje</Button>
-                <Button variant="ghost" size="icon" onClick={() => navigate(1)} aria-label={mode === 'day' ? 'Próximo dia' : 'Próxima semana'}><ChevronRight className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0 sm:h-10 sm:w-10" onClick={() => navigate(-1)} aria-label={mode === 'day' ? 'Dia anterior' : 'Semana anterior'}><ChevronLeft className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="sm" className="h-11 min-w-0 flex-1 px-2 text-sm font-semibold sm:h-9 sm:min-w-[11rem] sm:flex-none" onClick={() => setCurrentDate(new Date())} aria-label={`Ir para hoje. Exibindo: ${navLabel}`}>
+                  <span className="truncate">{navLabel}</span>
+                </Button>
+                <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0 sm:h-10 sm:w-10" onClick={() => navigate(1)} aria-label={mode === 'day' ? 'Próximo dia' : 'Próxima semana'}><ChevronRight className="h-4 w-4" /></Button>
               </div>
-              <Button variant="outline" size="sm" onClick={() => setBlockDialog(true)}>
+              <Button variant="outline" size="sm" className="h-11 flex-1 sm:h-9 sm:flex-none" onClick={() => setBlockDialog(true)}>
                 <Plus className="h-4 w-4 mr-1" /> Bloquear
               </Button>
             </>
           )}
 
-          <Button size="sm" onClick={() => openApptDialog()}>
+          <Button size="sm" className="h-11 flex-1 sm:h-9 sm:flex-none" onClick={() => openApptDialog()}>
             <CalendarPlus className="h-4 w-4 mr-1" /> Novo Agend.
           </Button>
         </div>
