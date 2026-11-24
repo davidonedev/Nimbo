@@ -76,6 +76,13 @@ app:
   mail-from: ${SMTP_FROM:Nimbo <noreply@agendepro.com>}
   seed:
     enabled: ${SEED_ENABLED:false}
+  # Primeiro super admin sem acesso ao banco: preencha e-mail e senha (mín. 10 caracteres), suba o serviço, entre e
+  # REMOVA a senha do ambiente. Não altera um usuário que já existe.
+  bootstrap:
+    super-admin:
+      email: ${BOOTSTRAP_SUPER_ADMIN_EMAIL:}
+      password: ${BOOTSTRAP_SUPER_ADMIN_PASSWORD:}
+      name: ${BOOTSTRAP_SUPER_ADMIN_NAME:Super Admin}
   # WhatsApp padrão da plataforma (Evolution API): usado no código de confirmação do agendamento quando o
   # estabelecimento não configurou o próprio (Configurações → Portal do Cliente → Integração WhatsApp).
   whatsapp:
