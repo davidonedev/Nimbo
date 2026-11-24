@@ -350,3 +350,13 @@ Decisões do dono em 2026-11-23: avisos ao dono sem custo (e-mail, sino, push e 
 **Efeito colateral a tratar (#15):** com a regra nova, uma tela desatualizada que tente aprovar ou concluir algo já decidido recebe 409. A Agenda ainda não mostra erro nessa situação (`AgendaView.tsx:364-366,617,659-665`), então o clique parece não fazer nada.
 
 Resultado dos testes após as correções: backend 185/185, frontend 432/432, `tsc` e `eslint` sem erros.
+
+### Entregas seguintes (branch `feat/notificacoes-outbox`)
+
+| Backlog | O que mudou |
+|---|---|
+| #15 erro visível na Agenda | Aceitar, Recusar e as ações do detalhe mostram um aviso quando a API falha (com a explicação do servidor no 409); a tela de Agendamentos usa a mesma mensagem |
+| #8 timeout do WhatsApp | `WhatsappService` falha em até 5 s (conexão) e 10 s (leitura) em vez de prender a thread |
+| #3 notificações (1ª fatia) | Fila `notification_outbox` (V13) com retry e idempotência. Dono recebe e-mail em pedido novo, cancelamento e remarcação pelo cliente. Cliente recebe e-mail e WhatsApp, quando houver canal, ao ser aprovado, recusado ou cancelado. O painel mostra "Avisar no WhatsApp" (link `wa.me`) para quem não tem e-mail nem canal automático |
+
+**Ainda aberto no #3:** push web (exige chaves VAPID e inscrição no service worker), aviso ao cliente na aprovação feita pelo webhook do Pix, e agrupar em uma só mensagem os agendamentos encadeados nas aprovações individuais. O envio por e-mail só funciona depois de configurar `SMTP_USER` e `SMTP_PASS`; sem isso, a fila marca como ignorado.
