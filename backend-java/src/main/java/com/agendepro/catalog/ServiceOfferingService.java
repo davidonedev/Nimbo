@@ -1,6 +1,9 @@
 package com.agendepro.catalog;
 
 import com.agendepro.common.AppException;
+import com.agendepro.professional.ProfessionalRepository;
+import com.agendepro.professional.ProfessionalServiceLink;
+import com.agendepro.professional.ProfessionalServiceLinkRepository;
 import com.agendepro.tenant.PlanLimits;
 import com.agendepro.tenant.Tenant;
 import com.agendepro.tenant.TenantRepository;
@@ -20,6 +23,8 @@ public class ServiceOfferingService {
 
     private final ServiceOfferingRepository serviceOfferingRepository;
     private final TenantRepository tenantRepository;
+    private final ProfessionalRepository professionalRepository;
+    private final ProfessionalServiceLinkRepository linkRepository;
 
     @Transactional(readOnly = true)
     public List<ServiceResponse> list(UUID tenantId) {
@@ -50,7 +55,13 @@ public class ServiceOfferingService {
                 .isActive(request.isActive() == null || request.isActive())
                 .build();
 
-        return ServiceResponse.from(serviceOfferingRepository.save(entity));
+        ServiceOffering saved = serviceOfferingRepository.save(entity);
+        // Sem vínculo o serviço não aparece para o cliente: já nasce disponível para os profissionais atuais
+        // (o dono ajusta em Profissionais).
+        linkRepository.saveAll(professionalRepository.findByTenantIdOrderByNameAsc(tenantId).stream()
+                .map(p -> ProfessionalServiceLink.of(p.getId(), saved.getId()))
+                .toList());
+        return ServiceResponse.from(saved);
     }
 
     @Transactional

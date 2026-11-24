@@ -101,8 +101,13 @@ public class ProfessionalService {
                 .workingDays(request.workingDays().toArray(new Integer[0]))
                 .build());
 
-        if (!request.serviceIds().isEmpty()) {
-            linkRepository.saveAll(request.serviceIds().stream()
+        // Profissional sem serviço nunca aparece para o cliente: sem escolha explícita, ele atende todos os serviços
+        // (o dono ajusta ao editar). Na edição, uma lista vazia continua valendo.
+        List<UUID> serviceIds = request.serviceIds().isEmpty()
+                ? serviceOfferingRepository.findByTenantIdOrderByNameAsc(tenantId).stream().map(ServiceOffering::getId).toList()
+                : request.serviceIds();
+        if (!serviceIds.isEmpty()) {
+            linkRepository.saveAll(serviceIds.stream()
                     .map(serviceId -> ProfessionalServiceLink.of(professional.getId(), serviceId))
                     .toList());
         }

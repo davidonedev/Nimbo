@@ -84,9 +84,11 @@ interface ProfFormFieldsProps {
   form: ProfFormData;
   setForm: React.Dispatch<React.SetStateAction<ProfFormData>>;
   services: Service[];
+  /** Cadastro novo: sem nenhum serviço marcado, o profissional atende todos. */
+  isNew?: boolean;
 }
 
-function ProfFormFields({ form, setForm, services }: ProfFormFieldsProps) {
+function ProfFormFields({ form, setForm, services, isNew = false }: ProfFormFieldsProps) {
   const toggleDay = (day: number) =>
     setForm(f => ({ ...f, workingDays: f.workingDays.includes(day) ? f.workingDays.filter(d => d !== day) : [...f.workingDays, day].sort() }));
 
@@ -201,6 +203,11 @@ function ProfFormFields({ form, setForm, services }: ProfFormFieldsProps) {
             </button>
           ))}
         </div>
+        <p className="text-xs text-muted-foreground">
+          {isNew
+            ? 'Se você não marcar nenhum, este profissional atende todos os serviços.'
+            : 'Sem nenhum serviço marcado, o profissional não aparece para os clientes agendarem.'}
+        </p>
       </div>
     </div>
   );
@@ -358,6 +365,12 @@ export default function ProfessionalsView() {
                   <span className="text-muted-foreground mx-1">·</span>
                   {p.workingDays.map(d => <span key={d} className="text-xs bg-muted px-1 rounded">{DAY_NAMES[d]}</span>)}
                 </div>
+                {profServices.length === 0 && (
+                  <p role="alert" className="mt-3 flex items-start gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                    Sem serviços: este profissional não aparece para os clientes. Clique em editar e marque os serviços.
+                  </p>
+                )}
                 <div className="mt-3 flex flex-wrap gap-1">
                   {profServices.map(s => (
                     <Badge key={s.id} variant="secondary" className="text-xs"><Scissors className="h-2.5 w-2.5 mr-1" />{s.name}</Badge>
@@ -440,7 +453,7 @@ export default function ProfessionalsView() {
           <DialogHeader>
             <DialogTitle>Novo Profissional</DialogTitle>
           </DialogHeader>
-          <ProfFormFields form={form} setForm={setForm} services={services} />
+          <ProfFormFields form={form} setForm={setForm} services={services} isNew />
           {formError && (
             <div className="flex items-start gap-2 text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">
               <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />

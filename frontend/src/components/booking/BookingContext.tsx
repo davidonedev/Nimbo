@@ -29,6 +29,8 @@ export interface Challenge { id: string; maskedPhone: string; expiresAt: string 
 interface BookingCtx {
   slug: string;
   services: Service[];
+  /** Serviços que algum profissional faz: só estes podem ser agendados. */
+  bookableServices: Service[];
   professionals: Professional[];
   selectedServices: Service[];
   /** Profissionais que fazem TODOS os serviços escolhidos. */
@@ -61,6 +63,10 @@ export function BookingProvider({ children }: { children: ReactNode }) {
 
   const services = useMemo(() => data.services.filter(s => s.isActive !== false), [data.services]);
   const professionals = data.professionals;
+  const bookableServices = useMemo(
+    () => services.filter(s => professionals.some(p => p.services.includes(s.id))),
+    [services, professionals],
+  );
 
   const ids = useMemo(() => (params.get('s') ?? '').split(',').filter(Boolean), [params]);
   const selectedServices = useMemo(
@@ -108,7 +114,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
   }, [navigate, pathFor]);
 
   const value: BookingCtx = {
-    slug, services, professionals, selectedServices, eligible,
+    slug, services, bookableServices, professionals, selectedServices, eligible,
     professionalId: params.get('p'), date: params.get('d'), time: params.get('t'), challengeId: params.get('c'),
     possession, form, setForm, challenge, setChallenge, booked, setBooked, go, pathFor,
   };
