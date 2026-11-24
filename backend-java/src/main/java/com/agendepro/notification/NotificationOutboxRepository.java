@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -36,4 +37,7 @@ public interface NotificationOutboxRepository extends JpaRepository<Notification
     List<UUID> lockDueIds(@Param("now") Instant now, @Param("limit") int limit);
 
     List<NotificationOutbox> findByTenantIdOrderByCreatedAtAsc(UUID tenantId);
+
+    /** Mensagens de certos eventos ligadas a esses agendamentos (a tela de aprovação consulta o resultado do envio). */
+    List<NotificationOutbox> findByTenantIdAndAppointmentIdInAndEventIn(UUID tenantId, Collection<UUID> appointmentIds, Collection<String> events);
 }

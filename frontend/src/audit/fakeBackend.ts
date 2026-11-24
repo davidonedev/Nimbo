@@ -55,12 +55,16 @@ export interface Backend {
   appointments: Appt[];
   /** Falha o próximo PATCH de status com este HTTP (para testar o estado de erro da tela). */
   failNextStatusWith: number | null;
+  /** O WhatsApp automático está ligado? Muda o resultado do envio que a tela consulta depois de confirmar. */
+  whatsappAuto: boolean;
+  /** Status que cada agendamento tinha antes da última troca (decide o evento do aviso: recusa x cancelamento). */
+  previous: Record<string, ApptStatus>;
   patches: () => Call[];
 }
 
 export function installAdminBackend(seed: Appt[]): Backend {
   const be: Backend = {
-    calls: [], unexpected: [], appointments: seed.map(a => ({ ...a })), failNextStatusWith: null,
+    calls: [], unexpected: [], appointments: seed.map(a => ({ ...a })), failNextStatusWith: null, whatsappAuto: false, previous: {},
     patches: () => be.calls.filter(c => c.method === 'PATCH' && /\/status$/.test(c.path)),
   };
 
@@ -100,6 +104,18 @@ export function installAdminBackend(seed: Appt[]): Backend {
       if (path === '/admin/blocked-slots' || path === '/admin/products') return ok([]);
       if (path === '/admin/product-categories' || path === '/admin/service-categories') return ok([]);
       if (path === '/admin/dashboard/summary') return ok(summary());
+      if (path === '/admin/notifications/channels') return ok({ whatsappAuto: be.whatsappAuto });
+      if (path === '/admin/notifications/status') {
+        // Espelha o backend: uma linha de WhatsApp por aviso; sem WhatsApp configurado o envio é ignorado com o motivo.
+        const rows = url.searchParams.getAll('ids').flatMap(id => {
+          const a = be.appointments.find(x => x.id === id);
+          if (!a) return [];
+          const event = a.status === 'confirmed' ? 'APPROVED' : a.status === 'cancelled' ? (be.previous[id] === 'pending' ? 'REFUSED' : 'CANCELLED_BY_OWNER') : null;
+          if (!event) return [];
+          return [{ appointmentId: id, event, channel: 'WHATSAPP', status: be.whatsappAuto ? 'SENT' : 'SKIPPED', error: be.whatsappAuto ? null : 'WhatsApp não configurado' }];
+        });
+        return ok(rows);
+      }
     }
     const patch = /^\/admin\/appointments\/([^/]+)\/status$/.exec(path);
     if (method === 'PATCH' && patch) {
@@ -121,6 +137,7 @@ export function installAdminBackend(seed: Appt[]): Backend {
       if (!allowed[a.status].includes(next)) {
         return fail(409, 'Este agendamento não pode mudar para esse status. Atualize a tela.');
       }
+      be.previous[a.id] = a.status;
       a.status = next;
       if (a.status !== 'pending') a.confirmBy = null;
       return ok(a);
@@ -128,7 +145,7 @@ export function installAdminBackend(seed: Appt[]): Backend {
     if (method === 'POST' && path === '/admin/appointments/bulk-confirm') {
       const ids = (body?.ids as string[]) ?? [];
       const done = be.appointments.filter(a => ids.includes(a.id) && a.status === 'pending');
-      done.forEach(a => { a.status = 'confirmed'; a.confirmBy = null; });
+      done.forEach(a => { be.previous[a.id] = a.status; a.status = 'confirmed'; a.confirmBy = null; });
       return ok({ confirmed: done.length, skipped: ids.length - done.length, confirmedIds: done.map(a => a.id) });
     }
     be.unexpected.push(`${method} ${path}`);

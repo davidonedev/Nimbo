@@ -2,12 +2,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { setViewportWidth } from '@/test/setup';
 import ProfAgendaView from './ProfAgendaView';
+import { confirmInSafetyDialog, dismissSafetyDialog } from '@/test/confirmDialog';
+import { resetWhatsappAutoCache } from '@/hooks/useWhatsappAuto';
 import { appt, day, profContext } from './testFixtures';
 
 const updateAppointmentStatus = vi.fn(async () => {});
 const cancelAppointment = vi.fn(async () => {});
 let ctx = profContext();
 vi.mock('@/context/ProfessionalContext', () => ({ useProfessional: () => ctx }));
+// O servidor manda o WhatsApp sozinho; aqui ele responde que a mensagem saiu.
+vi.mock('@/services/notifications.service', () => ({
+  getNotificationStatusApi: vi.fn(async (_scope: string, ids: string[]) => ids.map(id => ({ appointmentId: id, event: 'APPROVED', channel: 'WHATSAPP', status: 'SENT', error: null }))),
+  getChannelsApi: vi.fn(async () => ({ whatsappAuto: true })),
+}));
 
 const setWidth = (w: number) => { setViewportWidth(w); Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: w }); };
 const setup = () => render(<ProfAgendaView />);
@@ -18,7 +25,7 @@ const view = (name: RegExp | string) => within(screen.getByRole('group', { name:
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-11-17T12:00:00'));
-  updateAppointmentStatus.mockClear(); cancelAppointment.mockClear();
+  updateAppointmentStatus.mockClear(); cancelAppointment.mockClear(); resetWhatsappAutoCache();
   ctx = profContext({
     updateAppointmentStatus, cancelAppointment, addAppointment: vi.fn(),
     appointments: [
@@ -70,6 +77,7 @@ describe('Minha Agenda (celular)', () => {
     expect(within(box).getAllByRole('listitem')).toHaveLength(1);
 
     fireEvent.click(within(box).getByRole('button', { name: /^Aceitar:.*Bruno Alves/ }));
+    await confirmInSafetyDialog();
     await waitFor(() => expect(updateAppointmentStatus).toHaveBeenCalledWith('a2', 'confirmed'));
 
     fireEvent.click(within(box).getByRole('button', { name: /^Recusar:.*Bruno Alves/ }));
@@ -78,6 +86,25 @@ describe('Minha Agenda (celular)', () => {
     expect(dialog.textContent).toMatch(/recusar este agendamento/);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Confirmar' }));
     await waitFor(() => expect(cancelAppointment).toHaveBeenCalledWith('a2'));
+  });
+
+  it('Aceitar abre o modal de segurança com o cliente e o aviso do WhatsApp; Voltar não confirma nada', async () => {
+    setup();
+    const box = screen.getByRole('list', { name: 'Aguardando sua confirmação' });
+    fireEvent.click(within(box).getByRole('button', { name: /^Aceitar:.*Bruno Alves/ }));
+    const dialog = await screen.findByRole('dialog', { name: /Confirmar agendamento?/ });
+    expect(dialog.textContent).toContain('Bruno Alves');
+    expect(await within(dialog).findByText(/enviada automaticamente ao cliente pelo WhatsApp/)).toBeTruthy();
+    await dismissSafetyDialog();
+    expect(updateAppointmentStatus).not.toHaveBeenCalled();
+  });
+
+  it('depois de confirmar, a tela mostra que a mensagem foi enviada ao cliente automaticamente', async () => {
+    setup();
+    fireEvent.click(within(screen.getByRole('list', { name: 'Aguardando sua confirmação' })).getByRole('button', { name: /^Aceitar:.*Bruno Alves/ }));
+    await confirmInSafetyDialog();
+    expect(await screen.findByText(/Confirmação enviada para Bruno pelo WhatsApp./)).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /Avisar Bruno/ })).toBeNull();
   });
 
   it('cartão: ação principal em destaque e o resto no menu Mais', async () => {
@@ -142,6 +169,7 @@ describe('Minha Agenda (desktop)', () => {
     expect(screen.queryByRole('button', { name: 'Salvar' })).toBeNull();
 
     fireEvent.click(within(rows[0]).getByRole('button', { name: /^Confirmar:/ }));
+    await confirmInSafetyDialog();
     await waitFor(() => expect(updateAppointmentStatus).toHaveBeenCalledWith('a2', 'confirmed'));
   });
 

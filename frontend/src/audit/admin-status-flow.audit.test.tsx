@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { setViewportWidth } from '@/test/setup';
 import App from '../App';
+import { confirmInSafetyDialog } from '@/test/confirmDialog';
 import { appt, brDate, installAdminBackend, signInAsTenantAdmin, type Backend } from './fakeBackend';
 
 /**
@@ -42,6 +43,7 @@ describe('Agenda: faixa "aguardando confirmação" (Aceitar / Recusar)', { timeo
 
     const [aceitar] = await screen.findAllByRole('button', { name: /Aceitar/ });
     fireEvent.click(aceitar);
+    await confirmInSafetyDialog();
 
     expect(await screen.findByText('1 agendamento aguardando confirmação', undefined, T)).toBeTruthy();
     expect(be.patches()).toHaveLength(1);
@@ -76,6 +78,7 @@ describe('Agendamentos: painel de pendentes e ações de status', { timeout: 900
     open('/admin/appointments');
     const group = await screen.findByRole('list', { name: /já confirmou/ }, T);
     fireEvent.click(within(group).getByRole('button', { name: 'Confirmar' }));
+    await confirmInSafetyDialog();
 
     await waitFor(() => expect(be.patches()).toHaveLength(1), T);
     expect(be.patches()[0]).toMatchObject({ path: '/admin/appointments/a2/status', body: { status: 'confirmed' } });

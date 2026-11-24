@@ -21,6 +21,7 @@ import { dayNavLabel } from '@/lib/dayNavLabel';
 import { statusErrorMessage } from '@/lib/appointmentFilters';
 import { useClientNotice } from '@/hooks/useClientNotice';
 import ClientNoticeBar from '@/components/admin/ClientNoticeBar';
+import { ConfirmAppointmentDialog } from '@/components/appointments/ConfirmAppointmentDialog';
 import { NewAppointmentDialog } from './NewAppointmentDialog';
 import { AppointmentCardList, type ApptCardData } from '@/components/ui/AppointmentCards';
 import type { Appointment, AppointmentStatus } from '@/types';
@@ -196,6 +197,7 @@ export default function AgendaView({ only }: AgendaViewProps = {}) {
   const [apptDialog, setApptDialog] = useState<{ date?: string; professionalId?: string } | null>(null);
   const [detailAppt, setDetailAppt] = useState<Appointment | null>(null);
   const [rejectId, setRejectId] = useState<string | null>(null);
+  const [confirmAppt, setConfirmAppt] = useState<Appointment | null>(null);
   const [actionError, setActionError] = useState('');
 
   // Toda troca de status passa por aqui: se o servidor recusar, o dono vê o motivo em vez de um clique que não faz nada.
@@ -354,7 +356,7 @@ export default function AgendaView({ only }: AgendaViewProps = {}) {
       {actionError && (
         <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{actionError}</p>
       )}
-      <ClientNoticeBar notice={clientNotice.notice} onClose={clientNotice.clear} />
+      <ClientNoticeBar notice={clientNotice.notice} onClose={clientNotice.clear} settingsHref="/admin/settings/portal#whatsapp" />
 
       {/* Pending alert */}
       {pending.length > 0 && (
@@ -390,7 +392,7 @@ export default function AgendaView({ only }: AgendaViewProps = {}) {
                     <p className="text-sm font-semibold hidden sm:block">{formatCurrency(appt.price)}</p>
                     <div className="flex gap-2">
                       <Button size="sm" className="h-8 gap-1 bg-green-600 hover:bg-green-700 text-white flex-1 sm:flex-none"
-                        onClick={() => void changeStatus(appt, 'confirmed')}>
+                        onClick={() => setConfirmAppt(appt)}>
                         <ThumbsUp className="h-3.5 w-3.5" /> Aceitar
                       </Button>
                       <Button size="sm" variant="destructive" className="h-8 gap-1 flex-1 sm:flex-none"
@@ -583,6 +585,11 @@ export default function AgendaView({ only }: AgendaViewProps = {}) {
         </Card>
       ))}
 
+      <ConfirmAppointmentDialog scope="admin"
+        target={confirmAppt ? { clientName: clients.find(c => c.id === confirmAppt.clientId)?.name ?? 'Cliente', date: confirmAppt.date, startTime: confirmAppt.startTime, serviceName: services.find(s => s.id === confirmAppt.serviceId)?.name } : null}
+        onCancel={() => setConfirmAppt(null)}
+        onConfirm={() => { const a = confirmAppt; setConfirmAppt(null); if (a) void changeStatus(a, 'confirmed'); }} />
+
       {/* ── Dialogs (mantidos idênticos) ───────────────────────────────────── */}
       <Dialog open={blockDialog} onOpenChange={setBlockDialog}>
         <DialogContent>
@@ -685,7 +692,7 @@ export default function AgendaView({ only }: AgendaViewProps = {}) {
                 </div>
                 <div className="flex gap-2 flex-wrap pt-2 border-t">
                   {detailAppt.status === 'pending' && (
-                    <Button size="sm" onClick={() => { void changeStatus(detailAppt, 'confirmed'); setDetailAppt(null); }}>Confirmar</Button>
+                    <Button size="sm" onClick={() => { setConfirmAppt(detailAppt); setDetailAppt(null); }}>Confirmar</Button>
                   )}
                   {(detailAppt.status === 'confirmed' || detailAppt.status === 'pending') && (
                     <Button size="sm" variant="outline" onClick={() => { void changeStatus(detailAppt, 'completed'); setDetailAppt(null); }}>Marcar Concluído</Button>

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { setViewportWidth } from '@/test/setup';
+import { confirmInSafetyDialog } from '@/test/confirmDialog';
 import App from '../App';
 import { appt, brDate, installAdminBackend, signInAsTenantAdmin, type Backend } from './fakeBackend';
 
@@ -34,6 +35,7 @@ describe('Agenda: erro ao mudar o status fica visível', { timeout: 90000 }, () 
 
     be.failNextStatusWith = 500;
     fireEvent.click((await screen.findAllByRole('button', { name: /Aceitar/ }))[0]);
+    await confirmInSafetyDialog();
 
     const alert = await screen.findByRole('alert', undefined, T);
     expect(alert.textContent).toContain('Não foi possível atualizar o agendamento');
@@ -47,9 +49,11 @@ describe('Agenda: erro ao mudar o status fica visível', { timeout: 90000 }, () 
 
     be.failNextStatusWith = 409;
     fireEvent.click((await screen.findAllByRole('button', { name: /Aceitar/ }))[0]);
+    await confirmInSafetyDialog();
     expect((await screen.findByRole('alert', undefined, T)).textContent).toContain('Falha simulada');
 
     fireEvent.click((await screen.findAllByRole('button', { name: /Aceitar/ }))[0]);
+    await confirmInSafetyDialog();
     expect(await screen.findByText('1 agendamento aguardando confirmação', undefined, T)).toBeTruthy();
     expect(screen.queryByRole('alert')).toBeNull();
   });

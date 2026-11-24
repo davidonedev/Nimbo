@@ -9,6 +9,7 @@ import { useTenant } from '@/context/TenantContext';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useClientNotice } from '@/hooks/useClientNotice';
 import ClientNoticeBar from '@/components/admin/ClientNoticeBar';
+import { AutoSendNote, ConfirmAppointmentDialog } from '@/components/appointments/ConfirmAppointmentDialog';
 import { saveErrorMessage } from '@/lib/settingsPayload';
 import { nowBrasilia } from '@/lib/scheduling';
 import type { Appointment } from '@/types';
@@ -36,6 +37,7 @@ export default function PendingConfirmations() {
   const clientNotice = useClientNotice();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [askBulk, setAskBulk] = useState(false);
+  const [askOneId, setAskOneId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -84,7 +86,7 @@ export default function PendingConfirmations() {
         {error
           ? <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
           : notice && <p role="status" className="rounded-md border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-800 dark:bg-green-900/20 dark:text-green-300">{notice}</p>}
-        <ClientNoticeBar notice={clientNotice.notice} onClose={clientNotice.clear} />
+        <ClientNoticeBar notice={clientNotice.notice} onClose={clientNotice.clear} settingsHref="/admin/settings/portal#whatsapp" />
       </div>
     );
   }
@@ -157,7 +159,7 @@ export default function PendingConfirmations() {
         <CardContent id="pending-confirmations-body" className="space-y-4 px-4 pb-4 pt-0">
           {error && <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
           {notice && <p role="status" className="rounded-md border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-800 dark:bg-green-900/20 dark:text-green-300">{notice}</p>}
-          <ClientNoticeBar notice={clientNotice.notice} onClose={clientNotice.clear} />
+          <ClientNoticeBar notice={clientNotice.notice} onClose={clientNotice.clear} settingsHref="/admin/settings/portal#whatsapp" />
 
           {several && (
             <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
@@ -209,7 +211,7 @@ export default function PendingConfirmations() {
                         </div>
                       </div>
                       <div className="flex shrink-0 gap-2">
-                        <Button type="button" size="sm" className="min-h-11 flex-1 sm:min-h-9 sm:flex-none" disabled={busy} onClick={() => void confirmOne(appt.id)}>
+                        <Button type="button" size="sm" className="min-h-11 flex-1 sm:min-h-9 sm:flex-none" disabled={busy} onClick={() => setAskOneId(appt.id)}>
                           Confirmar
                         </Button>
                         {number && (
@@ -238,6 +240,11 @@ export default function PendingConfirmations() {
         </CardContent>
       )}
 
+      <ConfirmAppointmentDialog scope="admin" busy={busy}
+        target={(() => { const r = rows.find(x => x.appt.id === askOneId); return r ? { clientName: r.client?.name ?? 'Cliente', date: r.appt.date, startTime: r.appt.startTime, serviceName: r.service } : null; })()}
+        onCancel={() => setAskOneId(null)}
+        onConfirm={() => { const id = askOneId; setAskOneId(null); if (id) void confirmOne(id); }} />
+
       <Dialog open={askBulk} onOpenChange={setAskBulk}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -253,6 +260,7 @@ export default function PendingConfirmations() {
                 confirmou pode não aparecer e o horário ficará ocupado à toa.
               </span>
               <span className="block">Depois de confirmar, só dá para desfazer cancelando cada agendamento individualmente.</span>
+              <AutoSendNote scope="admin" active={askBulk} />
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

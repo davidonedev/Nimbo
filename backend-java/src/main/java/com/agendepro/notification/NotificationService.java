@@ -15,6 +15,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -44,6 +46,7 @@ public class NotificationService {
     private final ClientRepository clientRepository;
     private final ProfessionalRepository professionalRepository;
     private final ServiceOfferingRepository serviceOfferingRepository;
+    private final NotificationDispatcher dispatcher;
 
     @Value("${app.app-url}")
     private String appUrl;
@@ -56,6 +59,7 @@ public class NotificationService {
         forEachGroup(appointments, g -> notifyOwner(g, Event.NEW_REQUEST,
                 "Novo pedido de agendamento: " + g.client().getName(),
                 "Novo pedido de agendamento em " + g.tenant().getName() + ".", ""));
+        dispatchAfterCommit();
     }
 
     @Transactional
@@ -63,6 +67,7 @@ public class NotificationService {
         forEachGroup(List.of(appointment), g -> notifyOwner(g, Event.CLIENT_CANCELLED,
                 "Cliente cancelou: " + g.client().getName(),
                 "O cliente cancelou o agendamento.", ""));
+        dispatchAfterCommit();
     }
 
     /** {@code oldDate}/{@code oldStart}: horário anterior (yyyy-MM-dd e HH:mm), se conhecido. */
@@ -72,6 +77,7 @@ public class NotificationService {
                 "Cliente remarcou: " + g.client().getName(),
                 "O cliente remarcou o agendamento para o horário abaixo.",
                 oldDate == null ? "" : "Horário anterior: " + br(oldDate) + " às " + oldStart + "\n"));
+        dispatchAfterCommit();
     }
 
     // ─── avisos ao cliente ──────────────────────────────────────────────────────
@@ -85,6 +91,7 @@ public class NotificationService {
                         + " está confirmado: " + g.services() + " com " + g.professional() + ", "
                         + br(g.date()) + " às " + g.start() + "."
                         + (blank(g.tenant().getAddress()) ? "" : " Endereço: " + g.tenant().getAddress().trim() + ".")));
+        dispatchAfterCommit();
     }
 
     /** O dono recusou um pedido que ainda estava pendente. */
@@ -94,6 +101,7 @@ public class NotificationService {
                 g.tenant().getName() + ": horário não confirmado",
                 "Olá, " + firstName(g.client().getName()) + ". Não conseguimos atender " + br(g.date()) + " às " + g.start()
                         + " em " + g.tenant().getName() + ". Escolha outro horário: " + appUrl + "/" + g.tenant().getSlug()));
+        dispatchAfterCommit();
     }
 
     /** O dono cancelou um horário que já estava confirmado (ou marcado como falta). */
@@ -103,6 +111,7 @@ public class NotificationService {
                 g.tenant().getName() + ": horário cancelado",
                 "Olá, " + firstName(g.client().getName()) + ". Seu horário de " + br(g.date()) + " às " + g.start()
                         + " em " + g.tenant().getName() + " foi cancelado. Para reagendar: " + appUrl + "/" + g.tenant().getSlug()));
+        dispatchAfterCommit();
     }
 
     /**
@@ -118,6 +127,25 @@ public class NotificationService {
         enqueue(tenant, appointment.getId(), event, key, Channel.EMAIL, client.getEmail(), subject, text);
         enqueue(tenant, appointment.getId(), event, key, Channel.WHATSAPP, phone, subject, text);
         return true;
+    }
+
+    // ─── envio imediato ─────────────────────────────────────────────────────────
+
+    /**
+     * Pede o envio das mensagens recém-enfileiradas assim que a transação de quem chamou der commit (antes disso a
+     * linha nem existe para outras conexões). Sem transação ativa, dispara na hora.
+     */
+    private void dispatchAfterCommit() {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    dispatcher.dispatchNow();
+                }
+            });
+        } else {
+            dispatcher.dispatchNow();
+        }
     }
 
     // ─── montagem ───────────────────────────────────────────────────────────────

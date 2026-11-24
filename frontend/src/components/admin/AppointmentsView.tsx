@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AppointmentCard, type AppointmentCardData } from '@/components/appointments/AppointmentCard';
+import { ConfirmAppointmentDialog } from '@/components/appointments/ConfirmAppointmentDialog';
 import { FilterChips } from '@/components/appointments/FilterChips';
 import { StatusBadge } from '@/components/appointments/StatusBadge';
 import { SummaryStrip } from '@/components/appointments/SummaryStrip';
@@ -89,6 +90,7 @@ export default function AppointmentsView() {
     setParams(next.search ? { q: next.search } : {}, { replace: true });
   };
   const [pendingCancel, setPendingCancel] = useState<RowData | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<RowData | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [showFilters, setShowFilters] = useState(false);
@@ -153,6 +155,7 @@ export default function AppointmentsView() {
 
   const onAction = (row: RowData, a: StatusAction) => {
     if (a.status === 'cancelled') setPendingCancel(row);
+    else if (a.status === 'confirmed') setPendingConfirm(row); // confirmar avisa o cliente: pede uma segunda confirmação
     else void apply(row, a.status);
   };
 
@@ -243,7 +246,7 @@ export default function AppointmentsView() {
       </form>
 
       {error && <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
-      <ClientNoticeBar notice={clientNotice.notice} onClose={clientNotice.clear} />
+      <ClientNoticeBar notice={clientNotice.notice} onClose={clientNotice.clear} settingsHref="/admin/settings/portal#whatsapp" />
 
       {rows.length === 0 ? (
         <Card><CardContent className="flex flex-col items-center gap-3 py-12 text-center">
@@ -304,6 +307,11 @@ export default function AppointmentsView() {
           </div>
         </Card>
       )}
+
+      <ConfirmAppointmentDialog scope="admin"
+        target={pendingConfirm ? { clientName: pendingConfirm.clientName, date: pendingConfirm.date, startTime: pendingConfirm.startTime, serviceName: pendingConfirm.serviceName } : null}
+        onCancel={() => setPendingConfirm(null)}
+        onConfirm={() => { const r = pendingConfirm; setPendingConfirm(null); if (r) void apply(r, 'confirmed'); }} />
 
       <Dialog open={!!pendingCancel} onOpenChange={o => !o && setPendingCancel(null)}>
         <DialogContent className="max-w-sm">
