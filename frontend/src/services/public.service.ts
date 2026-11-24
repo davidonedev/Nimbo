@@ -1,5 +1,5 @@
 import { api } from '../lib/api';
-import type { Tenant, Service, Professional, Appointment, Client } from '../types';
+import type { Tenant, Service, Professional, Appointment } from '../types';
 
 // Normaliza professional do backend para tipo frontend
 function normalizeProfessional(p: Record<string, unknown>): Professional {
@@ -19,13 +19,6 @@ function normalizeProfessional(p: Record<string, unknown>): Professional {
     },
     workingDays: (p.workingDays as number[]) ?? [1, 2, 3, 4, 5],
   };
-}
-
-// Normaliza appointment (strip nested relations)
-function normalizeAppointment(a: Record<string, unknown>): Appointment {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { client: _c, professional: _p, service: _s, ...rest } = a;
-  return rest as unknown as Appointment;
 }
 
 // ─── Dados públicos do tenant ─────────────────────────────────────────────────
@@ -59,30 +52,6 @@ export async function getAvailableSlotsApi(
   return api.get<string[]>(`/public/${slug}/availability?${qs}`);
 }
 
-// ─── Payload de agendamento público ──────────────────────────────────────────
-export interface PublicBookingPayload {
-  professionalId: string;
-  serviceIds:     string[];   // um ou mais serviços
-  date:           string;
-  startTime:      string;
-  clientName:     string;
-  clientEmail:    string;
-  clientPhone?:   string;
-  notes?:         string;
-}
-
-// ─── Criar agendamento — retorna array (um por serviço) ───────────────────────
-export async function createPublicBookingApi(
-  slug: string,
-  payload: PublicBookingPayload,
-): Promise<{ appointments: Appointment[]; client: Client }> {
-  const raw = await api.post<Record<string, unknown>[]>(`/public/${slug}/booking`, payload);
-  // backend retorna array de appointments, cada um com client/professional/service nested
-  const appointments = raw.map(normalizeAppointment);
-  const client = ((raw[0] as Record<string, unknown>)?.client ?? {}) as Client;
-  return { appointments, client };
-}
-
 // ─── Agendamentos do cliente no portal público ────────────────────────────────
 export interface PublicAppointment extends Appointment {
   professional?:  { id: string; name: string; specialty: string };
@@ -105,47 +74,6 @@ export async function cancelPublicAppointmentApi(
   clientId: string,
 ): Promise<void> {
   await api.patch(`/public/${slug}/appointments/${appointmentId}/cancel`, { clientId });
-}
-
-// ─── Cadastro + Agendamento combinados (novo cliente, verifica via WhatsApp) ──
-
-export interface RegisterAndBookPayload {
-  // Cliente
-  name:     string;
-  email:    string;
-  phone:    string;
-  password: string;
-  // Agendamento
-  professionalId: string;
-  serviceIds:     string[];
-  date:           string;
-  startTime:      string;
-  notes?:         string;
-}
-
-export interface RegisterAndBookResult {
-  appointments: Appointment[];
-  message:      string;
-  phone:        string;
-}
-
-export async function registerAndBookApi(
-  slug: string,
-  payload: RegisterAndBookPayload,
-): Promise<RegisterAndBookResult> {
-  const raw = await api.post<{ appointments: Record<string, unknown>[]; message: string; phone: string }>(
-    `/public/${slug}/register-and-book`,
-    payload,
-  );
-  return {
-    appointments: raw.appointments.map(a => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { client: _c, professional: _p, service: _s, ...rest } = a;
-      return rest as unknown as Appointment;
-    }),
-    message: raw.message,
-    phone:   raw.phone,
-  };
 }
 
 // ─── Reagendar agendamento pelo cliente ───────────────────────────────────────

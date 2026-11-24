@@ -44,30 +44,6 @@ public final class PublicDtos {
                                               String workingHoursEnd, List<ProfessionalDtos.ServiceLinkSummary> services) {
     }
 
-    // ─── booking ────────────────────────────────────────────────────────────────
-
-    public record BookingRequest(
-            @NotBlank String professionalId,
-            String serviceId,
-            List<String> serviceIds,
-            @NotBlank @Pattern(regexp = "^\\d{4}-\\d{2}-\\d{2}$") String date,
-            @NotBlank @Pattern(regexp = "^\\d{2}:\\d{2}(:\\d{2})?$") String startTime,
-            @NotBlank @Size(min = 2, max = 100) String clientName,
-            @NotBlank @Email String clientEmail,
-            String clientPhone,
-            @Size(max = 500) String notes
-    ) {
-        public List<UUID> resolveServiceIds() {
-            if (serviceIds != null && !serviceIds.isEmpty()) return serviceIds.stream().map(UUID::fromString).toList();
-            if (serviceId != null) return List.of(UUID.fromString(serviceId));
-            throw new com.agendepro.common.AppException("serviceId ou serviceIds é obrigatório", 400);
-        }
-
-        public String startTimeHHmm() {
-            return startTime.length() >= 5 ? startTime.substring(0, 5) : startTime;
-        }
-    }
-
     // ─── cliente ────────────────────────────────────────────────────────────────
 
     public record ClientLoginRequest(@NotBlank @Email String email, @NotBlank String password) {
@@ -85,25 +61,6 @@ public final class PublicDtos {
     }
 
     public record GoogleAuthRequest(@NotBlank String accessToken) {
-    }
-
-    public record RegisterAndBookRequest(
-            @NotBlank @Size(min = 2, max = 100) String name,
-            @NotBlank @Email String email,
-            @NotBlank String phone,
-            @NotBlank @Size(min = 6) String password,
-            @NotBlank String professionalId,
-            @NotEmpty List<@NotBlank String> serviceIds,
-            @NotBlank @Pattern(regexp = "^\\d{4}-\\d{2}-\\d{2}$") String date,
-            @NotBlank @Pattern(regexp = "^\\d{2}:\\d{2}(:\\d{2})?$") String startTime,
-            @Size(max = 500) String notes
-    ) {
-        public String startTimeHHmm() {
-            return startTime.length() >= 5 ? startTime.substring(0, 5) : startTime;
-        }
-    }
-
-    public record RegisterAndBookResponse(List<AppointmentDtos.AppointmentResponse> appointments, String message, String phone) {
     }
 
     public record ProfessionalRegisterRequest(

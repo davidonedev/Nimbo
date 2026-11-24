@@ -143,8 +143,13 @@ public class AppointmentService {
             }
         }
 
+        if (!appointment.getStatus().canTransitionTo(request.status())) {
+            throw new AppException("Este agendamento está " + appointment.getStatus().label()
+                    + " e não pode passar para " + request.status().label() + ". Atualize a tela.", 409, "INVALID_STATUS_TRANSITION");
+        }
+
         appointment.setStatus(request.status());
-        if (request.status() != AppointmentStatus.PENDING) appointment.setConfirmBy(null); // decidido: não expira mais
+        appointment.setConfirmBy(null); // decidido: não expira mais
         return toResponse(appointmentRepository.save(appointment));
     }
 
