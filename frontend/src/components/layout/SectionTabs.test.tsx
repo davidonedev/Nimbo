@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { SectionLayout } from './SectionTabs';
-import { SERVICES_TABS } from '@/config/sectionTabs';
+import { SERVICES_TABS, SETTINGS_TABS } from '@/config/sectionTabs';
 
 const setup = (path: string) =>
   render(
@@ -32,6 +32,26 @@ describe('SectionLayout', () => {
     expect(screen.getByText('tela de produtos')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Produtos' }).getAttribute('aria-current')).toBe('page');
     expect(screen.getByRole('link', { name: 'Serviços' }).getAttribute('aria-current')).toBeNull(); // `end`: não fica ativa nas filhas
+  });
+
+  it('no celular as abas viram uma grade, sem rolagem horizontal', () => {
+    render(
+      <MemoryRouter initialEntries={['/admin/settings']}>
+        <Routes><Route path="admin/settings" element={<SectionLayout tabs={SETTINGS_TABS} label="Configurações" />}><Route index element={<p>conta</p>} /></Route></Routes>
+      </MemoryRouter>,
+    );
+    const nav = screen.getByRole('navigation', { name: 'Configurações' });
+    expect(nav.className).not.toContain('overflow-x');
+    const list = nav.querySelector('ul') as HTMLElement;
+    expect(list.className).toContain('grid');
+    expect(list.className).toContain('grid-cols-3'); // 6 abas em 2 linhas de 3
+    expect(list.className).not.toContain('overflow-x');
+    expect(screen.getAllByRole('link').map(a => a.textContent)).toEqual(['Conta', 'Portal do Cliente', 'Disponibilidade', 'Bloqueios', 'Lembretes', 'Pedidos de acesso']);
+  });
+
+  it('com duas abas a grade tem duas colunas', () => {
+    setup('/admin/services');
+    expect((screen.getByRole('navigation').querySelector('ul') as HTMLElement).className).toContain('grid-cols-2');
   });
 
   it('alvos de toque de ao menos 44 px', () => {
