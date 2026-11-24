@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useTenant } from '@/context/TenantContext';
 import { formatCurrency } from '@/lib/utils';
 import { isPastInBrasilia, nowBrasilia } from '@/lib/scheduling';
+import { statusErrorMessage } from '@/lib/appointmentFilters';
 import { NewAppointmentDialog } from './NewAppointmentDialog';
 import { AppointmentCardList, type ApptCardData } from '@/components/ui/AppointmentCards';
 import type { Appointment, AppointmentStatus } from '@/types';
@@ -191,6 +192,14 @@ export default function AgendaView({ only }: AgendaViewProps = {}) {
   const [apptDialog, setApptDialog] = useState<{ date?: string; professionalId?: string } | null>(null);
   const [detailAppt, setDetailAppt] = useState<Appointment | null>(null);
   const [rejectId, setRejectId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState('');
+
+  // Toda troca de status passa por aqui: se o servidor recusar, o dono vê o motivo em vez de um clique que não faz nada.
+  const runStatusAction = async (action: () => Promise<unknown>) => {
+    setActionError('');
+    try { await action(); }
+    catch (err) { setActionError(statusErrorMessage(err)); }
+  };
 
   const pending = useMemo(() =>
     appointments.filter(a => a.status === 'pending')
@@ -265,9 +274,8 @@ export default function AgendaView({ only }: AgendaViewProps = {}) {
 
   const openApptDialog = (date?: string, profId?: string) => setApptDialog({ date, professionalId: profId });
 
-  const handleTableSave = async (id: string, status: AppointmentStatus) => {
-    await updateAppointmentStatus(id, status);
-  };
+  const handleTableSave = (id: string, status: AppointmentStatus) =>
+    runStatusAction(() => updateAppointmentStatus(id, status));
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
@@ -328,6 +336,10 @@ export default function AgendaView({ only }: AgendaViewProps = {}) {
         </div>
       </div>
 
+      {actionError && (
+        <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{actionError}</p>
+      )}
+
       {/* Pending alert */}
       {pending.length > 0 && (
         <Card className="border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20">
@@ -362,7 +374,7 @@ export default function AgendaView({ only }: AgendaViewProps = {}) {
                     <p className="text-sm font-semibold hidden sm:block">{formatCurrency(appt.price)}</p>
                     <div className="flex gap-2">
                       <Button size="sm" className="h-8 gap-1 bg-green-600 hover:bg-green-700 text-white flex-1 sm:flex-none"
-                        onClick={() => updateAppointmentStatus(appt.id, 'confirmed')}>
+                        onClick={() => void runStatusAction(() => updateAppointmentStatus(appt.id, 'confirmed'))}>
                         <ThumbsUp className="h-3.5 w-3.5" /> Aceitar
                       </Button>
                       <Button size="sm" variant="destructive" className="h-8 gap-1 flex-1 sm:flex-none"
@@ -614,7 +626,7 @@ export default function AgendaView({ only }: AgendaViewProps = {}) {
           <p className="text-sm text-muted-foreground">Tem certeza que deseja recusar este agendamento?</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRejectId(null)}>Voltar</Button>
-            <Button variant="destructive" onClick={() => { if (rejectId) cancelAppointment(rejectId); setRejectId(null); }}>Recusar</Button>
+            <Button variant="destructive" onClick={() => { if (rejectId) void runStatusAction(() => cancelAppointment(rejectId)); setRejectId(null); }}>Recusar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -653,16 +665,16 @@ export default function AgendaView({ only }: AgendaViewProps = {}) {
                 </div>
                 <div className="flex gap-2 flex-wrap pt-2 border-t">
                   {detailAppt.status === 'pending' && (
-                    <Button size="sm" onClick={() => { updateAppointmentStatus(detailAppt.id, 'confirmed'); setDetailAppt(null); }}>Confirmar</Button>
+                    <Button size="sm" onClick={() => { void runStatusAction(() => updateAppointmentStatus(detailAppt.id, 'confirmed')); setDetailAppt(null); }}>Confirmar</Button>
                   )}
                   {(detailAppt.status === 'confirmed' || detailAppt.status === 'pending') && (
-                    <Button size="sm" variant="outline" onClick={() => { updateAppointmentStatus(detailAppt.id, 'completed'); setDetailAppt(null); }}>Marcar Concluído</Button>
+                    <Button size="sm" variant="outline" onClick={() => { void runStatusAction(() => updateAppointmentStatus(detailAppt.id, 'completed')); setDetailAppt(null); }}>Marcar Concluído</Button>
+                  )}
+                  {detailAppt.status !== 'cancelled' && detailAppt.status !== 'completed' && detailAppt.status !== 'no_show' && (
+                    <Button size="sm" variant="outline" onClick={() => { void runStatusAction(() => updateAppointmentStatus(detailAppt.id, 'no_show')); setDetailAppt(null); }}>Não compareceu</Button>
                   )}
                   {detailAppt.status !== 'cancelled' && detailAppt.status !== 'completed' && (
-                    <Button size="sm" variant="outline" onClick={() => { updateAppointmentStatus(detailAppt.id, 'no_show'); setDetailAppt(null); }}>Não compareceu</Button>
-                  )}
-                  {detailAppt.status !== 'cancelled' && detailAppt.status !== 'completed' && (
-                    <Button size="sm" variant="destructive" onClick={() => { cancelAppointment(detailAppt.id); setDetailAppt(null); }}>Cancelar</Button>
+                    <Button size="sm" variant="destructive" onClick={() => { void runStatusAction(() => cancelAppointment(detailAppt.id)); setDetailAppt(null); }}>Cancelar</Button>
                   )}
                 </div>
               </div>

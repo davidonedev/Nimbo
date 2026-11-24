@@ -108,8 +108,19 @@ export function installAdminBackend(seed: Appt[]): Backend {
       }
       const a = be.appointments.find(x => x.id === patch[1]);
       if (!a) return fail(404, 'Agendamento não encontrado');
-      // Espelha o backend atual: NÃO valida a origem da transição (AppointmentService.updateStatus).
-      a.status = body?.status as ApptStatus;
+      // Espelha AppointmentStatus.canTransitionTo do backend: concluído e cancelado são finais; falta só vira cancelado.
+      const next = body?.status as ApptStatus;
+      const allowed: Record<ApptStatus, ApptStatus[]> = {
+        pending: ['confirmed', 'completed', 'no_show', 'cancelled'],
+        confirmed: ['completed', 'no_show', 'cancelled'],
+        no_show: ['cancelled'],
+        completed: [],
+        cancelled: [],
+      };
+      if (!allowed[a.status].includes(next)) {
+        return fail(409, 'Este agendamento não pode mudar para esse status. Atualize a tela.');
+      }
+      a.status = next;
       if (a.status !== 'pending') a.confirmBy = null;
       return ok(a);
     }

@@ -13,7 +13,7 @@ import { useTenant } from '@/context/TenantContext';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { formatCurrency } from '@/lib/utils';
 import {
-  EMPTY_FILTERS, filterAppointments, hasActiveFilters, statusActionsFor,
+  EMPTY_FILTERS, filterAppointments, hasActiveFilters, statusActionsFor, statusErrorMessage,
   type AppointmentFilters, type StatusAction,
 } from '@/lib/appointmentFilters';
 import PendingConfirmations from '@/components/admin/PendingConfirmations';
@@ -106,7 +106,7 @@ export default function AppointmentsView() {
     setError('');
     setBusyId(row.appt.id);
     try { await updateAppointmentStatus(row.appt.id, status); }
-    catch { setError('Não foi possível atualizar o agendamento. Tente novamente.'); }
+    catch (err) { setError(statusErrorMessage(err)); }
     finally { setBusyId(null); }
   };
 
