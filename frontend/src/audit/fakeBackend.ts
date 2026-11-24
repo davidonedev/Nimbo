@@ -28,6 +28,7 @@ const CLIENTS = [
   { id: 'c1', tenantId: TENANT_ID, name: 'Ana Lima', email: 'teste+ana@exemplo.com', phone: '(11) 91111-1111', createdAt: '2026-01-01T00:00:00Z' },
   { id: 'c2', tenantId: TENANT_ID, name: 'Bruno Costa', email: 'teste+bruno@exemplo.com', phone: '(11) 92222-2222', createdAt: '2026-01-01T00:00:00Z' },
   { id: 'c3', tenantId: TENANT_ID, name: 'Carla Dias', email: 'teste+carla@exemplo.com', phone: '(11) 93333-3333', createdAt: '2026-01-01T00:00:00Z' },
+  { id: 'c4', tenantId: TENANT_ID, name: 'Duda Sem Fone', email: 'teste+duda@exemplo.com', phone: null as string | null, createdAt: '2026-01-01T00:00:00Z' },
 ];
 
 export type ApptStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show';
@@ -35,11 +36,11 @@ export interface Appt {
   id: string; tenantId: string; clientId: string; professionalId: string; serviceId: string;
   date: string; startTime: string; endTime: string; status: ApptStatus; price: number; notes: null;
   confirmBy: string | null; clientConfirmedAt: string | null; createdAt: string;
-  client: { id: string; name: string; phone: string }; professional: { id: string; name: string };
+  client: { id: string; name: string; phone: string | null }; professional: { id: string; name: string };
   service: typeof SERVICE;
 }
 
-export function appt(id: string, clientId: 'c1' | 'c2' | 'c3', date: string, startTime: string, status: ApptStatus, extra: Partial<Appt> = {}): Appt {
+export function appt(id: string, clientId: 'c1' | 'c2' | 'c3' | 'c4', date: string, startTime: string, status: ApptStatus, extra: Partial<Appt> = {}): Appt {
   const c = CLIENTS.find(x => x.id === clientId)!;
   return {
     id, tenantId: TENANT_ID, clientId, professionalId: PROF_ID, serviceId: SERVICE_ID, date, startTime, endTime: '23:59', status, price: 80, notes: null,
@@ -108,8 +109,19 @@ export function installAdminBackend(seed: Appt[]): Backend {
       }
       const a = be.appointments.find(x => x.id === patch[1]);
       if (!a) return fail(404, 'Agendamento não encontrado');
-      // Espelha o backend atual: NÃO valida a origem da transição (AppointmentService.updateStatus).
-      a.status = body?.status as ApptStatus;
+      // Espelha AppointmentStatus.canTransitionTo do backend: concluído e cancelado são finais; falta só vira cancelado.
+      const next = body?.status as ApptStatus;
+      const allowed: Record<ApptStatus, ApptStatus[]> = {
+        pending: ['confirmed', 'completed', 'no_show', 'cancelled'],
+        confirmed: ['completed', 'no_show', 'cancelled'],
+        no_show: ['cancelled'],
+        completed: [],
+        cancelled: [],
+      };
+      if (!allowed[a.status].includes(next)) {
+        return fail(409, 'Este agendamento não pode mudar para esse status. Atualize a tela.');
+      }
+      a.status = next;
       if (a.status !== 'pending') a.confirmBy = null;
       return ok(a);
     }

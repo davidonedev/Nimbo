@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY_FILTERS, clientMatches, filterAppointments, hasActiveFilters, statusActionsFor } from './appointmentFilters';
+import { EMPTY_FILTERS, clientMatches, filterAppointments, hasActiveFilters, statusActionsFor, statusErrorMessage } from './appointmentFilters';
+import { ApiError } from './api';
 import type { Appointment } from '@/types';
 
 const clients = [
@@ -86,5 +87,17 @@ describe('statusActionsFor', () => {
     expect(labels('completed')).toEqual([]);
     expect(labels('cancelled')).toEqual([]);
     expect(labels('no_show')).toEqual(['Cancelar']);
+  });
+});
+
+describe('statusErrorMessage', () => {
+  it('409 mostra a explicação do servidor', () => {
+    const msg = 'Este agendamento está cancelado e não pode passar para confirmado. Atualize a tela.';
+    expect(statusErrorMessage(new ApiError(msg, 409, 'INVALID_STATUS_TRANSITION'))).toBe(msg);
+  });
+  it('outros erros usam a mensagem genérica', () => {
+    const generic = 'Não foi possível atualizar o agendamento. Tente novamente.';
+    expect(statusErrorMessage(new ApiError('Erro interno', 500))).toBe(generic);
+    expect(statusErrorMessage(new Error('rede'))).toBe(generic);
   });
 });

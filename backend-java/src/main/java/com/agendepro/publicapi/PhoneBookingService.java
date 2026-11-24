@@ -70,6 +70,7 @@ public class PhoneBookingService {
 
     private final CaptchaService captchaService;
     private final BookingAttemptLimiter attemptLimiter;
+    private final com.agendepro.notification.NotificationService notificationService;
 
     /** Prazo (minutos) para confirmar um agendamento pendente; passou, o horário é liberado (PendingExpiryService). */
     @org.springframework.beans.factory.annotation.Value("${app.pending.confirm-minutes:120}")
@@ -177,6 +178,7 @@ public class PhoneBookingService {
         if (existing.isPresent() && device.isPresent() && device.get().getClientId().equals(existing.get().getId())) {
             touch(device.get());
             BookedSummary summary = bookNow(t, slug, existing.get(), serviceIds, professionalId, req.date(), start, req.notes());
+            notifyOwnerOfNewRequest(t, summary);
             return BookResponse.booked(summary, toClient(existing.get()), null);
         }
 
@@ -231,6 +233,9 @@ public class PhoneBookingService {
         Instant confirmBy = t.getPhone() == null || t.getPhone().isBlank() ? null
                 : earliest(Instant.now().plus(Duration.ofMinutes(confirmMinutes)), startInstant(req.date(), start));
         BookedSummary summary = bookNow(t, slug, client, serviceIds, professionalId, req.date(), start, req.notes(), confirmBy);
+        // Com prazo, o dono só é avisado quando o cliente confirmar (clientConfirmed): o pedido pode nunca ser confirmado.
+        // Sem prazo (estabelecimento sem telefone) o cliente não tem como confirmar, então o aviso sai já.
+        if (confirmBy == null) notifyOwnerOfNewRequest(t, summary);
         // Sem prova de posse do celular (nem código, nem aparelho): devolve só o que o próprio cliente digitou.
         // O cadastro existente (id, nome, telefone) não pode vazar para quem apenas digitou o número de outra pessoa.
         return BookResponse.pending(summary, new BookedClient(null, req.name().trim(), null), confirmBy);
@@ -245,6 +250,7 @@ public class PhoneBookingService {
         Tenant t = publicService.resolveTenant(slug);
         Instant now = Instant.now();
         int confirmed = 0;
+        List<Appointment> newlyConfirmed = new ArrayList<>();
         for (Appointment a : appointmentRepository.findByTenantIdAndIdIn(t.getId(), appointmentIds)) {
             if (a.getStatus() != AppointmentStatus.PENDING) continue;
             boolean alreadyConfirmed = a.getClientConfirmedAt() != null; // repetir o toque é inofensivo
@@ -254,9 +260,12 @@ public class PhoneBookingService {
                 a.setClientConfirmedAt(now);
                 a.setConfirmBy(null); // sem prazo: o dono confirma quando puder
                 appointmentRepository.save(a);
+                newlyConfirmed.add(a);
             }
             confirmed++;
         }
+        // Agora o pedido é "de verdade": avisa o dono (só na 1ª vez; repetir o toque não reenvia).
+        notificationService.ownerNewRequest(newlyConfirmed);
         return new ClientConfirmedResponse(confirmed);
     }
 
@@ -297,6 +306,7 @@ public class PhoneBookingService {
 
         List<UUID> serviceIds = Arrays.stream(ch.getServiceIds().split(",")).map(UUID::fromString).toList();
         BookedSummary summary = bookNow(t, slug, client, serviceIds, ch.getProfessionalId(), ch.getDate(), ch.getStartTime(), ch.getNotes());
+        notifyOwnerOfNewRequest(t, summary);
 
         ch.setConsumedAt(Instant.now());
         challengeRepository.save(ch);
@@ -360,6 +370,12 @@ public class PhoneBookingService {
             return new BookedSummary(date, p.getId(), p.getName(), totalDuration, totalPrice, items);
         }
         throw slotTaken();
+    }
+
+    /** Enfileira o aviso de novo pedido ao dono (uma mensagem para todos os serviços da reserva). */
+    private void notifyOwnerOfNewRequest(Tenant t, BookedSummary summary) {
+        List<UUID> ids = summary.items().stream().map(BookedItem::id).toList();
+        notificationService.ownerNewRequest(appointmentRepository.findByTenantIdAndIdIn(t.getId(), ids));
     }
 
     // ─── disponibilidade (helpers) ──────────────────────────────────────────────

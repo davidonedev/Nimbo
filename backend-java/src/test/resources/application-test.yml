@@ -5,6 +5,8 @@ app:
     max-attempts-per-ip: 100000
   owner-reminders:
     enabled: false   # os testes chamam run() direto; o agendador não pode competir
+  notifications:
+    enabled: false   # idem: os testes chamam NotificationDispatcher.run() direto
   jwt:
     secret: test-secret-key-for-integration-tests-only-not-for-production-use
     expires-in: 1h

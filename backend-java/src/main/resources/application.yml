@@ -94,6 +94,13 @@ app:
   owner-reminders:
     enabled: ${OWNER_REMINDERS_ENABLED:true}
     check-interval-ms: 60000
+  # Fila de avisos (tabela notification_outbox): pedido novo/cancelamento/remarcação → dono; aprovação/recusa/cancelamento
+  # → cliente. E-mail só sai com SMTP_USER/SMTP_PASS; WhatsApp só com Evolution API (do estabelecimento ou WHATSAPP_DEFAULT_*).
+  # Canal indisponível é marcado como ignorado, sem nova tentativa.
+  notifications:
+    enabled: ${NOTIFICATIONS_ENABLED:true}
+    check-interval-ms: 15000
+    max-attempts: ${NOTIFICATIONS_MAX_ATTEMPTS:5}
   booking:
     max-attempts-per-ip: ${BOOKING_MAX_ATTEMPTS_PER_IP:10}   # pedidos de agendamento por IP...
     window-minutes: 15                                        # ...nesta janela

@@ -111,6 +111,39 @@ public class EmailService {
                 "email/owner-pending-reminder", context, "Aviso: agendamento sem confirmação (" + timeLeft + ")", panelUrl);
     }
 
+    public enum SendResult {
+        /** O servidor SMTP aceitou a mensagem. */
+        SENT,
+        /** Sem SMTP configurado (SMTP_USER vazio): nada foi enviado. */
+        NOT_CONFIGURED,
+        /** O SMTP recusou ou ficou fora do ar. */
+        FAILED
+    }
+
+    /**
+     * Envio síncrono de texto simples, para quem precisa saber se a mensagem saiu (fila de notificações).
+     * Diferente dos métodos {@code @Async}, devolve o resultado em vez de engolir a falha.
+     */
+    public SendResult sendNow(String to, String subject, String textBody) {
+        if (smtpUser == null || smtpUser.isBlank()) {
+            log.info("[email] Sem SMTP configurado: mensagem para {} não enviada ({})", to, subject);
+            return SendResult.NOT_CONFIGURED;
+        }
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, false, "UTF-8");
+            helper.setFrom(mailFrom);
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(textBody, false);
+            mailSender.send(message);
+            return SendResult.SENT;
+        } catch (Exception ex) {
+            log.error("[email] Falha ao enviar '{}': {}", subject, ex.getMessage());
+            return SendResult.FAILED;
+        }
+    }
+
     private void send(String to, String subject, String template, Context context, String devLabel, String devLink) {
         if (smtpUser == null || smtpUser.isBlank()) {
             log.warn("\n─────────────────────────────────────────────\n" +

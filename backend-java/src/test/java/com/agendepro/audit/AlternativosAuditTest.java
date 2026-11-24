@@ -5,6 +5,7 @@ import com.agendepro.appointment.AppointmentStatus;
 import com.agendepro.appointment.OwnerPendingReminderService;
 import com.agendepro.appointment.PendingExpiryService;
 import com.agendepro.client.Client;
+import com.agendepro.notification.NotificationOutbox;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -62,21 +63,22 @@ class AlternativosAuditTest extends AuditBase {
     }
 
     @Test
-    void gap_b1_refusalHasNoReason_andNobodyIsNotified() throws Exception {
-        // documenta lacuna: não existe status "recusado", nem motivo, nem aviso ao cliente
+    void gap_b1_refusalHasNoReason_butTheClientIsNowNotified() throws Exception {
+        // documenta lacuna: não existe status "recusado" nem motivo (o aviso ao cliente já existe)
         Ctx c = ctx();
         String phone = uniquePhone();
         book(c, "Cliente Recusado", phone, "10:00", null, 200);
         Appointment a = appointmentsOf(c.tenant).get(0);
-        Mockito.clearInvocations(whatsappService, emailService);
 
         mockMvc.perform(patch("/api/admin/appointments/" + a.getId() + "/status").header("Authorization", bearer(adminToken(c.tenant)))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"cancelled\",\"reason\":\"Fechado nesse dia\"}"))
                 .andExpect(status().isOk());
 
         assertThat(reload(a).getNotes()).isNull();          // o motivo enviado foi descartado
-        assertThat(whatsappRecipients()).isEmpty();
-        Mockito.verifyNoInteractions(emailService);
+        var refused = outboxOf(c.tenant, "REFUSED", NotificationOutbox.Channel.WHATSAPP);
+        assertThat(refused).hasSize(1);
+        assertThat(refused.get(0).getRecipient()).isEqualTo(e164(phone));
+        assertThat(refused.get(0).getBody()).doesNotContain("Fechado nesse dia"); // motivo ainda não existe
     }
 
     @Test
@@ -122,17 +124,18 @@ class AlternativosAuditTest extends AuditBase {
     }
 
     @Test
-    void gap_b3_clientCancellationDoesNotNotifyTheAdmin() throws Exception {
-        // documenta lacuna: inverter ao corrigir (o fluxo-alvo exige aviso ao admin quando o cliente cancela)
+    void b3_clientCancellationQueuesTheOwnerNotification() throws Exception {
         Ctx c = ctx();
         Client client = clientWithPhone(c.tenant, uniquePhone());
         Appointment a = confirmedIn(c, client, 2, "10:00", "10:30");
-        Mockito.clearInvocations(whatsappService, emailService);
 
         clientCancel(c, a, client).andExpect(status().isOk());
 
-        assertThat(whatsappSentTo(c.tenant.getPhone())).isFalse();
-        assertThat(emailCallsMentioning(c.tenant.getEmail())).isEmpty();
+        var email = outboxOf(c.tenant, "CLIENT_CANCELLED", NotificationOutbox.Channel.EMAIL);
+        assertThat(email).hasSize(1);
+        assertThat(email.get(0).getRecipient()).isEqualTo(c.tenant.getEmail());
+        assertThat(email.get(0).getSubject()).isEqualTo("Cliente cancelou: " + client.getName());
+        assertThat(outboxOf(c.tenant, "CLIENT_CANCELLED", NotificationOutbox.Channel.WHATSAPP)).hasSize(1);
     }
 
     // ── B4. Cliente reagenda ───────────────────────────────────────────────────────────────────────
@@ -167,18 +170,18 @@ class AlternativosAuditTest extends AuditBase {
     }
 
     @Test
-    void gap_b4_rescheduleKeepsConfirmedStatus_andDoesNotNotifyTheAdmin() throws Exception {
-        // documenta lacuna: um CONFIRMED movido pelo cliente continua CONFIRMED sem o admin saber
+    void gap_b4_rescheduleKeepsConfirmedStatus_butTheOwnerIsNowNotified() throws Exception {
+        // documenta lacuna: um CONFIRMED movido pelo cliente continua CONFIRMED sem nova aprovação (o aviso ao dono já existe)
         Ctx c = ctx();
         Client client = clientWithPhone(c.tenant, uniquePhone());
         Appointment a = confirmedIn(c, client, 2, "10:00", "10:30");
-        Mockito.clearInvocations(whatsappService, emailService);
 
         clientReschedule(c, a, client, date, "15:00").andExpect(status().isOk());
 
         assertThat(reload(a).getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
-        assertThat(whatsappSentTo(c.tenant.getPhone())).isFalse();
-        assertThat(emailCallsMentioning(c.tenant.getEmail())).isEmpty();
+        var email = outboxOf(c.tenant, "CLIENT_RESCHEDULED", NotificationOutbox.Channel.EMAIL);
+        assertThat(email).hasSize(1);
+        assertThat(email.get(0).getBody()).contains("às 15:00").contains("Horário anterior:").contains("às 10:00");
     }
 
     @Test

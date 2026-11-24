@@ -1,5 +1,12 @@
 import type { Appointment, AppointmentStatus, Client } from '@/types';
 import { digitsOf as digits, normalizeText as normalize } from '@/lib/text';
+import { ApiError } from '@/lib/api';
+
+/** Mensagem para uma troca de status que falhou. O 409 traz a explicação do servidor (ex.: "já está cancelado"). */
+export function statusErrorMessage(err: unknown): string {
+  if (err instanceof ApiError && err.status === 409) return err.message;
+  return 'Não foi possível atualizar o agendamento. Tente novamente.';
+}
 
 export interface AppointmentFilters {
   /** Texto livre: nome, e-mail ou telefone do cliente. */
