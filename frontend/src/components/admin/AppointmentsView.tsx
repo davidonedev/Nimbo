@@ -238,7 +238,7 @@ export default function AppointmentsView() {
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
             <Input
-              type="search" className="h-11 pl-9" placeholder="Buscar por nome, e-mail ou telefone do cliente"
+              type="search" className="h-11 pl-9" placeholder="Buscar cliente"
               aria-label="Buscar cliente por nome, e-mail ou telefone"
               value={filters.search} onChange={e => set('search', e.target.value)}
             />
@@ -274,14 +274,14 @@ export default function AppointmentsView() {
 
         {panelOpen && (
           <div id={`${uid}-panel`} className="grid grid-cols-2 gap-3 rounded-2xl border bg-muted/30 p-3 lg:grid-cols-5 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0">
-            <div className="space-y-1">
+            <div className="min-w-0 space-y-1">
               <Label htmlFor={`${uid}-from`}>De</Label>
-              <Input id={`${uid}-from`} type="date" className="h-11" value={filters.dateFrom} max={filters.dateTo || undefined}
+              <Input id={`${uid}-from`} type="date" className="h-11 min-w-0 px-2" value={filters.dateFrom} max={filters.dateTo || undefined}
                 onChange={e => set('dateFrom', e.target.value)} />
             </div>
-            <div className="space-y-1">
+            <div className="min-w-0 space-y-1">
               <Label htmlFor={`${uid}-to`}>Até</Label>
-              <Input id={`${uid}-to`} type="date" className="h-11" value={filters.dateTo} min={filters.dateFrom || undefined}
+              <Input id={`${uid}-to`} type="date" className="h-11 min-w-0 px-2" value={filters.dateTo} min={filters.dateFrom || undefined}
                 onChange={e => set('dateTo', e.target.value)} />
             </div>
             <div className="space-y-1">

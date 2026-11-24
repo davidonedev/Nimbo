@@ -171,14 +171,14 @@ export default function RevenueView() {
           <p className="text-muted-foreground text-sm" aria-live="polite">{periodDetail}</p>
         </div>
 
-        <div role="radiogroup" aria-label="Período do relatório" className="-mx-1 flex gap-1 overflow-x-auto rounded-xl bg-muted/50 p-1 sm:mx-0 sm:w-fit">
+        <div role="radiogroup" aria-label="Período do relatório" className="flex gap-1 overflow-x-auto rounded-xl bg-muted/50 p-1 sm:w-fit">
           {RANGE_ORDER.map(r => (
             <button
               key={r} type="button" role="radio" aria-checked={range === r}
               onClick={() => changeRange(r)}
-              className={`inline-flex h-11 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:flex-none ${range === r ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-sm font-medium sm:px-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:flex-none ${range === r ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
             >
-              {r === 'custom' && <CalendarRange className="h-3.5 w-3.5" aria-hidden />}{RANGE_SHORT[r]}
+              {r === 'custom' && <CalendarRange className="hidden h-3.5 w-3.5 sm:block" aria-hidden />}{RANGE_SHORT[r]}
             </button>
           ))}
         </div>
@@ -214,11 +214,11 @@ export default function RevenueView() {
               <div className="grid grid-cols-2 gap-3 sm:max-w-md">
                 <div className="space-y-1">
                   <Label htmlFor="rev-from" className="text-xs">Data inicial</Label>
-                  <Input id="rev-from" type="date" className="h-11" value={customStart} max={customEnd} onChange={e => setCustomStart(e.target.value)} />
+                  <Input id="rev-from" type="date" className="h-11 min-w-0 px-2" value={customStart} max={customEnd} onChange={e => setCustomStart(e.target.value)} />
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="rev-to" className="text-xs">Data final</Label>
-                  <Input id="rev-to" type="date" className="h-11" value={customEnd} min={customStart} max={format(new Date(), 'yyyy-MM-dd')} onChange={e => setCustomEnd(e.target.value)} />
+                  <Input id="rev-to" type="date" className="h-11 min-w-0 px-2" value={customEnd} min={customStart} max={format(new Date(), 'yyyy-MM-dd')} onChange={e => setCustomEnd(e.target.value)} />
                 </div>
               </div>
               {invalidCustom ? (
