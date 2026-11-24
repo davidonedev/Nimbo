@@ -9,13 +9,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import ClientNoticeBar from '@/components/admin/ClientNoticeBar';
 import { AppointmentCard, type AppointmentCardData } from '@/components/appointments/AppointmentCard';
+import { ConfirmAppointmentDialog } from '@/components/appointments/ConfirmAppointmentDialog';
 import { FilterChips } from '@/components/appointments/FilterChips';
 import { StatusBadge } from '@/components/appointments/StatusBadge';
 import { SummaryStrip } from '@/components/appointments/SummaryStrip';
 import { actionLabel, dayHeading, fmtDate } from '@/components/appointments/appointmentUi';
 import { useProfessional } from '@/context/ProfessionalContext';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { useProfClientNotice } from '@/hooks/useClientNotice';
 import { todaySP } from '@/lib/agendaDates';
 import { statusActionsFor, statusErrorMessage, type StatusAction } from '@/lib/appointmentFilters';
 import { formatCurrency } from '@/lib/utils';
@@ -118,6 +121,7 @@ export default function ProfAgendaView() {
   const { appointments: all, clients, allClients, services, professional, addAppointment, updateAppointmentStatus, cancelAppointment } = useProfessional();
   const appointments = useMemo(() => ownAppointments(all, professional.id), [all, professional.id]);
   const { isMobile } = useBreakpoint();
+  const clientNotice = useProfClientNotice();
 
   const [view, setView] = useState<View>('today');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -127,6 +131,7 @@ export default function ProfAgendaView() {
   const [showFilters, setShowFilters] = useState(false);
 
   const [rejectId, setRejectId] = useState<string | null>(null);
+  const [confirmRow, setConfirmRow] = useState<Row | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
 
@@ -207,8 +212,16 @@ export default function ProfAgendaView() {
     catch (err) { setActionError(statusErrorMessage(err)); }
     finally { setBusyId(null); }
   };
-  const apply = (r: Row, status: AppointmentStatus) => run(r.id, () => updateAppointmentStatus(r.id, status));
-  const onAction = (r: Row, a: StatusAction) => { if (a.status === 'cancelled') setRejectId(r.id); else void apply(r, a.status); };
+  const apply = (r: Row, status: AppointmentStatus) => run(r.id, async () => {
+    clientNotice.clear();
+    await updateAppointmentStatus(r.id, status);
+    clientNotice.offer([r.appt], status);
+  });
+  const onAction = (r: Row, a: StatusAction) => {
+    if (a.status === 'cancelled') setRejectId(r.id);
+    else if (a.status === 'confirmed') setConfirmRow(r); // confirmar avisa o cliente: pede uma segunda confirmação
+    else void apply(r, a.status);
+  };
 
   const handleApptSave = async () => {
     setApptError('');
@@ -268,7 +281,7 @@ export default function ProfAgendaView() {
         { label: 'Receita', value: formatCurrency(stats.revenue) },
       ]} />
 
-      <PendingBox rows={pending} busy={busyId !== null} onAccept={r => void apply(r, 'confirmed')} onRefuse={r => setRejectId(r.id)} />
+      <PendingBox rows={pending} busy={busyId !== null} onAccept={r => setConfirmRow(r)} onRefuse={r => setRejectId(r.id)} />
 
       {/* Visões e filtros */}
       <form role="search" aria-label="Filtrar agendamentos" onSubmit={e => e.preventDefault()} className="space-y-3">
@@ -317,6 +330,7 @@ export default function ProfAgendaView() {
         )}
       </form>
 
+      <ClientNoticeBar notice={clientNotice.notice} onClose={clientNotice.clear} />
       {actionError && <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{actionError}</p>}
 
       {filtered.length === 0 ? (
@@ -389,6 +403,11 @@ export default function ProfAgendaView() {
           </div>
         </Card>
       )}
+
+      <ConfirmAppointmentDialog scope="professional"
+        target={confirmRow ? { clientName: confirmRow.clientName, date: confirmRow.date, startTime: confirmRow.startTime, serviceName: confirmRow.serviceName } : null}
+        onCancel={() => setConfirmRow(null)}
+        onConfirm={() => { const r = confirmRow; setConfirmRow(null); if (r) void apply(r, 'confirmed'); }} />
 
       {/* ── New Appointment Dialog ── */}
       <Dialog open={apptDialog} onOpenChange={o => { setApptDialog(o); if (!o) setApptError(''); }}>
@@ -466,7 +485,8 @@ export default function ProfAgendaView() {
             <Button variant="outline" className="min-h-11" onClick={() => setRejectId(null)}>Voltar</Button>
             <Button variant="destructive" className="min-h-11" onClick={() => {
               const id = rejectId; setRejectId(null);
-              if (id) void run(id, () => cancelAppointment(id));
+              const row = rows.find(x => x.id === id);
+              if (id) void run(id, async () => { clientNotice.clear(); await cancelAppointment(id); if (row) clientNotice.offer([row.appt], 'cancelled'); });
             }}>
               Confirmar
             </Button>

@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { setViewportWidth } from '@/test/setup';
 import { MemoryRouter } from 'react-router-dom';
 import AppointmentsView from './AppointmentsView';
+import { confirmInSafetyDialog } from '@/test/confirmDialog';
 
 /** A busca mora na URL (?q=), então a tela precisa de um Router. */
 const renderView = (url = '/admin/appointments') =>
@@ -183,6 +184,7 @@ describe('AppointmentsView (desktop)', () => {
   it('confirma um agendamento pendente', async () => {
     renderView();
     fireEvent.click(screen.getByRole('button', { name: /^Confirmar:.*Maria Souza/ }));
+    await confirmInSafetyDialog();
     await waitFor(() => expect(updateAppointmentStatus).toHaveBeenCalledWith('a2', 'confirmed'));
   });
 
@@ -265,6 +267,7 @@ describe('AppointmentsView (celular)', () => {
     renderView();
     expect(screen.getByRole('button', { name: /^Concluir:.*João Pereira.*10\/11/ })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /^Confirmar:.*Maria Souza/ }));
+    await confirmInSafetyDialog();
     await waitFor(() => expect(updateAppointmentStatus).toHaveBeenCalledWith('a2', 'confirmed'));
   });
 

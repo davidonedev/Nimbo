@@ -627,7 +627,7 @@ export default function SettingsView({ section = 'account' }: Props) {
           Integração WhatsApp
         </h3>
         <p className="text-muted-foreground text-sm mt-1">
-          Configure a API do WhatsApp para enviar mensagens de verificação e resumos de agendamento.
+          Configure a API do WhatsApp para enviar sozinha a confirmação do agendamento (assim que você confirma), o código de verificação e os lembretes ao cliente.
           Compatível com <strong>Evolution API</strong> e serviços similares.
         </p>
       </div>

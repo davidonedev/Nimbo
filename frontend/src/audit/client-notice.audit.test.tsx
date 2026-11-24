@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { setViewportWidth } from '@/test/setup';
 import App from '../App';
+import { confirmInSafetyDialog } from '@/test/confirmDialog';
 import { appt, brDate, installAdminBackend, signInAsTenantAdmin, type Backend } from './fakeBackend';
 
 /** Depois de aprovar, recusar ou cancelar, o dono tem o botão que abre o WhatsApp com a mensagem pronta para o cliente. */
@@ -30,6 +31,7 @@ describe('Aviso ao cliente pelo WhatsApp', { timeout: 90000 }, () => {
     be = installAdminBackend([appt('a1', 'c1', brDate(1), '10:00', 'pending')]);
     open('/admin/agenda');
     fireEvent.click((await screen.findAllByRole('button', { name: /Aceitar/ }, T))[0]);
+    await confirmInSafetyDialog();
 
     const link = await screen.findByRole('link', { name: 'Avisar Ana no WhatsApp' }, T);
     expect((link as HTMLAnchorElement).href).toMatch(/^https:\/\/wa\.me\/5511911111111\?text=/);
@@ -37,7 +39,7 @@ describe('Aviso ao cliente pelo WhatsApp', { timeout: 90000 }, () => {
     expect(link.getAttribute('rel')).toBe('noopener noreferrer');
     expect(decodedText(link)).toContain('Seu horário em Studio Nimbo está confirmado: Corte feminino com Marina Souza');
     expect(decodedText(link)).toContain('Endereço: Rua A, 1.');
-    expect(screen.getByText('Avise o cliente pelo WhatsApp:')).toBeTruthy();
+    expect(screen.getByText(/Avise o cliente pelo WhatsApp:/)).toBeTruthy(); // sem WhatsApp automático, o link é a reserva
   });
 
   it('Recusar na Agenda mostra a mensagem de recusa com o link para escolher outro horário', async () => {
@@ -56,6 +58,7 @@ describe('Aviso ao cliente pelo WhatsApp', { timeout: 90000 }, () => {
     be = installAdminBackend([appt('a1', 'c1', brDate(1), '10:00', 'pending')]);
     open('/admin/agenda');
     fireEvent.click((await screen.findAllByRole('button', { name: /Aceitar/ }, T))[0]);
+    await confirmInSafetyDialog();
     await screen.findByRole('link', { name: 'Avisar Ana no WhatsApp' }, T);
 
     fireEvent.click(screen.getByRole('button', { name: 'Fechar aviso' }));
@@ -68,6 +71,7 @@ describe('Aviso ao cliente pelo WhatsApp', { timeout: 90000 }, () => {
     const [aceitar] = await screen.findAllByRole('button', { name: /Aceitar/ }, T);
     be.failNextStatusWith = 500;
     fireEvent.click(aceitar);
+    await confirmInSafetyDialog();
 
     expect((await screen.findByRole('alert', undefined, T)).textContent).toContain('Não foi possível atualizar o agendamento');
     expect(noticeLinks()).toHaveLength(0);
@@ -77,6 +81,7 @@ describe('Aviso ao cliente pelo WhatsApp', { timeout: 90000 }, () => {
     be = installAdminBackend([appt('a1', 'c4', brDate(1), '10:00', 'pending')]);
     open('/admin/agenda');
     fireEvent.click((await screen.findAllByRole('button', { name: /Aceitar/ }, T))[0]);
+    await confirmInSafetyDialog();
 
     await waitFor(() => expect(be.patches()).toHaveLength(1), T);
     await waitFor(() => expect(screen.queryByText(/aguardando confirmação/)).toBeNull(), T);
@@ -112,6 +117,7 @@ describe('Aviso ao cliente pelo WhatsApp', { timeout: 90000 }, () => {
     open('/admin/appointments');
     const group = await screen.findByRole('list', { name: /já confirmou/ }, T);
     fireEvent.click(within(group).getByRole('button', { name: 'Confirmar' }));
+    await confirmInSafetyDialog();
 
     const link = await screen.findByRole('link', { name: 'Avisar Bruno no WhatsApp' }, T);
     expect(decodedText(link)).toContain('está confirmado');

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { setViewportWidth } from '@/test/setup';
 import PendingConfirmations from './PendingConfirmations';
+import { confirmInSafetyDialog } from '@/test/confirmDialog';
 
 const updateAppointmentStatus = vi.fn(async () => {});
 const confirmAppointments = vi.fn(async (ids: string[]) => ({ confirmed: ids.length, skipped: 0, confirmedIds: ids }));
@@ -72,6 +73,7 @@ describe('PendingConfirmations', () => {
     render(<PendingConfirmations />);
     const group = screen.getByRole('list', { name: /já confirmou/ });
     fireEvent.click(within(group).getByRole('button', { name: 'Confirmar' }));
+    await confirmInSafetyDialog();
     await waitFor(() => expect(updateAppointmentStatus).toHaveBeenCalledWith('a1', 'confirmed'));
     expect(screen.queryByRole('dialog')).toBeNull();
   });
