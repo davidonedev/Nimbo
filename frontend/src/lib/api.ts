@@ -10,10 +10,10 @@ import { resolveApiBaseUrl } from './apiUrl';
 const BASE_URL = resolveApiBaseUrl(import.meta.env.VITE_API_URL);
 
 /**
- * Tempo máximo esperando a resposta. O Render gratuito dorme por inatividade e a primeira chamada pode levar
- * de 50 a 90 s para ser atendida, então 90 s evita desistir antes de o servidor acordar.
+ * Tempo máximo esperando a resposta. O Render gratuito dorme por inatividade e a primeira chamada levou ~107 s
+ * para ser atendida na medição de 2026-11-24, então 150 s evita desistir antes de o servidor acordar.
  */
-export const REQUEST_TIMEOUT_MS = 90_000;
+export const REQUEST_TIMEOUT_MS = 150_000;
 
 const RETRY_STATUSES = new Set([502, 503, 504]); // o proxy não alcançou o servidor (acordando/reiniciando)
 
