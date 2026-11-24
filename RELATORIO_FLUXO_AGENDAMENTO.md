@@ -332,3 +332,21 @@ Avaliação pós-atendimento · recibo · fila de espera · reativação de inat
 6. **Render:** aceita um ping externo gratuito (UptimeRobot ou similar) ou prefere migrar para um plano que não durma?
 7. **Comissão:** percentual por profissional, por serviço, ou os dois?
 8. **Fluxos legados:** posso removê-los de vez? Nenhuma rota atual do app os chama; só dois componentes órfãos (`BookingFlow.tsx`, `BookingAuthGate.tsx`) e um método do `PublicTenantContext` que não achei consumidor público.
+
+---
+
+## 9. Correções aplicadas (branch `fix/p0-seguranca-fluxo`)
+
+Decisões do dono em 2026-11-23: avisos ao dono sem custo (e-mail, sino, push e link `wa.me`); número de WhatsApp de cada estabelecimento; endpoints legados podem ser removidos.
+
+| Backlog | O que mudou | Prova |
+|---|---|---|
+| #1 vazamento do `/book` (parcial) | No modo pendente, `/book` devolve só o que o solicitante digitou (`id` e `phone` nulos). O cadastro existente não aparece mais na resposta (`PhoneBookingService.java`, `bookPending`) | `c7_pendingFlowDoesNotRevealAnExistingClient` e `c7_pendingFlowForANewPhoneAlsoReturnsNoClientId` |
+| #2 máquina de estados | `AppointmentStatus.canTransitionTo` espelha as ações do painel; `updateStatus` responde 409 `INVALID_STATUS_TRANSITION`. Concluído e cancelado são finais, o que também elimina o horário duplicado ao reabrir | `c5_validTransitionsAreAccepted`, `c5_invalidTransitionsAreRejectedWith409_andNothingChanges`, `c5_aCancelledAppointmentCannotBeReopened_soTheSlotIsNeverDoubleBooked` |
+| #4 fluxos legados | Removidos `POST /{slug}/booking` e `/{slug}/register-and-book`, seus DTOs e métodos, e os componentes órfãos `BookingFlow.tsx` e `BookingAuthGate.tsx` | `c2_legacyBookingEndpointsWereRemoved_soNoUnprotectedPathCreatesAppointments` |
+
+**Ainda aberto no #1:** cancelar, reagendar e `my-appointments` continuam aceitando só o `clientId`. O id deixou de vazar pelo `/book`, então hoje só o próprio cliente o conhece, mas a credencial continua fraca. Endurecer com token do cliente segue no backlog (teste `gap_c7_myAppointmentsNeedsOnlyTheClientUuid_noAuthentication`).
+
+**Efeito colateral a tratar (#15):** com a regra nova, uma tela desatualizada que tente aprovar ou concluir algo já decidido recebe 409. A Agenda ainda não mostra erro nessa situação (`AgendaView.tsx:364-366,617,659-665`), então o clique parece não fazer nada.
+
+Resultado dos testes após as correções: backend 185/185, frontend 432/432, `tsc` e `eslint` sem erros.

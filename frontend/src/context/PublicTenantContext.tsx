@@ -1,18 +1,16 @@
 /**
  * PublicTenantContext — portal do cliente (sem autenticação).
  * Carrega dados públicos do tenant por slug via API.
- * Expõe a mesma interface que antes para BookingFlow e ServicesPage.
+ * Expõe os dados públicos do tenant para as páginas do portal (serviços, meus agendamentos...).
  */
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import type { Appointment, Client, Product, TenantData } from '../types';
+import type { Client, Product, TenantData } from '../types';
 
 import {
   getPublicTenantApi,
   getPublicServicesApi,
   getPublicProfessionalsApi,
-  createPublicBookingApi,
-  type PublicBookingPayload,
 } from '../services/public.service';
 import { listPublicProductsApi } from '../services/products.service';
 import { ApiError } from '../lib/api';
@@ -21,8 +19,6 @@ interface PublicTenantContextType {
   data: TenantData;
   products: Product[];
   loading: boolean;
-  // Retorna array de agendamentos criados (um por serviço selecionado)
-  addAppointment: (payload: PublicBookingPayload) => Promise<Appointment[]>;
   addClient: (client: Client) => void;
   getSlug: () => string;
 }
@@ -127,21 +123,13 @@ export function PublicTenantProvider({ children }: { children: React.ReactNode }
     );
   }
 
-  const addAppointment = async (payload: PublicBookingPayload): Promise<Appointment[]> => {
-    const { appointments } = await createPublicBookingApi(tenantSlug!, payload);
-    setData((prev) =>
-      prev ? { ...prev, appointments: [...prev.appointments, ...appointments] } : prev,
-    );
-    return appointments;
-  };
-
   // Mantido por compatibilidade — o backend cria o cliente automaticamente no booking
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const addClient = (_client: Client) => { /* no-op: backend gerencia */ };
 
   return (
     <PublicTenantContext.Provider
-      value={{ data, products, loading, addAppointment, addClient, getSlug: () => tenantSlug! }}
+      value={{ data, products, loading, addClient, getSlug: () => tenantSlug! }}
     >
       {children}
     </PublicTenantContext.Provider>

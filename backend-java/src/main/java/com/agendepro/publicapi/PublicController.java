@@ -71,13 +71,6 @@ public class PublicController {
         return ResponseEntity.ok(ApiResponse.ok(data));
     }
 
-    @PostMapping("/{slug}/booking")
-    public ResponseEntity<ApiResponse<List<AppointmentDtos.AppointmentResponse>>> booking(
-            @PathVariable String slug, @Valid @RequestBody BookingRequest request) {
-        var created = publicService.createPublicBooking(slug, request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(created));
-    }
-
     // ─── Agendamento por celular (tela padrão: Nome + Celular + código por WhatsApp) ────
 
     @GetMapping("/{slug}/book/slots")
@@ -149,13 +142,6 @@ public class PublicController {
     @PostMapping("/{slug}/register/client")
     public ResponseEntity<ApiResponse<MessageResponse>> registerClient(@PathVariable String slug, @Valid @RequestBody ClientRegisterRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(publicService.registerPublicClient(slug, request)));
-    }
-
-    @PostMapping("/{slug}/register-and-book")
-    public ResponseEntity<ApiResponse<RegisterAndBookResponse>> registerAndBook(
-            @PathVariable String slug, @Valid @RequestBody RegisterAndBookRequest request) {
-        var result = publicService.registerAndBook(slug, request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(result));
     }
 
     @PostMapping("/{slug}/register/professional")
