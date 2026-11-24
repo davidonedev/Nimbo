@@ -1,19 +1,20 @@
 import { useId, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { addDays, format, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { FilterX, MessageCircle, MoreHorizontal, Phone, Search, SlidersHorizontal } from 'lucide-react';
+import { addDays, format } from 'date-fns';
+import { FilterX, Search, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { STATUS_META } from '@/components/admin/agenda/statusStyle';
+import { AppointmentCard, type AppointmentCardData } from '@/components/appointments/AppointmentCard';
+import { FilterChips } from '@/components/appointments/FilterChips';
+import { StatusBadge } from '@/components/appointments/StatusBadge';
+import { SummaryStrip } from '@/components/appointments/SummaryStrip';
+import { actionLabel, dayHeading, fmtDate } from '@/components/appointments/appointmentUi';
 import { useTenant } from '@/context/TenantContext';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { formatCurrency } from '@/lib/utils';
-import { normalizeWaNumber } from '@/lib/clientNotice';
 import { todaySP } from '@/lib/agendaDates';
 import {
   EMPTY_FILTERS, PERIOD_PRESETS, activePeriodPreset, filterAppointments, hasActiveFilters, periodRange, statusActionsFor,
@@ -35,47 +36,22 @@ const STATUS_CHIPS: { value: AppointmentStatus | 'all'; label: string }[] = [
   { value: 'cancelled', label: 'Cancelados' },
 ];
 
+const PERIOD_CHIPS: { value: PeriodPreset | 'all'; label: string }[] = [
+  { value: 'all', label: 'Todas as datas' },
+  ...PERIOD_PRESETS.map(p => ({ value: p.key as PeriodPreset | 'all', label: p.label })),
+];
+
 const fieldClass =
   'h-11 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 
-const chipClass = (on: boolean) =>
-  `inline-flex h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:px-3 ${on ? 'border-primary bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted hover:text-foreground'}`;
-
-const fmtDate = (d: string) => format(new Date(`${d}T00:00:00`), 'dd/MM/yyyy');
-const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-
-/** Cabeçalho do dia na lista do celular: "Hoje · Quarta, 25 de nov" / "Amanhã · …" / "Ontem · …" / "Quarta, 18 de nov". */
-function dayHeading(isoDay: string, todayIso: string): string {
-  const full = capitalize(format(parseISO(isoDay), "EEE, d 'de' MMM", { locale: ptBR }));
-  const rel = isoDay === todayIso ? 'Hoje'
-    : isoDay === format(addDays(parseISO(todayIso), 1), 'yyyy-MM-dd') ? 'Amanhã'
-    : isoDay === format(addDays(parseISO(todayIso), -1), 'yyyy-MM-dd') ? 'Ontem' : null;
-  return rel ? `${rel} · ${full}` : full;
-}
-
-/** Cor + ícone + texto: a cor nunca é a única pista do status. */
-function StatusBadge({ status }: { status: AppointmentStatus }) {
-  const { label, icon: Icon, card } = STATUS_META[status];
-  return (
-    <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-semibold ${card}`}>
-      <Icon className="h-3 w-3" aria-hidden />{label}
-    </span>
-  );
-}
-
-interface RowData {
+interface RowData extends AppointmentCardData {
   appt: Appointment;
-  clientName: string;
-  clientPhone?: string | null;
-  serviceName: string;
   professionalName: string;
 }
 
-const actionLabel = (row: RowData, a: StatusAction) => `${a.label}: ${row.clientName}, ${fmtDate(row.appt.date)} às ${row.appt.startTime}`;
-
 /** Desktop: todas as ações como botões na linha da tabela. */
 function ActionButtons({ row, onAction, busy }: { row: RowData; onAction: (r: RowData, a: StatusAction) => void; busy: boolean }) {
-  const actions = statusActionsFor(row.appt.status);
+  const actions = statusActionsFor(row.status);
   if (actions.length === 0) return <span className="text-xs text-muted-foreground">Sem ações</span>;
   return (
     <div className="flex flex-wrap gap-2" role="group" aria-label={`Ações do agendamento de ${row.clientName}`}>
@@ -83,8 +59,8 @@ function ActionButtons({ row, onAction, busy }: { row: RowData; onAction: (r: Ro
         <Button
           key={a.status} type="button" size="sm" disabled={busy}
           variant={a.status === 'cancelled' ? 'outline' : a.status === 'confirmed' ? 'default' : 'secondary'}
-          className={`min-h-11 md:min-h-9 ${a.status === 'cancelled' ? 'text-destructive' : ''}`}
-          aria-label={actionLabel(row, a)}
+          className={`min-h-9 ${a.status === 'cancelled' ? 'text-destructive' : ''}`}
+          aria-label={actionLabel(a.label, row.clientName, row.date, row.startTime)}
           onClick={() => onAction(row, a)}
         >
           {a.label}
@@ -95,59 +71,9 @@ function ActionButtons({ row, onAction, busy }: { row: RowData; onAction: (r: Ro
 }
 
 /**
- * Celular: a ação principal (Confirmar ou Concluir) fica em largura total ao alcance do polegar; ligar, WhatsApp e as
- * ações menos usadas (Marcar falta, Cancelar) ficam ao lado, sem encher o cartão de botões.
- */
-function MobileActions({ row, onAction, busy }: { row: RowData; onAction: (r: RowData, a: StatusAction) => void; busy: boolean }) {
-  const actions = statusActionsFor(row.appt.status);
-  const primary = actions.find(a => a.status === 'confirmed') ?? actions.find(a => a.status === 'completed');
-  const more = actions.filter(a => a !== primary);
-  const tel = (row.clientPhone ?? '').replace(/[^\d+]/g, '');
-  const wa = normalizeWaNumber(row.clientPhone);
-  if (!primary && more.length === 0 && !tel) return null;
-
-  const iconLink = 'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-input bg-background text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
-  return (
-    <div className="flex items-center gap-2 border-t pt-3">
-      {primary && (
-        <Button
-          type="button" size="sm" disabled={busy}
-          variant={primary.status === 'confirmed' ? 'default' : 'secondary'}
-          className="min-h-11 flex-1"
-          aria-label={actionLabel(row, primary)}
-          onClick={() => onAction(row, primary)}
-        >
-          {primary.label}
-        </Button>
-      )}
-      {tel && <a href={`tel:${tel}`} className={iconLink} aria-label={`Ligar para ${row.clientName}`}><Phone className="h-4 w-4" aria-hidden /></a>}
-      {wa && <a href={`https://wa.me/${wa}`} target="_blank" rel="noopener noreferrer" className={iconLink} aria-label={`Chamar ${row.clientName} no WhatsApp`}><MessageCircle className="h-4 w-4" aria-hidden /></a>}
-      {more.length > 0 && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button type="button" size="sm" variant="outline" disabled={busy}
-              className={primary ? 'min-h-11 w-11 shrink-0 px-0' : 'min-h-11 flex-1'}
-              aria-label={`Mais ações: ${row.clientName}, ${fmtDate(row.appt.date)} às ${row.appt.startTime}`}>
-              <MoreHorizontal aria-hidden />{!primary && 'Ações'}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {more.map(a => (
-              <DropdownMenuItem key={a.status} destructive={a.status === 'cancelled'} className="min-h-11" onSelect={() => onAction(row, a)}>
-                {a.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
-    </div>
-  );
-}
-
-/**
- * Tela "Agendamentos": lista pesquisável de todos os agendamentos, com filtros (período, status,
- * profissional, serviço, busca por cliente) e ações de status. Tabela no desktop, cards agrupados por dia no celular.
- * A Agenda (calendário) continua em `AgendaView only="calendar"`.
+ * Tela "Agendamentos": do quadro geral (hoje, pendentes, próximos 7 dias) para o detalhe. Primeiro o que precisa de
+ * decisão (aguardando confirmação), depois filtros em camadas (busca, status e período à vista; o resto num painel) e a
+ * lista: tabela no desktop, cartões agrupados por dia no celular. A Agenda (calendário) fica em `AgendaView only="calendar"`.
  */
 export default function AppointmentsView() {
   const { appointments, clients, professionals, services, updateAppointmentStatus } = useTenant();
@@ -175,6 +101,7 @@ export default function AppointmentsView() {
     const svcById = new Map(services.map(s => [s.id, s]));
     return filterAppointments(appointments, clients, filters).map(appt => ({
       appt,
+      id: appt.id, date: appt.date, startTime: appt.startTime, endTime: appt.endTime, status: appt.status, price: appt.price,
       clientName: clientById.get(appt.clientId)?.name ?? 'Cliente removido',
       clientPhone: clientById.get(appt.clientId)?.phone,
       serviceName: svcById.get(appt.serviceId)?.name ?? '—',
@@ -185,9 +112,20 @@ export default function AppointmentsView() {
   // Celular: cartões agrupados por dia (a ordem do dia e a do horário seguem a tabela do desktop).
   const groups = useMemo(() => {
     const byDay = new Map<string, RowData[]>();
-    for (const r of rows) { const list = byDay.get(r.appt.date); if (list) list.push(r); else byDay.set(r.appt.date, [r]); }
+    for (const r of rows) { const list = byDay.get(r.date); if (list) list.push(r); else byDay.set(r.date, [r]); }
     return [...byDay.entries()];
   }, [rows]);
+
+  // Quadro geral: independe dos filtros, é o retrato do negócio.
+  const overview = useMemo(() => {
+    const end = format(addDays(new Date(`${today}T12:00:00`), 6), 'yyyy-MM-dd');
+    const active = appointments.filter(a => a.status !== 'cancelled');
+    return {
+      today: active.filter(a => a.date === today).length,
+      pending: appointments.filter(a => a.status === 'pending').length,
+      week: active.filter(a => a.date >= today && a.date <= end).length,
+    };
+  }, [appointments, today]);
 
   const counts = useMemo(() => statusCounts(appointments, clients, filters), [appointments, clients, filters]);
   const activePreset = activePeriodPreset(filters, today);
@@ -196,17 +134,17 @@ export default function AppointmentsView() {
   const panelFilterCount = (filters.dateFrom || filters.dateTo ? 1 : 0) + (filters.professionalId !== 'all' ? 1 : 0) + (filters.serviceId !== 'all' ? 1 : 0);
   const panelOpen = !isMobile || showFilters;
 
-  const choosePreset = (key: PeriodPreset) => {
-    const { dateFrom, dateTo } = activePreset === key ? { dateFrom: '', dateTo: '' } : periodRange(key, today);
+  const choosePeriod = (key: PeriodPreset | 'all') => {
+    const { dateFrom, dateTo } = key === 'all' || activePreset === key ? { dateFrom: '', dateTo: '' } : periodRange(key, today);
     setFilters({ ...filters, dateFrom, dateTo });
   };
 
   const apply = async (row: RowData, status: AppointmentStatus) => {
     setError('');
     clientNotice.clear();
-    setBusyId(row.appt.id);
+    setBusyId(row.id);
     try {
-      await updateAppointmentStatus(row.appt.id, status);
+      await updateAppointmentStatus(row.id, status);
       clientNotice.offer([row.appt], status);
     }
     catch (err) { setError(statusErrorMessage(err)); }
@@ -228,6 +166,12 @@ export default function AppointmentsView() {
           {count === 0 ? 'Nenhum agendamento encontrado' : `${count} agendamento${count !== 1 ? 's' : ''} encontrado${count !== 1 ? 's' : ''}`}
         </p>
       </div>
+
+      <SummaryStrip label="Resumo dos agendamentos" items={[
+        { label: 'Hoje', value: overview.today },
+        { label: 'Pendentes', value: overview.pending, highlight: overview.pending > 0 },
+        { label: 'Próx. 7 dias', value: overview.week },
+      ]} />
 
       {/* Reservas sem código aguardando o cliente confirmar pelo WhatsApp */}
       <PendingConfirmations />
@@ -255,22 +199,10 @@ export default function AppointmentsView() {
           )}
         </div>
 
-        <div role="group" aria-label="Status" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-          {STATUS_CHIPS.map(s => (
-            <button key={s.value} type="button" aria-pressed={filters.status === s.value} onClick={() => set('status', s.value)} className={chipClass(filters.status === s.value)}>
-              {s.label}{' '}
-              <span className={`text-xs tabular-nums ${filters.status === s.value ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>{counts[s.value]}</span>
-            </button>
-          ))}
-        </div>
-
-        <div role="group" aria-label="Período" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-          <button type="button" aria-pressed={!filters.dateFrom && !filters.dateTo} onClick={() => setFilters({ ...filters, dateFrom: '', dateTo: '' })}
-            className={chipClass(!filters.dateFrom && !filters.dateTo)}>Todas as datas</button>
-          {PERIOD_PRESETS.map(p => (
-            <button key={p.key} type="button" aria-pressed={activePreset === p.key} onClick={() => choosePreset(p.key)} className={chipClass(activePreset === p.key)}>{p.label}</button>
-          ))}
-        </div>
+        <FilterChips label="Status" value={filters.status} onChange={v => set('status', v)}
+          options={STATUS_CHIPS.map(s => ({ ...s, count: counts[s.value] }))} />
+        <FilterChips label="Período" value={!filters.dateFrom && !filters.dateTo ? 'all' : activePreset} onChange={choosePeriod}
+          options={PERIOD_CHIPS} />
 
         {panelOpen && (
           <div id={`${uid}-panel`} className="grid grid-cols-2 gap-3 rounded-2xl border bg-muted/30 p-3 lg:grid-cols-5 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0">
@@ -331,24 +263,8 @@ export default function AppointmentsView() {
               <h3 className="px-1 text-sm font-semibold text-muted-foreground">{dayHeading(day, today)}</h3>
               <ul className="space-y-3">
                 {items.map(row => (
-                  <li key={row.appt.id}>
-                    <Card className="shadow-sm"><CardContent className="space-y-3 p-4">
-                      <div className="flex items-start gap-3">
-                        <div className="w-12 shrink-0 text-center tabular-nums">
-                          <p className="text-base font-bold">{row.appt.startTime}</p>
-                          <p className="text-xs text-muted-foreground">{row.appt.endTime}</p>
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-base font-semibold">{row.clientName}</p>
-                          <p className="truncate text-sm text-muted-foreground">{row.serviceName} · {row.professionalName}</p>
-                        </div>
-                        <div className="flex shrink-0 flex-col items-end gap-1">
-                          <StatusBadge status={row.appt.status} />
-                          <span className="text-sm font-bold tabular-nums">{formatCurrency(row.appt.price)}</span>
-                        </div>
-                      </div>
-                      <MobileActions row={row} onAction={onAction} busy={busyId === row.appt.id} />
-                    </CardContent></Card>
+                  <li key={row.id}>
+                    <AppointmentCard data={row} busy={busyId === row.id} onAction={(d, a) => onAction(d as RowData, a)} />
                   </li>
                 ))}
               </ul>
@@ -369,18 +285,18 @@ export default function AppointmentsView() {
               </thead>
               <tbody>
                 {rows.map(row => (
-                  <tr key={row.appt.id} className="border-b transition-colors last:border-0 hover:bg-muted/30">
-                    <td className="whitespace-nowrap px-4 py-3 text-sm font-medium">{fmtDate(row.appt.date)}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-muted-foreground">{row.appt.startTime} – {row.appt.endTime}</td>
+                  <tr key={row.id} className="border-b transition-colors last:border-0 hover:bg-muted/30">
+                    <td className="whitespace-nowrap px-4 py-3 text-sm font-medium">{fmtDate(row.date)}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm text-muted-foreground">{row.startTime} – {row.endTime}</td>
                     <td className="px-4 py-3 text-sm">
                       <div className="max-w-[160px] truncate font-medium">{row.clientName}</div>
                       {row.clientPhone && <div className="text-xs text-muted-foreground">{row.clientPhone}</div>}
                     </td>
                     <td className="px-4 py-3 text-sm"><div className="max-w-[140px] truncate">{row.serviceName}</div></td>
                     <td className="px-4 py-3 text-sm"><div className="max-w-[120px] truncate">{row.professionalName}</div></td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold">{formatCurrency(row.appt.price)}</td>
-                    <td className="px-4 py-3"><StatusBadge status={row.appt.status} /></td>
-                    <td className="px-4 py-3"><ActionButtons row={row} onAction={onAction} busy={busyId === row.appt.id} /></td>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold">{formatCurrency(row.price)}</td>
+                    <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
+                    <td className="px-4 py-3"><ActionButtons row={row} onAction={onAction} busy={busyId === row.id} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -394,7 +310,7 @@ export default function AppointmentsView() {
           <DialogHeader>
             <DialogTitle>Cancelar agendamento</DialogTitle>
             <DialogDescription>
-              {pendingCancel && `Cancelar o agendamento de ${pendingCancel.clientName} em ${fmtDate(pendingCancel.appt.date)} às ${pendingCancel.appt.startTime}? O horário volta a ficar livre.`}
+              {pendingCancel && `Cancelar o agendamento de ${pendingCancel.clientName} em ${fmtDate(pendingCancel.date)} às ${pendingCancel.startTime}? O horário volta a ficar livre.`}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

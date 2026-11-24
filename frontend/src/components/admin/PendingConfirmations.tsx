@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { AlertTriangle, CheckCircle, Clock, MessageCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, ChevronDown, Clock, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTenant } from '@/context/TenantContext';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useClientNotice } from '@/hooks/useClientNotice';
 import ClientNoticeBar from '@/components/admin/ClientNoticeBar';
 import { saveErrorMessage } from '@/lib/settingsPayload';
@@ -23,11 +24,15 @@ function waNumber(phone: string | null | undefined): string | null {
 
 /**
  * "Aguardando confirmação": horários que clientes reservaram sem código automático. O cliente confirma mandando uma
- * mensagem para o WhatsApp do estabelecimento; aqui o dono vê quem é, abre a conversa e confirma — um a um ou vários
+ * mensagem para o WhatsApp do estabelecimento; aqui o dono vê quem é, abre a conversa e confirma, um a um ou vários
  * de uma vez (com aviso). Sem confirmação até o prazo, o servidor libera o horário.
+ *
+ * Caixa compacta e recolhível: no celular abre recolhida (a lista de agendamentos aparece na primeira tela) e o texto
+ * explicativo fica atrás de "Como funciona?".
  */
 export default function PendingConfirmations() {
   const { appointments, clients, services, professionals, updateAppointmentStatus, confirmAppointments, refresh } = useTenant();
+  const { isMobile } = useBreakpoint();
   const clientNotice = useClientNotice();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [askBulk, setAskBulk] = useState(false);
@@ -35,6 +40,8 @@ export default function PendingConfirmations() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [now, setNow] = useState(() => Date.now());
+  const [openChoice, setOpenChoice] = useState<boolean | null>(null); // null = padrão da tela (aberta no desktop, fechada no celular)
+  const open = openChoice ?? !isMobile;
 
   // Esconde sozinho o que passou do prazo (o servidor libera o horário em seguida).
   useEffect(() => {
@@ -63,9 +70,11 @@ export default function PendingConfirmations() {
   const allSelected = rows.length > 0 && selectedIds.length === rows.length;
   // Quem já tocou em "Confirmar no WhatsApp" fica em cima: é o que o dono tem de decidir primeiro.
   const groups = [
-    { key: 'confirmed', title: 'O cliente já confirmou no WhatsApp — aguardando você', rows: rows.filter(r => !!r.appt.clientConfirmedAt) },
-    { key: 'waiting', title: 'O cliente ainda não confirmou', rows: rows.filter(r => !r.appt.clientConfirmedAt) },
+    { key: 'confirmed', title: 'O cliente já confirmou', rows: rows.filter(r => !!r.appt.clientConfirmedAt) },
+    { key: 'waiting', title: 'Ainda não confirmou', rows: rows.filter(r => !r.appt.clientConfirmedAt) },
   ].filter(g => g.rows.length > 0);
+  const alreadyConfirmed = rows.filter(r => !!r.appt.clientConfirmedAt).length;
+  const several = rows.length > 1; // seleção em massa só faz sentido com 2 ou mais
 
   // Lista vazia: some, mas deixa a mensagem do que acabou de acontecer (ex.: "3 agendamentos confirmados") por alguns segundos.
   if (rows.length === 0) {
@@ -114,87 +123,120 @@ export default function PendingConfirmations() {
 
   return (
     <Card className="border-yellow-300 dark:border-yellow-700">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Clock className="h-4 w-4" aria-hidden /> Aguardando confirmação
-          <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-semibold text-yellow-900 dark:bg-yellow-900/40 dark:text-yellow-200">{rows.length}</span>
-        </CardTitle>
-        <CardDescription>
-          Estes clientes reservaram sem código. O cliente tem 3 horas para tocar em "Confirmar no WhatsApp" e mandar a mensagem
-          para o seu número; se não tocar, o horário volta a ficar livre. Quem já confirmou fica reservado até você confirmar aqui.
-        </CardDescription>
+      <CardHeader className="space-y-1 p-4">
+        <button
+          type="button" aria-expanded={open} aria-controls="pending-confirmations-body"
+          onClick={() => setOpenChoice(!open)}
+          className="flex min-h-11 w-full items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Clock className="h-4 w-4 shrink-0" aria-hidden />
+          <span className="text-base font-semibold">Aguardando confirmação</span>
+          <span aria-label={`${rows.length} aguardando`} className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-semibold text-yellow-900 dark:bg-yellow-900/40 dark:text-yellow-200">{rows.length}</span>
+          <span className="ml-auto flex items-center gap-1 text-sm font-medium text-primary">
+            {open ? 'Recolher' : 'Revisar'}
+            <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
+          </span>
+        </button>
+        <p className="text-sm text-muted-foreground">
+          {alreadyConfirmed > 0
+            ? `${alreadyConfirmed} já ${alreadyConfirmed === 1 ? 'confirmou' : 'confirmaram'} no WhatsApp. Confirme aqui.`
+            : 'Reservaram sem código. Confirme depois de falar com o cliente.'}
+        </p>
+        {open && (
+          <details className="text-sm text-muted-foreground">
+            <summary className="flex min-h-11 cursor-pointer items-center font-medium text-foreground">Como funciona?</summary>
+            <p className="pb-2">
+              O cliente tem 3 horas para tocar em "Confirmar no WhatsApp" e mandar a mensagem para o seu número; se não tocar,
+              o horário volta a ficar livre. Quem já confirmou fica reservado até você confirmar aqui.
+            </p>
+          </details>
+        )}
       </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
-            <input
-              type="checkbox" className="h-4 w-4"
-              checked={allSelected}
-              onChange={e => setSelected(e.target.checked ? new Set(rows.map(r => r.appt.id)) : new Set())}
-            />
-            Selecionar todos
-          </label>
-          <Button type="button" className="min-h-11 gap-2" disabled={selectedIds.length === 0 || busy} onClick={() => setAskBulk(true)}>
-            <CheckCircle className="h-4 w-4" aria-hidden /> Confirmar selecionados ({selectedIds.length})
-          </Button>
-        </div>
 
-        {error && <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
-        {notice && <p role="status" className="rounded-md border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-800 dark:bg-green-900/20 dark:text-green-300">{notice}</p>}
-        <ClientNoticeBar notice={clientNotice.notice} onClose={clientNotice.clear} />
+      {open && (
+        <CardContent id="pending-confirmations-body" className="space-y-4 px-4 pb-4 pt-0">
+          {error && <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+          {notice && <p role="status" className="rounded-md border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-800 dark:bg-green-900/20 dark:text-green-300">{notice}</p>}
+          <ClientNoticeBar notice={clientNotice.notice} onClose={clientNotice.clear} />
 
-        {groups.map(g => (
-          <section key={g.key} className="space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold">{g.title} ({g.rows.length})</h3>
-              <Button type="button" variant="ghost" size="sm" className="min-h-9"
-                onClick={() => setSelected(prev => new Set([...prev, ...g.rows.map(r => r.appt.id)]))}>
-                Selecionar este grupo
+          {several && (
+            <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox" className="h-5 w-5"
+                checked={allSelected}
+                onChange={e => setSelected(e.target.checked ? new Set(rows.map(r => r.appt.id)) : new Set())}
+              />
+              Selecionar todos
+            </label>
+          )}
+
+          {groups.map(g => (
+            <section key={g.key} className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold">{g.title} ({g.rows.length})</h3>
+                {several && (
+                  <Button type="button" variant="ghost" size="sm" className="min-h-11 sm:min-h-9"
+                    onClick={() => setSelected(prev => new Set([...prev, ...g.rows.map(r => r.appt.id)]))}>
+                    Selecionar este grupo
+                  </Button>
+                )}
+              </div>
+              <ul className="divide-y rounded-xl border bg-card" aria-label={g.title}>
+                {g.rows.map(({ appt, client, service, professional }) => {
+                  const number = waNumber(client?.phone);
+                  const msg = `Olá, ${client?.name?.split(' ')[0] ?? ''}! Recebi seu pedido de horário (${service}) para ${fmtWhen(appt)}. Está confirmado?`;
+                  const name = client?.name ?? 'Cliente';
+                  return (
+                    <li key={appt.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
+                      <div className="flex min-w-0 flex-1 items-start gap-3">
+                        {several && (
+                          <input
+                            type="checkbox" className="mt-0.5 h-5 w-5 shrink-0"
+                            checked={selected.has(appt.id)} onChange={() => toggle(appt.id)}
+                            aria-label={`Selecionar ${name}, ${fmtWhen(appt)}`}
+                          />
+                        )}
+                        <div className="min-w-0 text-sm">
+                          <p className="truncate text-base font-semibold">{name}</p>
+                          <p className="truncate text-muted-foreground">{fmtWhen(appt)} · {service}{professionals.length > 1 ? ` · ${professional}` : ''}</p>
+                          {appt.clientConfirmedAt ? (
+                            <p className="text-xs text-green-700 dark:text-green-400">
+                              Cliente confirmou às {format(new Date(appt.clientConfirmedAt), 'HH:mm')} · horário reservado até você confirmar
+                            </p>
+                          ) : appt.confirmBy && (
+                            <p className="text-xs text-yellow-800 dark:text-yellow-300">O cliente tem até {format(new Date(appt.confirmBy), 'HH:mm')} para confirmar</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 gap-2">
+                        <Button type="button" size="sm" className="min-h-11 flex-1 sm:min-h-9 sm:flex-none" disabled={busy} onClick={() => void confirmOne(appt.id)}>
+                          Confirmar
+                        </Button>
+                        {number && (
+                          <Button asChild variant="outline" size="sm" className="min-h-11 w-11 shrink-0 px-0 sm:min-h-9 sm:w-auto sm:gap-1.5 sm:px-3">
+                            <a href={`https://wa.me/${number}?text=${encodeURIComponent(msg)}`} target="_blank" rel="noopener noreferrer" aria-label={`WhatsApp de ${name}`}>
+                              <MessageCircle className="h-4 w-4" aria-hidden /><span className="hidden sm:inline">WhatsApp</span>
+                            </a>
+                          </Button>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ))}
+
+          {selectedIds.length > 0 && (
+            <div className="sticky bottom-20 z-10 flex items-center justify-between gap-3 rounded-xl border bg-background p-3 shadow-lg lg:bottom-4">
+              <span className="text-sm font-medium">{selectedIds.length} {selectedIds.length === 1 ? 'selecionado' : 'selecionados'}</span>
+              <Button type="button" className="min-h-11 gap-2" disabled={busy} onClick={() => setAskBulk(true)}>
+                <CheckCircle className="h-4 w-4" aria-hidden /> Confirmar selecionados ({selectedIds.length})
               </Button>
             </div>
-            <ul className="divide-y rounded-md border" aria-label={g.title}>
-              {g.rows.map(({ appt, client, service, professional }) => {
-                const number = waNumber(client?.phone);
-                const msg = `Olá, ${client?.name?.split(' ')[0] ?? ''}! Recebi seu pedido de horário (${service}) para ${fmtWhen(appt)}. Está confirmado?`;
-                return (
-                  <li key={appt.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
-                    <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
-                      <input
-                        type="checkbox" className="mt-1 h-4 w-4 shrink-0"
-                        checked={selected.has(appt.id)} onChange={() => toggle(appt.id)}
-                        aria-label={`Selecionar ${client?.name ?? 'cliente'}, ${fmtWhen(appt)}`}
-                      />
-                      <span className="min-w-0 text-sm">
-                        <span className="block truncate font-semibold">{client?.name ?? 'Cliente'}{client?.phone && <span className="ml-2 font-normal text-muted-foreground">{client.phone}</span>}</span>
-                        <span className="block text-muted-foreground">{service} · {professional} · {fmtWhen(appt)}</span>
-                        {appt.clientConfirmedAt ? (
-                          <span className="block text-xs text-green-700 dark:text-green-400">
-                            Cliente confirmou às {format(new Date(appt.clientConfirmedAt), 'HH:mm')} · horário reservado até você confirmar
-                          </span>
-                        ) : appt.confirmBy && (
-                          <span className="block text-xs text-yellow-800 dark:text-yellow-300">O cliente tem até {format(new Date(appt.confirmBy), 'HH:mm')} para confirmar</span>
-                        )}
-                      </span>
-                    </label>
-                    <div className="flex shrink-0 gap-2">
-                      {number && (
-                        <Button asChild variant="outline" size="sm" className="min-h-11 gap-1.5 sm:min-h-9">
-                          <a href={`https://wa.me/${number}?text=${encodeURIComponent(msg)}`} target="_blank" rel="noopener noreferrer">
-                            <MessageCircle className="h-4 w-4" aria-hidden /> WhatsApp
-                          </a>
-                        </Button>
-                      )}
-                      <Button type="button" size="sm" className="min-h-11 sm:min-h-9" disabled={busy} onClick={() => void confirmOne(appt.id)}>
-                        Confirmar
-                      </Button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        ))}
-      </CardContent>
+          )}
+        </CardContent>
+      )}
 
       <Dialog open={askBulk} onOpenChange={setAskBulk}>
         <DialogContent className="max-w-md">

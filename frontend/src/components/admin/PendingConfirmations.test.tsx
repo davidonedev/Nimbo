@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { setViewportWidth } from '@/test/setup';
 import PendingConfirmations from './PendingConfirmations';
 
 const updateAppointmentStatus = vi.fn(async () => {});
@@ -38,6 +39,8 @@ describe('PendingConfirmations', () => {
   beforeEach(() => {
     tenant.appointments = fixtures();
     updateAppointmentStatus.mockClear(); confirmAppointments.mockClear(); refresh.mockClear();
+    setViewportWidth(1280);
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1280 });
   });
 
   it('não aparece quando não há pendentes', () => {
@@ -49,8 +52,8 @@ describe('PendingConfirmations', () => {
   it('separa quem o cliente já confirmou de quem ainda não, e esconde vencidos, decididos e passados', () => {
     render(<PendingConfirmations />);
     expect(screen.getByText('Aguardando confirmação')).toBeTruthy();
-    expect(screen.getByRole('heading', { name: /O cliente já confirmou no WhatsApp — aguardando você \(1\)/ })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: /O cliente ainda não confirmou \(1\)/ })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /O cliente já confirmou \(1\)/ })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /Ainda não confirmou \(1\)/ })).toBeTruthy();
     expect(screen.getByText('Maria Souza')).toBeTruthy();
     expect(screen.getByText('João Lima')).toBeTruthy();
     expect(screen.queryByText('Ana Costa')).toBeNull();
@@ -76,7 +79,7 @@ describe('PendingConfirmations', () => {
   it('confirmar em massa pede confirmação num modal de aviso; "Voltar" não confirma nada', async () => {
     render(<PendingConfirmations />);
     const bulk = () => screen.getByRole('button', { name: /Confirmar selecionados/ }) as HTMLButtonElement;
-    expect(bulk().disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: /Confirmar selecionados/ })).toBeNull(); // a barra só aparece ao marcar alguém
 
     fireEvent.click(screen.getByLabelText('Selecionar todos'));
     expect(bulk().textContent).toContain('(2)');
@@ -107,6 +110,44 @@ describe('PendingConfirmations', () => {
     const confirmedSection = screen.getByRole('heading', { name: /já confirmou/ }).closest('section') as HTMLElement;
     fireEvent.click(within(confirmedSection).getByRole('button', { name: 'Selecionar este grupo' }));
     expect(screen.getByRole('button', { name: /Confirmar selecionados \(1\)/ })).toBeTruthy();
+  });
+
+  it('a barra de confirmar em massa só aparece com algo marcado e mostra quantos', () => {
+    render(<PendingConfirmations />);
+    expect(screen.queryByText(/selecionado/)).toBeNull();
+    fireEvent.click(screen.getByLabelText(/^Selecionar João Lima/));
+    expect(screen.getByText('1 selecionado')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText(/^Selecionar João Lima/));
+    expect(screen.queryByText(/selecionado/)).toBeNull();
+  });
+
+  it('com um só pendente não há seleção em massa', () => {
+    tenant.appointments = fixtures().slice(0, 1);
+    render(<PendingConfirmations />);
+    expect(screen.queryByLabelText('Selecionar todos')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Selecionar este grupo' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Confirmar' })).toBeTruthy();
+  });
+
+  it('o texto explicativo fica atrás de "Como funciona?"', () => {
+    render(<PendingConfirmations />);
+    const details = screen.getByText('Como funciona?').closest('details') as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    expect(details.textContent).toMatch(/3 horas/);
+  });
+
+  it('no celular abre recolhida, com resumo, e "Revisar" abre a lista', () => {
+    setViewportWidth(390);
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 390 });
+    render(<PendingConfirmations />);
+    const toggle = screen.getByRole('button', { name: /Aguardando confirmação/ });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByText('Maria Souza')).toBeNull();
+    expect(screen.getByText(/1 já confirmou no WhatsApp/)).toBeTruthy();
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByText('Maria Souza')).toBeTruthy();
   });
 
   it('mostra o erro quando a confirmação em massa falha, sem sumir com a lista', async () => {

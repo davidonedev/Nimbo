@@ -104,6 +104,16 @@ describe('AppointmentsView (desktop)', () => {
       expect(periodo.getByRole('button', { name: 'Todas as datas' }).getAttribute('aria-pressed')).toBe('true');
     });
 
+    it('o resumo do topo mostra hoje, pendentes e próximos 7 dias, sem depender dos filtros', () => {
+      renderView();
+      const resumo = screen.getByLabelText('Resumo dos agendamentos');
+      expect(resumo.textContent).toContain('Hoje');
+      const valores = [...resumo.querySelectorAll('dd')].map(d => d.textContent);
+      expect(valores).toEqual(['1', '1', '1']); // a2 (12/11, pendente) é o único de hoje e da semana; a1 é anterior e a3 é depois
+      fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'ninguém' } });
+      expect([...resumo.querySelectorAll('dd')].map(d => d.textContent)).toEqual(['1', '1', '1']);
+    });
+
     it('um período digitado à mão não marca nenhum atalho', () => {
       renderView();
       fireEvent.change(screen.getByLabelText('De'), { target: { value: '2026-11-11' } });
