@@ -44,65 +44,61 @@ describe('AppointmentsView (desktop)', () => {
 
   it('tem filtros de período, status, profissional, serviço e busca', () => {
     renderView();
-    for (const name of ['De', 'Até', 'Profissional', 'Serviço']) expect(screen.getByLabelText(name)).toBeTruthy();
-    expect(screen.getByRole('group', { name: 'Status' })).toBeTruthy();
-    expect(screen.getByRole('group', { name: 'Período' })).toBeTruthy();
+    // todos são caixas de seleção (ou campos de data), não chips
+    for (const name of ['Status', 'Período', 'Profissional', 'Serviço']) expect(screen.getByLabelText(name).tagName).toBe('SELECT');
+    for (const name of ['De', 'Até']) expect((screen.getByLabelText(name) as HTMLInputElement).type).toBe('date');
     expect(screen.getByRole('searchbox', { name: /nome, e-mail ou telefone/i })).toBeTruthy();
     // o painel de filtros fica sempre aberto no desktop, sem botão para abrir
     expect(screen.queryByRole('button', { name: /^Filtros/ })).toBeNull();
   });
 
-  it('os chips de status mostram a contagem de cada um e filtram a lista', () => {
+  it('o seletor de status mostra a contagem de cada opção e filtra a lista', () => {
     renderView();
-    const status = within(screen.getByRole('group', { name: 'Status' }));
-    expect(status.getByRole('button', { name: 'Todos 3' })).toBeTruthy();
-    expect(status.getByRole('button', { name: 'Pendentes 1' })).toBeTruthy();
-    expect(status.getByRole('button', { name: 'Confirmados 1' })).toBeTruthy();
-    expect(status.getByRole('button', { name: 'Faltas 0' })).toBeTruthy();
+    const status = screen.getByLabelText('Status') as HTMLSelectElement;
+    expect([...status.options].map(o => o.textContent)).toEqual(['Todos (3)', 'Pendentes (1)', 'Confirmados (1)', 'Concluídos (1)', 'Faltas (0)', 'Cancelados (0)']);
 
-    fireEvent.click(status.getByRole('button', { name: 'Pendentes 1' }));
+    fireEvent.change(status, { target: { value: 'pending' } });
     expect(dataRows()).toHaveLength(1);
     expect(rowText()[0]).toContain('Maria Souza');
-    expect(status.getByRole('button', { name: 'Pendentes 1' }).getAttribute('aria-pressed')).toBe('true');
 
-    fireEvent.click(status.getByRole('button', { name: /^Todos/ }));
+    fireEvent.change(status, { target: { value: 'all' } });
     expect(dataRows()).toHaveLength(3);
   });
 
-  it('a contagem dos chips respeita os outros filtros (busca, período, profissional, serviço)', () => {
+  it('a contagem do seletor respeita os outros filtros (busca, período, profissional, serviço)', () => {
     renderView();
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'joão' } });
-    const status = within(screen.getByRole('group', { name: 'Status' }));
-    expect(status.getByRole('button', { name: 'Todos 2' })).toBeTruthy();
-    expect(status.getByRole('button', { name: 'Pendentes 0' })).toBeTruthy();
+    const status = screen.getByLabelText('Status') as HTMLSelectElement;
+    expect([...status.options].slice(0, 2).map(o => o.textContent)).toEqual(['Todos (2)', 'Pendentes (0)']);
   });
 
   describe('atalhos de período', () => {
     beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-11-12T15:00:00Z')); }); // quinta-feira
     afterEach(() => vi.useRealTimers());
 
-    it('Hoje, Esta semana e Este mês preenchem De/Até e filtram; tocar de novo limpa', () => {
+    it('Hoje, Esta semana e Este mês preenchem De/Até e filtram; Todas as datas limpa', () => {
       renderView();
-      const periodo = within(screen.getByRole('group', { name: 'Período' }));
+      const periodo = screen.getByLabelText('Período') as HTMLSelectElement;
+      expect([...periodo.options].map(o => o.textContent)).toEqual(['Todas as datas', 'Hoje', 'Amanhã', 'Esta semana', 'Este mês']);
 
-      fireEvent.click(periodo.getByRole('button', { name: 'Hoje' }));
+      fireEvent.change(periodo, { target: { value: 'today' } });
       expect((screen.getByLabelText('De') as HTMLInputElement).value).toBe('2026-11-12');
       expect((screen.getByLabelText('Até') as HTMLInputElement).value).toBe('2026-11-12');
       expect(dataRows()).toHaveLength(1);
       expect(rowText()[0]).toContain('Maria Souza');
 
-      fireEvent.click(periodo.getByRole('button', { name: 'Esta semana' })); // seg 09/11 a dom 15/11
+      fireEvent.change(periodo, { target: { value: 'week' } }); // seg 09/11 a dom 15/11
       expect((screen.getByLabelText('De') as HTMLInputElement).value).toBe('2026-11-09');
       expect((screen.getByLabelText('Até') as HTMLInputElement).value).toBe('2026-11-15');
       expect(dataRows()).toHaveLength(2);
 
-      fireEvent.click(periodo.getByRole('button', { name: 'Este mês' }));
+      fireEvent.change(periodo, { target: { value: 'month' } });
       expect(dataRows()).toHaveLength(3);
-      expect(periodo.getByRole('button', { name: 'Este mês' }).getAttribute('aria-pressed')).toBe('true');
+      expect(periodo.value).toBe('month');
 
-      fireEvent.click(periodo.getByRole('button', { name: 'Este mês' }));
+      fireEvent.change(periodo, { target: { value: 'all' } });
       expect((screen.getByLabelText('De') as HTMLInputElement).value).toBe('');
-      expect(periodo.getByRole('button', { name: 'Todas as datas' }).getAttribute('aria-pressed')).toBe('true');
+      expect(periodo.value).toBe('all');
     });
 
     it('o resumo do topo mostra hoje, pendentes e próximos 7 dias, sem depender dos filtros', () => {
@@ -115,14 +111,14 @@ describe('AppointmentsView (desktop)', () => {
       expect([...resumo.querySelectorAll('dd')].map(d => d.textContent)).toEqual(['1', '1', '1']);
     });
 
-    it('um período digitado à mão não marca nenhum atalho', () => {
+    it('um período digitado à mão aparece como "Personalizado" no seletor', () => {
       renderView();
       fireEvent.change(screen.getByLabelText('De'), { target: { value: '2026-11-11' } });
-      const periodo = within(screen.getByRole('group', { name: 'Período' }));
-      for (const b of periodo.getAllByRole('button')) expect(b.getAttribute('aria-pressed')).toBe('false');
+      const periodo = screen.getByLabelText('Período') as HTMLSelectElement;
+      expect(periodo.value).toBe('custom');
+      expect(periodo.selectedOptions[0].textContent).toBe('Personalizado');
     });
   });
-
   it('filtra por período', () => {
     renderView();
     fireEvent.change(screen.getByLabelText('De'), { target: { value: '2026-11-11' } });
@@ -133,10 +129,9 @@ describe('AppointmentsView (desktop)', () => {
 
   it('filtra por status, profissional e serviço', () => {
     renderView();
-    const status = within(screen.getByRole('group', { name: 'Status' }));
-    fireEvent.click(status.getByRole('button', { name: /^Concluídos/ }));
+    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'completed' } });
     expect(dataRows()).toHaveLength(1);
-    fireEvent.click(status.getByRole('button', { name: /^Todos/ }));
+    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'all' } });
     fireEvent.change(screen.getByLabelText('Profissional'), { target: { value: 'p2' } });
     expect(rowText()[0]).toContain('Maria Souza');
     fireEvent.change(screen.getByLabelText('Profissional'), { target: { value: 'all' } });
