@@ -3,6 +3,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { Role } from '@/types';
+import { SETTINGS_TABS, SUPER_SETTINGS_TABS, type SectionTab } from './sectionTabs';
 
 /**
  * Configuração central da navegação. Sidebar, BottomNav e guards de rota leem DAQUI:
@@ -27,6 +28,8 @@ export interface NavItem {
   mobile: 'bar' | 'more';
   /** Prefixos extras (telas filhas e URLs antigas) que também deixam o item ativo. */
   activeFor?: readonly string[];
+  /** Celular: seções da tela. No "Mais" o item vira um grupo com estas seções, em vez de um link só. */
+  sections?: readonly SectionTab[];
 }
 
 const ADMIN: readonly Role[] = ['tenant_admin'];
@@ -42,7 +45,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { id: 'admin-servicos',      to: '/admin/services',      label: 'Serviços',      icon: Scissors,        roles: ADMIN, placement: 'main',   mobile: 'more' },
   { id: 'admin-profissionais', to: '/admin/professionals', label: 'Profissionais', icon: UserCog,         roles: ADMIN, placement: 'main',   mobile: 'more' },
   { id: 'admin-relatorios',    to: '/admin/reports',       label: 'Relatórios',    icon: BarChart3,       roles: ADMIN, placement: 'main',   mobile: 'more' },
-  { id: 'admin-configuracoes', to: '/admin/settings',      label: 'Configurações', icon: Settings,        roles: ADMIN, placement: 'footer', mobile: 'more', activeFor: ['/admin/account'] },
+  { id: 'admin-configuracoes', to: '/admin/settings',      label: 'Configurações', icon: Settings,        roles: ADMIN, placement: 'footer', mobile: 'more', activeFor: ['/admin/account'], sections: SETTINGS_TABS },
 
   // ── Super admin (dono da plataforma) ────────────────────────────────────────
   // Usuário e Sair ficam só no menu do avatar do navbar. "Pedidos de acesso" é uma aba dentro de Configurações.
@@ -50,7 +53,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { id: 'super-empresas',      to: '/super/tenants',   label: 'Empresas',      icon: Building2,       roles: SUPER, placement: 'main',   mobile: 'bar' },
   { id: 'super-planos',        to: '/super/plans',     label: 'Planos',        icon: CreditCard,      roles: SUPER, placement: 'main',   mobile: 'bar' },
   { id: 'super-relatorios',    to: '/super/metrics',   label: 'Relatórios',    icon: BarChart3,       roles: SUPER, placement: 'main',   mobile: 'bar' },
-  { id: 'super-configuracoes', to: '/super/account',   label: 'Configurações', icon: Settings,        roles: SUPER, placement: 'footer', mobile: 'more', activeFor: ['/super/access-help'] },
+  { id: 'super-configuracoes', to: '/super/account',   label: 'Configurações', icon: Settings,        roles: SUPER, placement: 'footer', mobile: 'more', activeFor: ['/super/access-help'], sections: SUPER_SETTINGS_TABS },
   // O profissional entra na config na etapa 5.
   // ── Profissional: só o que é dele (Painel resumido, Agenda e Clientes dele) ──
   { id: 'prof-painel',   to: '/professional/dashboard', label: 'Painel',   icon: LayoutDashboard, roles: PROF, placement: 'main', mobile: 'bar' },

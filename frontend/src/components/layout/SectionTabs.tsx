@@ -80,11 +80,12 @@ function SectionPicker({ tabs, label }: { tabs: readonly SectionTab[]; label: st
 
 /**
  * Abas de uma seção, baseadas em ROTA (cada aba tem URL própria, funciona com voltar/compartilhar link).
- * Tablet e desktop: abas sublinhadas numa linha. Celular: seletor com folha inferior ({@link SectionPicker}).
+ * Tablet e desktop: abas sublinhadas numa linha. Celular: seletor com folha inferior ({@link SectionPicker}), ou nada
+ * quando `hideOnMobile` (as seções já estão no menu "Mais" da barra inferior).
  */
-export function SectionTabs({ tabs, label }: { tabs: readonly SectionTab[]; label: string }) {
+export function SectionTabs({ tabs, label, hideOnMobile = false }: { tabs: readonly SectionTab[]; label: string; hideOnMobile?: boolean }) {
   const { isMobile } = useBreakpoint();
-  if (isMobile) return <SectionPicker tabs={tabs} label={label} />;
+  if (isMobile) return hideOnMobile ? null : <SectionPicker tabs={tabs} label={label} />;
   return (
     <nav aria-label={label}>
       <ul className="flex gap-1 border-b">
@@ -107,10 +108,10 @@ export function SectionTabs({ tabs, label }: { tabs: readonly SectionTab[]; labe
 }
 
 /** Seção com abas por cima e a tela da aba abaixo (via rotas filhas). */
-export function SectionLayout({ tabs, label }: { tabs: readonly SectionTab[]; label: string }) {
+export function SectionLayout({ tabs, label, hideOnMobile = false }: { tabs: readonly SectionTab[]; label: string; hideOnMobile?: boolean }) {
   return (
     <div className="space-y-6">
-      <SectionTabs tabs={tabs} label={label} />
+      <SectionTabs tabs={tabs} label={label} hideOnMobile={hideOnMobile} />
       <Outlet />
     </div>
   );

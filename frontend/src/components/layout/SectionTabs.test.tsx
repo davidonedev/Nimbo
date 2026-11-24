@@ -102,6 +102,21 @@ describe('SectionLayout (celular): seletor com folha inferior', () => {
     expect(screen.getByRole('button', { name: /Configurações: Conta/ })).toBeTruthy();
   });
 
+  it('com hideOnMobile (Configurações) o celular não mostra seletor: as seções estão no "Mais"', () => {
+    render(
+      <MemoryRouter initialEntries={['/admin/settings']}>
+        <Routes>
+          <Route path="admin/settings" element={<SectionLayout tabs={SETTINGS_TABS} label="Configurações" hideOnMobile />}>
+            <Route index element={<p>tela da conta</p>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('button', { name: /Trocar de seção/ })).toBeNull();
+    expect(screen.queryAllByRole('link')).toHaveLength(0);
+    expect(screen.getByText('tela da conta')).toBeTruthy();
+  });
+
   it('com uma seção só (Relatórios) não há seletor', () => {
     render(
       <MemoryRouter initialEntries={['/admin/reports']}>

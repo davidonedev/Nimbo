@@ -123,7 +123,7 @@ function AppRoutes() {
         <Route path="metrics"     element={<PlatformMetricsView />} />
         <Route path="plans"       element={<PlansView />} />
         {/* Configurações do super admin: conta e pedidos de acesso (abas) */}
-        <Route element={<SectionLayout tabs={SUPER_SETTINGS_TABS} label="Configurações" />}>
+        <Route element={<SectionLayout tabs={SUPER_SETTINGS_TABS} label="Configurações" hideOnMobile />}>
           <Route path="account"     element={<SuperAccountView />} />
           <Route path="access-help" element={<AccessHelpList scope="super" />} />
         </Route>
@@ -152,7 +152,7 @@ function AppRoutes() {
         </Route>
 
         {/* Configurações — conta, portal, disponibilidade, bloqueios, lembretes e pedidos de acesso */}
-        <Route path="settings" element={<SectionLayout tabs={SETTINGS_TABS} label="Configurações" />}>
+        <Route path="settings" element={<SectionLayout tabs={SETTINGS_TABS} label="Configurações" hideOnMobile />}>
           <Route index              element={<SettingsView section="account" />} />
           <Route path="portal"      element={<SettingsView section="portal" />} />
           <Route path="schedule"    element={<SettingsView section="schedule" />} />
