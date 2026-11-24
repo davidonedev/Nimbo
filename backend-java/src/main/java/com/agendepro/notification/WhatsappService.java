@@ -2,6 +2,7 @@ package com.agendepro.notification;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -63,7 +64,22 @@ public class WhatsappService {
 
     private static final Pattern PLACEHOLDER = Pattern.compile("\\{\\{(\\w+)\\}\\}");
 
-    private final RestClient restClient = RestClient.create();
+    private static final int CONNECT_TIMEOUT_MS = 5_000;
+    private static final int READ_TIMEOUT_MS = 10_000;
+
+    private final RestClient restClient;
+
+    public WhatsappService() {
+        this(CONNECT_TIMEOUT_MS, READ_TIMEOUT_MS);
+    }
+
+    // Sem timeout, um provedor travado prende a thread HTTP (/book) ou a thread única dos agendadores.
+    WhatsappService(int connectTimeoutMs, int readTimeoutMs) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(connectTimeoutMs);
+        factory.setReadTimeout(readTimeoutMs);
+        this.restClient = RestClient.builder().requestFactory(factory).build();
+    }
 
     /** "(11) 99999-9999" / "11999999999" / "5511999999999" → "5511999999999". */
     public String normalizePhone(String phone) {
