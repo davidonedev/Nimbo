@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { setViewportWidth } from '@/test/setup';
 import { MemoryRouter } from 'react-router-dom';
@@ -43,8 +43,73 @@ describe('AppointmentsView (desktop)', () => {
 
   it('tem filtros de período, status, profissional, serviço e busca', () => {
     renderView();
-    for (const name of ['De', 'Até', 'Status', 'Profissional', 'Serviço']) expect(screen.getByLabelText(name)).toBeTruthy();
+    for (const name of ['De', 'Até', 'Profissional', 'Serviço']) expect(screen.getByLabelText(name)).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Status' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Período' })).toBeTruthy();
     expect(screen.getByRole('searchbox', { name: /nome, e-mail ou telefone/i })).toBeTruthy();
+    // o painel de filtros fica sempre aberto no desktop, sem botão para abrir
+    expect(screen.queryByRole('button', { name: /^Filtros/ })).toBeNull();
+  });
+
+  it('os chips de status mostram a contagem de cada um e filtram a lista', () => {
+    renderView();
+    const status = within(screen.getByRole('group', { name: 'Status' }));
+    expect(status.getByRole('button', { name: 'Todos 3' })).toBeTruthy();
+    expect(status.getByRole('button', { name: 'Pendentes 1' })).toBeTruthy();
+    expect(status.getByRole('button', { name: 'Confirmados 1' })).toBeTruthy();
+    expect(status.getByRole('button', { name: 'Faltas 0' })).toBeTruthy();
+
+    fireEvent.click(status.getByRole('button', { name: 'Pendentes 1' }));
+    expect(dataRows()).toHaveLength(1);
+    expect(rowText()[0]).toContain('Maria Souza');
+    expect(status.getByRole('button', { name: 'Pendentes 1' }).getAttribute('aria-pressed')).toBe('true');
+
+    fireEvent.click(status.getByRole('button', { name: /^Todos/ }));
+    expect(dataRows()).toHaveLength(3);
+  });
+
+  it('a contagem dos chips respeita os outros filtros (busca, período, profissional, serviço)', () => {
+    renderView();
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'joão' } });
+    const status = within(screen.getByRole('group', { name: 'Status' }));
+    expect(status.getByRole('button', { name: 'Todos 2' })).toBeTruthy();
+    expect(status.getByRole('button', { name: 'Pendentes 0' })).toBeTruthy();
+  });
+
+  describe('atalhos de período', () => {
+    beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-11-12T15:00:00Z')); }); // quinta-feira
+    afterEach(() => vi.useRealTimers());
+
+    it('Hoje, Esta semana e Este mês preenchem De/Até e filtram; tocar de novo limpa', () => {
+      renderView();
+      const periodo = within(screen.getByRole('group', { name: 'Período' }));
+
+      fireEvent.click(periodo.getByRole('button', { name: 'Hoje' }));
+      expect((screen.getByLabelText('De') as HTMLInputElement).value).toBe('2026-11-12');
+      expect((screen.getByLabelText('Até') as HTMLInputElement).value).toBe('2026-11-12');
+      expect(dataRows()).toHaveLength(1);
+      expect(rowText()[0]).toContain('Maria Souza');
+
+      fireEvent.click(periodo.getByRole('button', { name: 'Esta semana' })); // seg 09/11 a dom 15/11
+      expect((screen.getByLabelText('De') as HTMLInputElement).value).toBe('2026-11-09');
+      expect((screen.getByLabelText('Até') as HTMLInputElement).value).toBe('2026-11-15');
+      expect(dataRows()).toHaveLength(2);
+
+      fireEvent.click(periodo.getByRole('button', { name: 'Este mês' }));
+      expect(dataRows()).toHaveLength(3);
+      expect(periodo.getByRole('button', { name: 'Este mês' }).getAttribute('aria-pressed')).toBe('true');
+
+      fireEvent.click(periodo.getByRole('button', { name: 'Este mês' }));
+      expect((screen.getByLabelText('De') as HTMLInputElement).value).toBe('');
+      expect(periodo.getByRole('button', { name: 'Todas as datas' }).getAttribute('aria-pressed')).toBe('true');
+    });
+
+    it('um período digitado à mão não marca nenhum atalho', () => {
+      renderView();
+      fireEvent.change(screen.getByLabelText('De'), { target: { value: '2026-11-11' } });
+      const periodo = within(screen.getByRole('group', { name: 'Período' }));
+      for (const b of periodo.getAllByRole('button')) expect(b.getAttribute('aria-pressed')).toBe('false');
+    });
   });
 
   it('filtra por período', () => {
@@ -57,9 +122,10 @@ describe('AppointmentsView (desktop)', () => {
 
   it('filtra por status, profissional e serviço', () => {
     renderView();
-    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'completed' } });
+    const status = within(screen.getByRole('group', { name: 'Status' }));
+    fireEvent.click(status.getByRole('button', { name: /^Concluídos/ }));
     expect(dataRows()).toHaveLength(1);
-    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'all' } });
+    fireEvent.click(status.getByRole('button', { name: /^Todos/ }));
     fireEvent.change(screen.getByLabelText('Profissional'), { target: { value: 'p2' } });
     expect(rowText()[0]).toContain('Maria Souza');
     fireEvent.change(screen.getByLabelText('Profissional'), { target: { value: 'all' } });
@@ -92,6 +158,7 @@ describe('AppointmentsView (desktop)', () => {
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'ninguém' } });
     expect(screen.getByText(/nenhum agendamento com esses filtros/i)).toBeTruthy();
     expect(screen.getByText('Nenhum agendamento encontrado')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: /limpar filtros/i })).toHaveLength(2); // o do painel e o do estado vazio
     fireEvent.click(clear);
     expect(dataRows()).toHaveLength(3);
   });
@@ -133,20 +200,70 @@ describe('AppointmentsView (desktop)', () => {
 });
 
 describe('AppointmentsView (celular)', () => {
-  beforeEach(() => { Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 390 }); setViewportWidth(390); });
+  beforeEach(() => { Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 390 }); setViewportWidth(390); updateAppointmentStatus.mockClear(); });
 
-  it('vira lista de cards, sem tabela, com as mesmas ações e filtros', () => {
+  it('vira lista de cards agrupada por dia, sem tabela', () => {
     renderView();
     expect(screen.queryByRole('table')).toBeNull();
     expect(screen.getAllByRole('listitem')).toHaveLength(3);
-    expect(screen.getByLabelText('Serviço')).toBeTruthy();
-    const btn = screen.getByRole('button', { name: /^Confirmar:.*Maria Souza/ });
-    expect(btn.className).toContain('min-h-11');
+    expect(screen.getAllByRole('heading', { level: 3 }).map(h => h.textContent)).toEqual(['Sexta, 20 de nov', 'Quinta, 12 de nov', 'Terça, 10 de nov']);
+  });
+
+  it('os filtros avançados ficam num painel que o botão Filtros abre e fecha', () => {
+    renderView();
+    expect(screen.queryByLabelText('Serviço')).toBeNull();
+    const toggle = screen.getByRole('button', { name: /^Filtros/ });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    for (const name of ['De', 'Até', 'Profissional', 'Serviço']) expect(screen.getByLabelText(name)).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Serviço'), { target: { value: 's2' } });
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+    expect(screen.getByLabelText('1 filtro ativo')).toBeTruthy(); // contador no botão
+
+    fireEvent.click(toggle);
+    expect(screen.queryByLabelText('Serviço')).toBeNull();
+    expect(screen.getAllByRole('listitem')).toHaveLength(2); // o filtro continua valendo com o painel fechado
   });
 
   it('a busca também filtra os cards', () => {
     renderView();
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'maria' } });
     expect(screen.getAllByRole('listitem')).toHaveLength(1);
+  });
+
+  it('pendente: Confirmar é a ação principal (44 px) e Concluir, Marcar falta e Cancelar vão para o menu Mais', async () => {
+    renderView();
+    const confirmar = screen.getByRole('button', { name: /^Confirmar:.*Maria Souza/ });
+    expect(confirmar.className).toContain('min-h-11');
+    expect(confirmar.className).toContain('flex-1');
+    expect(screen.queryByRole('button', { name: /^Cancelar:.*Maria Souza/ })).toBeNull();
+
+    fireEvent.keyDown(screen.getByRole('button', { name: /^Mais ações:.*Maria Souza/ }), { key: 'Enter' });
+    const menu = await screen.findByRole('menu');
+    expect(within(menu).getAllByRole('menuitem').map(i => i.textContent)).toEqual(['Concluir', 'Marcar falta', 'Cancelar']);
+
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Cancelar' }));
+    expect(updateAppointmentStatus).not.toHaveBeenCalled(); // cancelar continua pedindo confirmação
+    const dialog = await screen.findByRole('dialog', { name: 'Cancelar agendamento' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancelar agendamento' }));
+    await waitFor(() => expect(updateAppointmentStatus).toHaveBeenCalledWith('a2', 'cancelled'));
+  });
+
+  it('confirmado: Concluir é a ação principal; confirmar o pendente chama a API', async () => {
+    renderView();
+    expect(screen.getByRole('button', { name: /^Concluir:.*João Pereira.*10\/11/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /^Confirmar:.*Maria Souza/ }));
+    await waitFor(() => expect(updateAppointmentStatus).toHaveBeenCalledWith('a2', 'confirmed'));
+  });
+
+  it('ligar e WhatsApp do cliente ficam à mão; concluído não tem ação principal nem menu', () => {
+    renderView();
+    const [ligar] = screen.getAllByRole('link', { name: 'Ligar para Maria Souza' });
+    expect(ligar.getAttribute('href')).toBe('tel:21977771234');
+    expect(screen.getByRole('link', { name: 'Chamar Maria Souza no WhatsApp' }).getAttribute('href')).toBe('https://wa.me/5521977771234');
+    const concluidoCard = screen.getAllByRole('listitem')[0]; // 20/11, concluído
+    expect(within(concluidoCard).queryByRole('button')).toBeNull();
   });
 });

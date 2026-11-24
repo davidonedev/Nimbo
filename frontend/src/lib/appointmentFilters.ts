@@ -1,3 +1,4 @@
+import { addDays, endOfMonth, endOfWeek, format, parseISO, startOfMonth, startOfWeek } from 'date-fns';
 import type { Appointment, AppointmentStatus, Client } from '@/types';
 import { digitsOf as digits, normalizeText as normalize } from '@/lib/text';
 import { ApiError } from '@/lib/api';
@@ -69,4 +70,45 @@ export function statusActionsFor(status: AppointmentStatus): StatusAction[] {
     actions.push({ status: 'cancelled', label: 'Cancelar' });
   }
   return actions;
+}
+
+/** Atalhos de período da tela Agendamentos. */
+export type PeriodPreset = 'today' | 'tomorrow' | 'week' | 'month';
+
+export const PERIOD_PRESETS: { key: PeriodPreset; label: string }[] = [
+  { key: 'today', label: 'Hoje' },
+  { key: 'tomorrow', label: 'Amanhã' },
+  { key: 'week', label: 'Esta semana' },
+  { key: 'month', label: 'Este mês' },
+];
+
+const iso = (d: Date) => format(d, 'yyyy-MM-dd');
+
+/** Intervalo (YYYY-MM-DD, inclusive) de um atalho. A semana vai de segunda a domingo. */
+export function periodRange(key: PeriodPreset, todayIso: string): { dateFrom: string; dateTo: string } {
+  const today = parseISO(todayIso);
+  if (key === 'today') return { dateFrom: todayIso, dateTo: todayIso };
+  if (key === 'tomorrow') { const d = iso(addDays(today, 1)); return { dateFrom: d, dateTo: d }; }
+  if (key === 'week') return { dateFrom: iso(startOfWeek(today, { weekStartsOn: 1 })), dateTo: iso(endOfWeek(today, { weekStartsOn: 1 })) };
+  return { dateFrom: iso(startOfMonth(today)), dateTo: iso(endOfMonth(today)) };
+}
+
+/** Qual atalho corresponde ao período atual dos filtros (null = período livre ou vazio). */
+export function activePeriodPreset(f: Pick<AppointmentFilters, 'dateFrom' | 'dateTo'>, todayIso: string): PeriodPreset | null {
+  if (!f.dateFrom && !f.dateTo) return null;
+  return PERIOD_PRESETS.find(p => {
+    const r = periodRange(p.key, todayIso);
+    return r.dateFrom === f.dateFrom && r.dateTo === f.dateTo;
+  })?.key ?? null;
+}
+
+/** Quantos agendamentos há em cada status, respeitando todos os filtros menos o de status (os números dos chips). */
+export function statusCounts(
+  appointments: readonly Appointment[],
+  clients: readonly Pick<Client, 'id' | 'name' | 'email' | 'phone'>[],
+  f: AppointmentFilters,
+): Record<AppointmentStatus | 'all', number> {
+  const counts: Record<AppointmentStatus | 'all', number> = { all: 0, pending: 0, confirmed: 0, completed: 0, no_show: 0, cancelled: 0 };
+  for (const a of filterAppointments(appointments, clients, { ...f, status: 'all' })) { counts.all += 1; counts[a.status] += 1; }
+  return counts;
 }

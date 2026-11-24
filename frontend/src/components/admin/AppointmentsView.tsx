@@ -1,33 +1,57 @@
 import { useId, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { format } from 'date-fns';
+import { addDays, format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CalendarDays, Clock, FilterX, Scissors, Search, User, UserCheck } from 'lucide-react';
+import { FilterX, MessageCircle, MoreHorizontal, Phone, Search, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { STATUS_META } from '@/components/admin/agenda/statusStyle';
 import { useTenant } from '@/context/TenantContext';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { formatCurrency } from '@/lib/utils';
+import { normalizeWaNumber } from '@/lib/clientNotice';
+import { todaySP } from '@/lib/agendaDates';
 import {
-  EMPTY_FILTERS, filterAppointments, hasActiveFilters, statusActionsFor, statusErrorMessage,
-  type AppointmentFilters, type StatusAction,
+  EMPTY_FILTERS, PERIOD_PRESETS, activePeriodPreset, filterAppointments, hasActiveFilters, periodRange, statusActionsFor,
+  statusCounts, statusErrorMessage,
+  type AppointmentFilters, type PeriodPreset, type StatusAction,
 } from '@/lib/appointmentFilters';
 import PendingConfirmations from '@/components/admin/PendingConfirmations';
 import ClientNoticeBar from '@/components/admin/ClientNoticeBar';
 import { useClientNotice } from '@/hooks/useClientNotice';
 import type { Appointment, AppointmentStatus } from '@/types';
 
-const STATUS_OPTIONS: AppointmentStatus[] = ['pending', 'confirmed', 'completed', 'no_show', 'cancelled'];
+/** Chips de status, na ordem em que o dono costuma agir (pendentes primeiro). */
+const STATUS_CHIPS: { value: AppointmentStatus | 'all'; label: string }[] = [
+  { value: 'all', label: 'Todos' },
+  { value: 'pending', label: 'Pendentes' },
+  { value: 'confirmed', label: 'Confirmados' },
+  { value: 'completed', label: 'Concluídos' },
+  { value: 'no_show', label: 'Faltas' },
+  { value: 'cancelled', label: 'Cancelados' },
+];
 
 const fieldClass =
   'h-11 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 
+const chipClass = (on: boolean) =>
+  `inline-flex h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:px-3 ${on ? 'border-primary bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-muted hover:text-foreground'}`;
+
 const fmtDate = (d: string) => format(new Date(`${d}T00:00:00`), 'dd/MM/yyyy');
-const fmtDateLong = (d: string) => format(new Date(`${d}T00:00:00`), "EEE, d 'de' MMM", { locale: ptBR });
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** Cabeçalho do dia na lista do celular: "Hoje · Quarta, 25 de nov" / "Amanhã · …" / "Ontem · …" / "Quarta, 18 de nov". */
+function dayHeading(isoDay: string, todayIso: string): string {
+  const full = capitalize(format(parseISO(isoDay), "EEE, d 'de' MMM", { locale: ptBR }));
+  const rel = isoDay === todayIso ? 'Hoje'
+    : isoDay === format(addDays(parseISO(todayIso), 1), 'yyyy-MM-dd') ? 'Amanhã'
+    : isoDay === format(addDays(parseISO(todayIso), -1), 'yyyy-MM-dd') ? 'Ontem' : null;
+  return rel ? `${rel} · ${full}` : full;
+}
 
 /** Cor + ícone + texto: a cor nunca é a única pista do status. */
 function StatusBadge({ status }: { status: AppointmentStatus }) {
@@ -47,6 +71,9 @@ interface RowData {
   professionalName: string;
 }
 
+const actionLabel = (row: RowData, a: StatusAction) => `${a.label}: ${row.clientName}, ${fmtDate(row.appt.date)} às ${row.appt.startTime}`;
+
+/** Desktop: todas as ações como botões na linha da tabela. */
 function ActionButtons({ row, onAction, busy }: { row: RowData; onAction: (r: RowData, a: StatusAction) => void; busy: boolean }) {
   const actions = statusActionsFor(row.appt.status);
   if (actions.length === 0) return <span className="text-xs text-muted-foreground">Sem ações</span>;
@@ -57,7 +84,7 @@ function ActionButtons({ row, onAction, busy }: { row: RowData; onAction: (r: Ro
           key={a.status} type="button" size="sm" disabled={busy}
           variant={a.status === 'cancelled' ? 'outline' : a.status === 'confirmed' ? 'default' : 'secondary'}
           className={`min-h-11 md:min-h-9 ${a.status === 'cancelled' ? 'text-destructive' : ''}`}
-          aria-label={`${a.label}: ${row.clientName}, ${fmtDate(row.appt.date)} às ${row.appt.startTime}`}
+          aria-label={actionLabel(row, a)}
           onClick={() => onAction(row, a)}
         >
           {a.label}
@@ -68,8 +95,58 @@ function ActionButtons({ row, onAction, busy }: { row: RowData; onAction: (r: Ro
 }
 
 /**
+ * Celular: a ação principal (Confirmar ou Concluir) fica em largura total ao alcance do polegar; ligar, WhatsApp e as
+ * ações menos usadas (Marcar falta, Cancelar) ficam ao lado, sem encher o cartão de botões.
+ */
+function MobileActions({ row, onAction, busy }: { row: RowData; onAction: (r: RowData, a: StatusAction) => void; busy: boolean }) {
+  const actions = statusActionsFor(row.appt.status);
+  const primary = actions.find(a => a.status === 'confirmed') ?? actions.find(a => a.status === 'completed');
+  const more = actions.filter(a => a !== primary);
+  const tel = (row.clientPhone ?? '').replace(/[^\d+]/g, '');
+  const wa = normalizeWaNumber(row.clientPhone);
+  if (!primary && more.length === 0 && !tel) return null;
+
+  const iconLink = 'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-input bg-background text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  return (
+    <div className="flex items-center gap-2 border-t pt-3">
+      {primary && (
+        <Button
+          type="button" size="sm" disabled={busy}
+          variant={primary.status === 'confirmed' ? 'default' : 'secondary'}
+          className="min-h-11 flex-1"
+          aria-label={actionLabel(row, primary)}
+          onClick={() => onAction(row, primary)}
+        >
+          {primary.label}
+        </Button>
+      )}
+      {tel && <a href={`tel:${tel}`} className={iconLink} aria-label={`Ligar para ${row.clientName}`}><Phone className="h-4 w-4" aria-hidden /></a>}
+      {wa && <a href={`https://wa.me/${wa}`} target="_blank" rel="noopener noreferrer" className={iconLink} aria-label={`Chamar ${row.clientName} no WhatsApp`}><MessageCircle className="h-4 w-4" aria-hidden /></a>}
+      {more.length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" size="sm" variant="outline" disabled={busy}
+              className={primary ? 'min-h-11 w-11 shrink-0 px-0' : 'min-h-11 flex-1'}
+              aria-label={`Mais ações: ${row.clientName}, ${fmtDate(row.appt.date)} às ${row.appt.startTime}`}>
+              <MoreHorizontal aria-hidden />{!primary && 'Ações'}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {more.map(a => (
+              <DropdownMenuItem key={a.status} destructive={a.status === 'cancelled'} className="min-h-11" onSelect={() => onAction(row, a)}>
+                {a.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
+  );
+}
+
+/**
  * Tela "Agendamentos": lista pesquisável de todos os agendamentos, com filtros (período, status,
- * profissional, serviço, busca por cliente) e ações de status. Tabela no desktop, cards no celular.
+ * profissional, serviço, busca por cliente) e ações de status. Tabela no desktop, cards agrupados por dia no celular.
  * A Agenda (calendário) continua em `AgendaView only="calendar"`.
  */
 export default function AppointmentsView() {
@@ -88,8 +165,10 @@ export default function AppointmentsView() {
   const [pendingCancel, setPendingCancel] = useState<RowData | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
   const set = <K extends keyof AppointmentFilters>(k: K, v: AppointmentFilters[K]) => setFilters({ ...filters, [k]: v });
 
+  const today = todaySP();
   const rows = useMemo<RowData[]>(() => {
     const clientById = new Map(clients.map(c => [c.id, c]));
     const profById = new Map(professionals.map(p => [p.id, p]));
@@ -103,7 +182,24 @@ export default function AppointmentsView() {
     }));
   }, [appointments, clients, professionals, services, filters]);
 
+  // Celular: cartões agrupados por dia (a ordem do dia e a do horário seguem a tabela do desktop).
+  const groups = useMemo(() => {
+    const byDay = new Map<string, RowData[]>();
+    for (const r of rows) { const list = byDay.get(r.appt.date); if (list) list.push(r); else byDay.set(r.appt.date, [r]); }
+    return [...byDay.entries()];
+  }, [rows]);
+
+  const counts = useMemo(() => statusCounts(appointments, clients, filters), [appointments, clients, filters]);
+  const activePreset = activePeriodPreset(filters, today);
   const invalidPeriod = !!filters.dateFrom && !!filters.dateTo && filters.dateFrom > filters.dateTo;
+  // Filtros que moram no painel (os chips de status e período ficam sempre à vista).
+  const panelFilterCount = (filters.dateFrom || filters.dateTo ? 1 : 0) + (filters.professionalId !== 'all' ? 1 : 0) + (filters.serviceId !== 'all' ? 1 : 0);
+  const panelOpen = !isMobile || showFilters;
+
+  const choosePreset = (key: PeriodPreset) => {
+    const { dateFrom, dateTo } = activePreset === key ? { dateFrom: '', dateTo: '' } : periodRange(key, today);
+    setFilters({ ...filters, dateFrom, dateTo });
+  };
 
   const apply = async (row: RowData, status: AppointmentStatus) => {
     setError('');
@@ -136,54 +232,79 @@ export default function AppointmentsView() {
       {/* Reservas sem código aguardando o cliente confirmar pelo WhatsApp */}
       <PendingConfirmations />
 
-      {/* Filtros */}
+      {/* Filtros: busca, status e período à vista; o resto no painel */}
       <form role="search" aria-label="Filtrar agendamentos" onSubmit={e => e.preventDefault()} className="space-y-3">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-          <Input
-            type="search" className="h-11 pl-9" placeholder="Buscar por nome, e-mail ou telefone do cliente"
-            aria-label="Buscar cliente por nome, e-mail ou telefone"
-            value={filters.search} onChange={e => set('search', e.target.value)}
-          />
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          <div className="space-y-1">
-            <Label htmlFor={`${uid}-from`}>De</Label>
-            <Input id={`${uid}-from`} type="date" className="h-11" value={filters.dateFrom} max={filters.dateTo || undefined}
-              onChange={e => set('dateFrom', e.target.value)} />
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Input
+              type="search" className="h-11 pl-9" placeholder="Buscar por nome, e-mail ou telefone do cliente"
+              aria-label="Buscar cliente por nome, e-mail ou telefone"
+              value={filters.search} onChange={e => set('search', e.target.value)}
+            />
           </div>
-          <div className="space-y-1">
-            <Label htmlFor={`${uid}-to`}>Até</Label>
-            <Input id={`${uid}-to`} type="date" className="h-11" value={filters.dateTo} min={filters.dateFrom || undefined}
-              onChange={e => set('dateTo', e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor={`${uid}-status`}>Status</Label>
-            <select id={`${uid}-status`} className={fieldClass} value={filters.status} onChange={e => set('status', e.target.value as AppointmentStatus | 'all')}>
-              <option value="all">Todos</option>
-              {STATUS_OPTIONS.map(s => <option key={s} value={s}>{STATUS_META[s].label}</option>)}
-            </select>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor={`${uid}-prof`}>Profissional</Label>
-            <select id={`${uid}-prof`} className={fieldClass} value={filters.professionalId} onChange={e => set('professionalId', e.target.value)}>
-              <option value="all">Todos</option>
-              {professionals.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor={`${uid}-svc`}>Serviço</Label>
-            <select id={`${uid}-svc`} className={fieldClass} value={filters.serviceId} onChange={e => set('serviceId', e.target.value)}>
-              <option value="all">Todos</option>
-              {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
-          <div className="flex items-end">
-            <Button type="button" variant="outline" className="min-h-11 w-full gap-2" disabled={!hasActiveFilters(filters)} onClick={() => setFilters(EMPTY_FILTERS)}>
-              <FilterX aria-hidden /> Limpar filtros
+          {isMobile && (
+            <Button type="button" variant="outline" className="relative h-11 shrink-0 gap-2 px-3"
+              aria-expanded={showFilters} aria-controls={`${uid}-panel`} onClick={() => setShowFilters(v => !v)}>
+              <SlidersHorizontal aria-hidden /> Filtros
+              {panelFilterCount > 0 && (
+                <span aria-label={`${panelFilterCount} ${panelFilterCount === 1 ? 'filtro ativo' : 'filtros ativos'}`}
+                  className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1 text-xs font-semibold text-primary-foreground">{panelFilterCount}</span>
+              )}
             </Button>
-          </div>
+          )}
         </div>
+
+        <div role="group" aria-label="Status" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          {STATUS_CHIPS.map(s => (
+            <button key={s.value} type="button" aria-pressed={filters.status === s.value} onClick={() => set('status', s.value)} className={chipClass(filters.status === s.value)}>
+              {s.label}{' '}
+              <span className={`text-xs tabular-nums ${filters.status === s.value ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>{counts[s.value]}</span>
+            </button>
+          ))}
+        </div>
+
+        <div role="group" aria-label="Período" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          <button type="button" aria-pressed={!filters.dateFrom && !filters.dateTo} onClick={() => setFilters({ ...filters, dateFrom: '', dateTo: '' })}
+            className={chipClass(!filters.dateFrom && !filters.dateTo)}>Todas as datas</button>
+          {PERIOD_PRESETS.map(p => (
+            <button key={p.key} type="button" aria-pressed={activePreset === p.key} onClick={() => choosePreset(p.key)} className={chipClass(activePreset === p.key)}>{p.label}</button>
+          ))}
+        </div>
+
+        {panelOpen && (
+          <div id={`${uid}-panel`} className="grid grid-cols-2 gap-3 rounded-2xl border bg-muted/30 p-3 lg:grid-cols-5 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0">
+            <div className="space-y-1">
+              <Label htmlFor={`${uid}-from`}>De</Label>
+              <Input id={`${uid}-from`} type="date" className="h-11" value={filters.dateFrom} max={filters.dateTo || undefined}
+                onChange={e => set('dateFrom', e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor={`${uid}-to`}>Até</Label>
+              <Input id={`${uid}-to`} type="date" className="h-11" value={filters.dateTo} min={filters.dateFrom || undefined}
+                onChange={e => set('dateTo', e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor={`${uid}-prof`}>Profissional</Label>
+              <select id={`${uid}-prof`} className={fieldClass} value={filters.professionalId} onChange={e => set('professionalId', e.target.value)}>
+                <option value="all">Todos</option>
+                {professionals.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor={`${uid}-svc`}>Serviço</Label>
+              <select id={`${uid}-svc`} className={fieldClass} value={filters.serviceId} onChange={e => set('serviceId', e.target.value)}>
+                <option value="all">Todos</option>
+                {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div className="col-span-2 flex items-end lg:col-span-1">
+              <Button type="button" variant="outline" className="min-h-11 w-full gap-2" disabled={!hasActiveFilters(filters)} onClick={() => setFilters(EMPTY_FILTERS)}>
+                <FilterX aria-hidden /> Limpar filtros
+              </Button>
+            </div>
+          </div>
+        )}
         {invalidPeriod && (
           <p role="alert" className="text-sm text-destructive">A data inicial é depois da data final. Ajuste o período.</p>
         )}
@@ -193,33 +314,47 @@ export default function AppointmentsView() {
       <ClientNoticeBar notice={clientNotice.notice} onClose={clientNotice.clear} />
 
       {rows.length === 0 ? (
-        <Card><CardContent className="py-12 text-center text-sm text-muted-foreground">
-          {hasActiveFilters(filters) ? 'Nenhum agendamento com esses filtros. Tente ampliar o período ou limpar os filtros.' : 'Ainda não há agendamentos.'}
+        <Card><CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+          <p className="max-w-sm text-sm text-muted-foreground">
+            {hasActiveFilters(filters) ? 'Nenhum agendamento com esses filtros. Tente ampliar o período ou limpar os filtros.' : 'Ainda não há agendamentos. Quando um cliente marcar um horário, ele aparece aqui.'}
+          </p>
+          {hasActiveFilters(filters) && (
+            <Button type="button" variant="outline" className="min-h-11 gap-2" onClick={() => setFilters(EMPTY_FILTERS)}>
+              <FilterX aria-hidden /> Limpar filtros
+            </Button>
+          )}
         </CardContent></Card>
       ) : isMobile ? (
-        <ul className="space-y-3" aria-label="Lista de agendamentos">
-          {rows.map(row => (
-            <li key={row.appt.id}>
-              <Card className="shadow-sm"><CardContent className="space-y-3 p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <StatusBadge status={row.appt.status} />
-                  <span className="text-base font-bold">{formatCurrency(row.appt.price)}</span>
-                </div>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" aria-hidden />{fmtDateLong(row.appt.date)}</span>
-                  <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" aria-hidden />{row.appt.startTime} – {row.appt.endTime}</span>
-                </div>
-                <div className="space-y-1 border-t pt-3 text-sm">
-                  <p className="flex items-start gap-2"><User className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                    <span><span className="font-semibold">{row.clientName}</span>{row.clientPhone && <span className="block text-xs text-muted-foreground">{row.clientPhone}</span>}</span></p>
-                  <p className="flex items-center gap-2"><Scissors className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />{row.serviceName}</p>
-                  <p className="flex items-center gap-2 text-muted-foreground"><UserCheck className="h-4 w-4 shrink-0" aria-hidden />{row.professionalName}</p>
-                </div>
-                <div className="border-t pt-3"><ActionButtons row={row} onAction={onAction} busy={busyId === row.appt.id} /></div>
-              </CardContent></Card>
-            </li>
+        <div className="space-y-5">
+          {groups.map(([day, items]) => (
+            <section key={day} aria-label={dayHeading(day, today)} className="space-y-2">
+              <h3 className="px-1 text-sm font-semibold text-muted-foreground">{dayHeading(day, today)}</h3>
+              <ul className="space-y-3">
+                {items.map(row => (
+                  <li key={row.appt.id}>
+                    <Card className="shadow-sm"><CardContent className="space-y-3 p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-12 shrink-0 text-center tabular-nums">
+                          <p className="text-base font-bold">{row.appt.startTime}</p>
+                          <p className="text-xs text-muted-foreground">{row.appt.endTime}</p>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-base font-semibold">{row.clientName}</p>
+                          <p className="truncate text-sm text-muted-foreground">{row.serviceName} · {row.professionalName}</p>
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          <StatusBadge status={row.appt.status} />
+                          <span className="text-sm font-bold tabular-nums">{formatCurrency(row.appt.price)}</span>
+                        </div>
+                      </div>
+                      <MobileActions row={row} onAction={onAction} busy={busyId === row.appt.id} />
+                    </CardContent></Card>
+                  </li>
+                ))}
+              </ul>
+            </section>
           ))}
-        </ul>
+        </div>
       ) : (
         <Card>
           <div className="overflow-x-auto">
