@@ -3,20 +3,19 @@ import { computeOpenStatus } from '@/lib/businessStatus';
 
 /**
  * "Aberto" com bolinha verde pulsando; "Fechado" com bolinha vermelha estática (um vermelho piscando
- * lê como alarme). O pulso respeita prefers-reduced-motion (motion-reduce). Segue o interruptor do portal do cliente.
+ * lê como alarme). O texto aparece também no celular: a cor sozinha não diz o estado. O pulso respeita prefers-reduced-motion (motion-reduce). Segue o interruptor do portal do cliente.
  */
 export function OpenStatus() {
   const { tenant } = useTenant();
   const open = computeOpenStatus(tenant);
 
   return (
-    <div role="status" className="flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-sm font-medium">
+    <div role="status" className="flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-1 text-xs font-medium sm:gap-2 sm:px-3 sm:text-sm">
       <span className="relative flex h-2.5 w-2.5" aria-hidden>
         {open && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-60 motion-reduce:animate-none" />}
         <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${open ? 'bg-green-500' : 'bg-red-500'}`} />
       </span>
-      <span className="hidden sm:inline">{open ? 'Aberto' : 'Fechado'}</span>
-      <span className="sr-only sm:hidden">{open ? 'Aberto' : 'Fechado'}</span>
+      <span>{open ? 'Aberto' : 'Fechado'}</span>
     </div>
   );
 }
