@@ -56,6 +56,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleDataIntegrity(DataIntegrityViolationException ex) {
         log.warn("Violação de integridade de dados: {}", ex.getMessage());
+        // 22001 = texto maior que a coluna aceita: não é duplicidade, e dizer "duplicado" esconde o problema real.
+        if (ex.getMostSpecificCause() instanceof java.sql.SQLException sql && "22001".equals(sql.getSQLState())) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Algum campo passou do tamanho permitido. Reduza o texto ou a imagem.", "VALUE_TOO_LONG"));
+        }
         return ResponseEntity.status(409)
                 .body(ApiResponse.error("Registro duplicado", "DUPLICATE_ENTRY"));
     }
