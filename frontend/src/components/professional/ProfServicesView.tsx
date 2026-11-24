@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { FilterSelect } from '@/components/ui/filter-select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useProfessional } from '@/context/ProfessionalContext';
 import { ApiError } from '@/lib/api';
@@ -141,32 +142,15 @@ export default function ProfServicesView() {
         </Button>
       </div>
 
-      {/* Filtros */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
+      {/* Filtros: busca e uma caixa de seleção de categoria */}
+      <div className="space-y-3">
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Buscar por nome, descrição ou categoria..." value={search} onChange={e => setSearch(e.target.value)} />
+          <Input className="h-11 pl-9 sm:h-10" placeholder="Buscar por nome, descrição ou categoria..." aria-label="Buscar serviço" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         {categories.length > 0 && (
-          <div className="flex gap-2 flex-wrap">
-            <Button
-              variant={filterCategory === '' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setFilterCategory('')}
-            >
-              Todos
-            </Button>
-            {categories.map(cat => (
-              <Button
-                key={cat}
-                variant={filterCategory === cat ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setFilterCategory(cat === filterCategory ? '' : cat)}
-              >
-                {cat}
-              </Button>
-            ))}
-          </div>
+          <FilterSelect className="sm:max-w-xs" label="Categoria" value={filterCategory} onChange={setFilterCategory}
+            options={[{ value: '', label: 'Todas', count: services.length }, ...categories.map(c => ({ value: c, label: c, count: services.filter(s => s.category === c).length }))]} />
         )}
       </div>
 

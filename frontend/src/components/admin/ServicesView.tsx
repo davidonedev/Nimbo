@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { FilterSelect } from '@/components/ui/filter-select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useTenant, PLAN_LIMITS } from '@/context/TenantContext';
 import { ApiError } from '@/lib/api';
@@ -255,38 +256,26 @@ export default function ServicesView() {
         </div>
       )}
 
-      {/* Filtros — linha 1: busca + dropdown categorias + ativo/inativo */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex gap-2 flex-1">
+      {/* Filtros: busca e duas caixas de seleção (categoria e situação) */}
+      <div className="space-y-3">
+        <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input className="pl-9" placeholder="Buscar por nome, descrição ou categoria..." value={search} onChange={e => setSearch(e.target.value)} />
+            <Input className="h-11 pl-9 sm:h-10" placeholder="Buscar por nome, descrição ou categoria..." aria-label="Buscar serviço" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <CategoryDropdown />
         </div>
-        <div className="flex gap-2 flex-wrap">
-          {(['all', 'active', 'inactive'] as const).map(f => (
-            <Button key={f} size="sm" variant={filterActive === f ? 'default' : 'outline'} onClick={() => setFilterActive(f)}>
-              {{ all: 'Todos', active: 'Ativos', inactive: 'Inativos' }[f]}
-            </Button>
-          ))}
+        <div className="grid grid-cols-2 gap-3 sm:max-w-lg">
+          <FilterSelect label="Categoria" value={filterCategory} onChange={setFilterCategory}
+            options={[{ value: '', label: 'Todas', count: services.length }, ...categories.map(c => ({ value: c, label: c, count: services.filter(s => s.category === c).length }))]} />
+          <FilterSelect label="Situação" value={filterActive} onChange={v => setFilterActive(v as 'all' | 'active' | 'inactive')}
+            options={[
+              { value: 'all', label: 'Todos', count: services.length },
+              { value: 'active', label: 'Ativos', count: services.filter(s => s.isActive).length },
+              { value: 'inactive', label: 'Inativos', count: services.filter(s => !s.isActive).length },
+            ]} />
         </div>
       </div>
-
-      {/* Filtros — linha 2: categorias */}
-      {categories.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
-          <Button size="sm" variant={filterCategory === '' ? 'default' : 'outline'} onClick={() => setFilterCategory('')}>
-            Todas
-          </Button>
-          {categories.map(cat => (
-            <Button key={cat} size="sm" variant={filterCategory === cat ? 'default' : 'outline'}
-              onClick={() => setFilterCategory(cat === filterCategory ? '' : cat)}>
-              <Tag className="h-3 w-3 mr-1" />{cat}
-            </Button>
-          ))}
-        </div>
-      )}
 
       {/* Grade de serviços */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
