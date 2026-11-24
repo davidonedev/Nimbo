@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { FilterSelect } from '@/components/ui/filter-select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useTenant } from '@/context/TenantContext';
 import { ApiError } from '@/lib/api';
@@ -288,38 +289,26 @@ export default function ProductsView() {
         </div>
       )}
 
-      {/* Filtros */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        {/* Busca + dropdown de categorias */}
-        <div className="flex gap-2 flex-1">
+      {/* Filtros: busca e duas caixas de seleção (categoria e situação), como em Serviços */}
+      <div className="space-y-3">
+        <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input className="pl-9" placeholder="Buscar produto..." value={search} onChange={e => setSearch(e.target.value)} />
+            <Input className="h-11 pl-9 sm:h-10" placeholder="Buscar produto..." aria-label="Buscar produto" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <CategoryDropdown />
         </div>
-
-        {/* Filtro ativo/inativo */}
-        <div className="flex gap-2 flex-wrap">
-          {(['all', 'active', 'inactive'] as const).map(f => (
-            <Button key={f} size="sm" variant={filterActive === f ? 'default' : 'outline'} onClick={() => setFilterActive(f)}>
-              {{ all: 'Todos', active: 'Ativos', inactive: 'Inativos' }[f]}
-            </Button>
-          ))}
+        <div className="grid grid-cols-2 gap-3 sm:max-w-lg">
+          <FilterSelect label="Categoria" value={filterCat} onChange={setFilterCat}
+            options={[{ value: '', label: 'Todas', count: products.length }, ...allCatNames.map(c => ({ value: c, label: c, count: products.filter(p => p.category === c).length }))]} />
+          <FilterSelect label="Situação" value={filterActive} onChange={v => setFilterActive(v as 'all' | 'active' | 'inactive')}
+            options={[
+              { value: 'all', label: 'Todos', count: products.length },
+              { value: 'active', label: 'Ativos', count: products.filter(p => p.isActive).length },
+              { value: 'inactive', label: 'Inativos', count: products.filter(p => !p.isActive).length },
+            ]} />
         </div>
       </div>
-
-      {/* Filtro por categoria */}
-      {allCatNames.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
-          <Button size="sm" variant={!filterCat ? 'default' : 'outline'} onClick={() => setFilterCat('')}>Todas</Button>
-          {allCatNames.map(c => (
-            <Button key={c} size="sm" variant={filterCat === c ? 'default' : 'outline'} onClick={() => setFilterCat(c === filterCat ? '' : c)}>
-              <Tag className="h-3 w-3 mr-1" />{c}
-            </Button>
-          ))}
-        </div>
-      )}
 
       {/* Grade */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
