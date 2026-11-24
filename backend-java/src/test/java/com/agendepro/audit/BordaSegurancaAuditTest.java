@@ -37,6 +37,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** AUDITORIA — C. Casos de borda e segurança: concorrência, horários inválidos, transições, isolamento, abuso, falhas. */
@@ -178,23 +179,17 @@ class BordaSegurancaAuditTest extends AuditBase {
     }
 
     @Test
-    void gap_c2_legacyEndpointsAcceptPastOutsideHoursAndOffDays_butStillRespectBlocks() throws Exception {
-        // documenta lacuna: /booking e /register-and-book só checam conflito e "aberto"
+    void c2_legacyBookingEndpointsWereRemoved_soNoUnprotectedPathCreatesAppointments() throws Exception {
+        // /booking e /register-and-book não tinham captcha, limite, validação de data nem prazo: foram removidos.
+        // O único caminho público de agendamento é o /book (coberto pelos testes c1, c2 e c9).
         Ctx c = ctx();
         String yesterday = LocalDate.now(SP).minusDays(1).toString();
 
-        legacyBooking(c, yesterday, "10:00", uniqueEmail(), "Legado Passado", uniquePhone()).andExpect(status().isCreated());
-        legacyBooking(c, date, "03:00", uniqueEmail(), "Legado Madrugada", uniquePhone()).andExpect(status().isCreated());
-        registerAndBook(c, yesterday, "11:00").andExpect(status().isCreated());
-        registerAndBook(c, date, "04:00").andExpect(status().isCreated());
+        legacyBooking(c, yesterday, "10:00", uniqueEmail(), "Legado Passado", uniquePhone()).andExpect(status().is4xxClientError());
+        legacyBooking(c, date, "10:00", uniqueEmail(), "Legado", uniquePhone()).andExpect(status().is4xxClientError());
+        registerAndBook(c, date, "11:00").andExpect(status().is4xxClientError());
 
-        Integer[] allButTarget = java.util.stream.IntStream.rangeClosed(0, 6).filter(d -> d != dayOfWeek(date)).boxed().toArray(Integer[]::new);
-        c.professional.setWorkingDays(allButTarget);
-        professionalRepository.save(c.professional);
-        legacyBooking(c, date, "10:00", uniqueEmail(), "Legado Folga", uniquePhone()).andExpect(status().isCreated());
-
-        fixtures.blockedSlot(c.tenant, c.professional, date, "14:00", "15:00");
-        legacyBooking(c, date, "14:00", uniqueEmail(), "Legado Bloqueio", uniquePhone()).andExpect(status().isConflict());
+        assertThat(appointmentsOf(c.tenant)).isEmpty();
     }
 
     @Test
@@ -273,32 +268,62 @@ class BordaSegurancaAuditTest extends AuditBase {
     // ── C5. Transições de status ───────────────────────────────────────────────────────────────────
 
     @Test
-    void gap_c5_anyStatusCanBeSetFromAnyStatus_includingReopeningAndCompletingCancelled() throws Exception {
-        // documenta lacuna: updateStatus não valida a origem (AppointmentService.java:146)
+    void c5_validTransitionsAreAccepted() throws Exception {
         Ctx c = ctx();
         Client client = fixtures.client(c.tenant);
-        Appointment a = appt(c, client, date, "10:00", "10:30", AppointmentStatus.PENDING);
         String token = adminToken(c.tenant);
 
-        for (String next : new String[]{"cancelled", "completed", "pending", "no_show", "confirmed", "confirmed", "completed", "confirmed"}) {
-            patchStatus(token, a.getId(), next).andExpect(status().isOk());
-        }
-        assertThat(reload(a).getStatus()).isEqualTo(AppointmentStatus.CONFIRMED); // concluído → confirmado, sem erro
+        Appointment a = appt(c, client, date, "10:00", "10:30", AppointmentStatus.PENDING);
+        patchStatus(token, a.getId(), "confirmed").andExpect(status().isOk());
+        patchStatus(token, a.getId(), "completed").andExpect(status().isOk());
+
+        Appointment b = appt(c, client, date, "11:00", "11:30", AppointmentStatus.PENDING);
+        patchStatus(token, b.getId(), "cancelled").andExpect(status().isOk());
+
+        Appointment d = appt(c, client, date, "12:00", "12:30", AppointmentStatus.CONFIRMED);
+        patchStatus(token, d.getId(), "no_show").andExpect(status().isOk());
+        patchStatus(token, d.getId(), "cancelled").andExpect(status().isOk());
+        assertThat(reload(d).getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
     }
 
     @Test
-    void gap_c5_reopeningACancelledAppointmentDoubleBooksTheSlot() throws Exception {
-        // documenta lacuna: reativar um cancelado não revalida conflito → dois agendamentos ativos no mesmo horário
+    void c5_invalidTransitionsAreRejectedWith409_andNothingChanges() throws Exception {
+        Ctx c = ctx();
+        Client client = fixtures.client(c.tenant);
+        String token = adminToken(c.tenant);
+
+        Appointment confirmed = appt(c, client, date, "10:00", "10:30", AppointmentStatus.CONFIRMED);
+        patchStatus(token, confirmed.getId(), "confirmed").andExpect(status().isConflict()); // aprovar 2x
+        patchStatus(token, confirmed.getId(), "pending").andExpect(status().isConflict());   // voltar para pendente
+
+        Appointment cancelled = appt(c, client, date, "11:00", "11:30", AppointmentStatus.CANCELLED);
+        for (String next : new String[]{"confirmed", "completed", "no_show", "pending", "cancelled"}) {
+            patchStatus(token, cancelled.getId(), next).andExpect(status().isConflict()); // concluir/reabrir cancelado
+        }
+
+        Appointment completed = appt(c, client, date, "12:00", "12:30", AppointmentStatus.COMPLETED);
+        for (String next : new String[]{"confirmed", "cancelled", "no_show", "pending"}) {
+            patchStatus(token, completed.getId(), next).andExpect(status().isConflict()); // reabrir concluído
+        }
+
+        assertThat(reload(confirmed).getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
+        assertThat(reload(cancelled).getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
+        assertThat(reload(completed).getStatus()).isEqualTo(AppointmentStatus.COMPLETED);
+        patchStatus(token, cancelled.getId(), "confirmed").andExpect(jsonPath("$.code").value("INVALID_STATUS_TRANSITION"));
+    }
+
+    @Test
+    void c5_aCancelledAppointmentCannotBeReopened_soTheSlotIsNeverDoubleBooked() throws Exception {
         Ctx c = ctx();
         Client first = fixtures.client(c.tenant);
         Appointment cancelled = appt(c, first, date, "10:00", "10:30", AppointmentStatus.CANCELLED);
         book(c, "Quem Pegou o Horario", uniquePhone(), "10:00", null, 200); // o horário liberado foi ocupado
 
-        patchStatus(adminToken(c.tenant), cancelled.getId(), "confirmed").andExpect(status().isOk());
+        patchStatus(adminToken(c.tenant), cancelled.getId(), "confirmed").andExpect(status().isConflict());
 
         long active = appointmentsOf(c.tenant).stream()
                 .filter(x -> x.getDate().equals(date) && x.getStartTime().equals("10:00") && x.getStatus() != AppointmentStatus.CANCELLED).count();
-        assertThat(active).isEqualTo(2);
+        assertThat(active).isEqualTo(1);
     }
 
     // ── C6. Isolamento entre estabelecimentos ──────────────────────────────────────────────────────
@@ -350,7 +375,8 @@ class BordaSegurancaAuditTest extends AuditBase {
 
     @Test
     void gap_c7_myAppointmentsNeedsOnlyTheClientUuid_noAuthentication() throws Exception {
-        // documenta lacuna: quem tiver o UUID lê nome/e-mail/telefone e a agenda do cliente sem nenhuma prova de posse
+        // documenta lacuna: o UUID ainda é a única credencial desses endpoints (endurecer com token — backlog).
+        // O id não vaza mais pelo /book (teste c7_pendingFlowDoesNotRevealAnExistingClient), então só o próprio cliente o conhece.
         Ctx c = ctx();
         Client client = clientWithPhone(c.tenant, uniquePhone());
         appt(c, client, date, "10:00", "10:30", AppointmentStatus.CONFIRMED);
@@ -364,9 +390,9 @@ class BordaSegurancaAuditTest extends AuditBase {
     }
 
     @Test
-    void gap_c7_pendingFlowRevealsAnExistingClientsIdAndName_enablingCancelAndRead() throws Exception {
-        // documenta lacuna: sem WhatsApp (fluxo pendente) o /book devolve o id e o nome reais do cliente dono do celular,
-        // sem verificar posse — com esse id qualquer um lista e cancela os agendamentos da vítima
+    void c7_pendingFlowDoesNotRevealAnExistingClient() throws Exception {
+        // Sem WhatsApp (fluxo pendente) o /book não prova posse do celular: a resposta só pode conter o que o próprio
+        // solicitante digitou. Antes devolvia o id e o nome reais do dono do celular (e com o id dava para ler e cancelar a agenda).
         Ctx c = ctx();
         String victimPhone = uniquePhone();
         Client victim = clientWithPhone(c.tenant, victimPhone);
@@ -375,18 +401,27 @@ class BordaSegurancaAuditTest extends AuditBase {
         Appointment victimAppt = appt(c, victim, date, "10:00", "10:30", AppointmentStatus.CONFIRMED);
 
         JsonNode res = book(c, "Atacante", victimPhone, "15:00", null, 200).get("data");
+
         assertThat(res.get("kind").asText()).isEqualTo("pending_confirmation");
-        assertThat(res.get("client").get("id").asText()).isEqualTo(victim.getId().toString());
-        assertThat(res.get("client").get("name").asText()).isEqualTo("Maria Vitima");
+        assertThat(res.get("client").get("id").isNull()).isTrue();
+        assertThat(res.get("client").get("phone").isNull()).isTrue();
+        assertThat(res.get("client").get("name").asText()).isEqualTo("Atacante");
+        assertThat(res.toString()).doesNotContain(victim.getId().toString()).doesNotContain("Maria Vitima");
 
-        String leakedId = res.get("client").get("id").asText();
-        JsonNode theirs = json.readTree(mockMvc.perform(get("/api/public/" + c.tenant.getSlug() + "/my-appointments").param("clientId", leakedId))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).get("data");
-        assertThat(theirs).extracting(n -> n.get("id").asText()).contains(victimAppt.getId().toString());
+        // O cadastro da vítima não foi alterado e a agenda dela segue intacta.
+        assertThat(clientRepository.findById(victim.getId()).orElseThrow().getName()).isEqualTo("Maria Vitima");
+        assertThat(reload(victimAppt).getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
+    }
 
-        mockMvc.perform(patch("/api/public/" + c.tenant.getSlug() + "/appointments/" + victimAppt.getId() + "/cancel")
-                .contentType(MediaType.APPLICATION_JSON).content("{\"clientId\":\"" + leakedId + "\"}")).andExpect(status().isOk());
-        assertThat(reload(victimAppt).getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
+    @Test
+    void c7_pendingFlowForANewPhoneAlsoReturnsNoClientId() throws Exception {
+        Ctx c = ctx();
+
+        JsonNode res = book(c, "Cliente Novo", uniquePhone(), "15:00", null, 200).get("data");
+
+        assertThat(res.get("kind").asText()).isEqualTo("pending_confirmation");
+        assertThat(res.get("client").get("id").isNull()).isTrue();
+        assertThat(res.get("client").get("name").asText()).isEqualTo("Cliente Novo");
     }
 
     @Test
@@ -401,19 +436,6 @@ class BordaSegurancaAuditTest extends AuditBase {
         assertThat(res.get("kind").asText()).isEqualTo("challenge_required");
         assertThat(res.has("client") && !res.get("client").isNull()).isFalse();
         assertThat(res.toString()).doesNotContain(victim.getId().toString());
-    }
-
-    @Test
-    void gap_c7_legacyBookingOverwritesNameAndPhoneOfAnExistingClientByEmail() throws Exception {
-        // documenta lacuna: /booking faz upsert por e-mail sem autenticar — quem souber o e-mail troca nome e telefone do cadastro
-        Ctx c = ctx();
-        Client existing = clientWithPhone(c.tenant, uniquePhone());
-
-        legacyBooking(c, date, "10:00", existing.getEmail(), "Nome Trocado", "(11) 90000-1111").andExpect(status().isCreated());
-
-        Client after = clientRepository.findById(existing.getId()).orElseThrow();
-        assertThat(after.getName()).isEqualTo("Nome Trocado");
-        assertThat(after.getPhone()).isEqualTo("(11) 90000-1111");
     }
 
     // ── C8. Permissões ─────────────────────────────────────────────────────────────────────────────
@@ -472,25 +494,6 @@ class BordaSegurancaAuditTest extends AuditBase {
         for (String time : new String[]{"09:00", "10:00", "11:00"}) book(c, "Acaparador", phone, time, null, 200);
 
         assertThat(book(c, "Acaparador", phone, "12:00", null, 429).get("code").asText()).isEqualTo("TOO_MANY_PENDING");
-    }
-
-    @Test
-    void gap_c9_legacyBookingAllowsUnlimitedUnverifiedHoldsThatNeverExpire() throws Exception {
-        // documenta lacuna: sem captcha, sem limite por IP/telefone, sem verificação e sem prazo (confirmBy nulo)
-        Ctx c = ctx();
-        String[] times = {"08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30"};
-        for (String time : times) {
-            legacyBooking(c, date, time, uniqueEmail(), "Spam " + time, uniquePhone()).andExpect(status().isCreated());
-        }
-
-        pendingExpiryService.expire(Instant.now().plus(365, ChronoUnit.DAYS));
-        List<Appointment> mine = appointmentsOf(c.tenant);
-        assertThat(mine).hasSize(times.length)
-                .allSatisfy(a -> {
-                    assertThat(a.getStatus()).isEqualTo(AppointmentStatus.PENDING);
-                    assertThat(a.getConfirmBy()).isNull();
-                });
-        assertThat(slots(c, date)).doesNotContain(times);
     }
 
     @Test

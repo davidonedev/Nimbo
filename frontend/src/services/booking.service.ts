@@ -24,7 +24,8 @@ export interface BookedSummary {
 }
 
 export interface BookedClient {
-  id: string;
+  /** Nulo no modo pendente: sem prova de posse do celular, o servidor não devolve o id do cadastro. */
+  id: string | null;
   name: string;
   phone: string | null;
 }

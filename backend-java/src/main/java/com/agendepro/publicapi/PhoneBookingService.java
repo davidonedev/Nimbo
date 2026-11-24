@@ -231,7 +231,9 @@ public class PhoneBookingService {
         Instant confirmBy = t.getPhone() == null || t.getPhone().isBlank() ? null
                 : earliest(Instant.now().plus(Duration.ofMinutes(confirmMinutes)), startInstant(req.date(), start));
         BookedSummary summary = bookNow(t, slug, client, serviceIds, professionalId, req.date(), start, req.notes(), confirmBy);
-        return BookResponse.pending(summary, toClient(client), confirmBy);
+        // Sem prova de posse do celular (nem código, nem aparelho): devolve só o que o próprio cliente digitou.
+        // O cadastro existente (id, nome, telefone) não pode vazar para quem apenas digitou o número de outra pessoa.
+        return BookResponse.pending(summary, new BookedClient(null, req.name().trim(), null), confirmBy);
     }
 
     /**

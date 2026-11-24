@@ -190,45 +190,11 @@ public class PublicService {
         }).toList();
     }
 
-    // ─── booking (portal público) ───────────────────────────────────────────────
-
-    @Transactional
-    public List<AppointmentDtos.AppointmentResponse> createPublicBooking(String slug, BookingRequest request) {
-        Tenant t = resolveTenant(slug);
-        if (!t.getIsOpen()) throw new AppException("Esta barbearia está fechada para novos agendamentos", 403);
-
-        UUID professionalId = UUID.fromString(request.professionalId());
-        List<UUID> serviceIds = request.resolveServiceIds();
-
-        Professional professional = professionalRepository.findByIdAndTenantId(professionalId, t.getId())
-                .orElseThrow(() -> AppException.notFound("Profissional não encontrado"));
-        List<ServiceOffering> services = serviceOfferingRepository.findByIdInAndTenantId(serviceIds, t.getId());
-        if (services.size() != serviceIds.size()) throw AppException.notFound("Um ou mais serviços não encontrados neste tenant");
-
-        List<ServiceOffering> ordered = orderServices(serviceIds, services);
-        int totalDuration = ordered.stream().mapToInt(ServiceOffering::getDuration).sum();
-        String startTime = request.startTimeHHmm();
-        String blockEnd = ScheduleService.addMinutes(startTime, totalDuration);
-
-        Client client = upsertClient(t.getId(), request.clientName(), request.clientEmail(), request.clientPhone());
-
-        pgAdvisoryLockService.lockProfessionalSchedule(professionalId, request.date());
-        if (scheduleService.checkConflict(t.getId(), professionalId, request.date(), startTime, blockEnd, null)) {
-            throw new AppException("Horário não disponível. Por favor escolha outro horário.", 409, "SCHEDULE_CONFLICT");
-        }
-
-        List<Appointment> created = createChainedAppointments(t.getId(), client.getId(), professionalId, ordered, request.date(), startTime, request.notes());
-        return appointmentService.toResponses(created);
-    }
+    // ─── apoio ao agendamento por celular (PhoneBookingService) ──────────────────
 
     List<ServiceOffering> orderServices(List<UUID> ids, List<ServiceOffering> services) {
         Map<UUID, ServiceOffering> byId = services.stream().collect(Collectors.toMap(ServiceOffering::getId, s -> s));
         return ids.stream().map(byId::get).toList();
-    }
-
-    List<Appointment> createChainedAppointments(UUID tenantId, UUID clientId, UUID professionalId,
-                                                          List<ServiceOffering> ordered, String date, String startTime, String notes) {
-        return createChainedAppointments(tenantId, clientId, professionalId, ordered, date, startTime, notes, null);
     }
 
     /** {@code confirmBy}: prazo para confirmar (agendamento pendente por celular); null = sem prazo. */
@@ -247,16 +213,6 @@ public class PublicService {
             current = end;
         }
         return created;
-    }
-
-    private Client upsertClient(UUID tenantId, String name, String email, String phone) {
-        return clientRepository.findByTenantIdAndEmail(tenantId, email)
-                .map(existing -> {
-                    existing.setName(name);
-                    if (phone != null) existing.setPhone(phone);
-                    return clientRepository.save(existing);
-                })
-                .orElseGet(() -> clientRepository.save(Client.builder().tenantId(tenantId).name(name).email(email).phone(phone).build()));
     }
 
     // ─── auth de cliente ────────────────────────────────────────────────────────
@@ -469,55 +425,6 @@ public class PublicService {
         sendVerification(t, client, slug, token, null);
 
         return new MessageResponse("Novo link de verificação enviado.");
-    }
-
-    // ─── cadastro + agendamento combinados ────────────────────────────────────────
-
-    @Transactional
-    public RegisterAndBookResponse registerAndBook(String slug, RegisterAndBookRequest request) {
-        Tenant t = resolveTenant(slug);
-        if (!t.getIsOpen()) throw new AppException("Este estabelecimento está fechado para novos agendamentos.", 403);
-
-        clientRepository.findByTenantIdAndEmail(t.getId(), request.email()).ifPresent(c -> {
-            throw new AppException("Este e-mail já tem cadastro neste estabelecimento. Faça login para agendar.", 409, "EMAIL_IN_USE");
-        });
-        checkDuplicatePhone(t.getId(), request.phone());
-
-        UUID professionalId = UUID.fromString(request.professionalId());
-        List<UUID> serviceIds = request.serviceIds().stream().map(UUID::fromString).toList();
-
-        Professional professional = professionalRepository.findByIdAndTenantId(professionalId, t.getId())
-                .orElseThrow(() -> AppException.notFound("Profissional não encontrado."));
-        List<ServiceOffering> services = serviceOfferingRepository.findByIdInAndTenantId(serviceIds, t.getId());
-        if (services.size() != serviceIds.size()) throw AppException.notFound("Um ou mais serviços não encontrados.");
-
-        List<ServiceOffering> ordered = orderServices(serviceIds, services);
-        int totalDuration = ordered.stream().mapToInt(ServiceOffering::getDuration).sum();
-        double totalPrice = ordered.stream().mapToDouble(ServiceOffering::getPrice).sum();
-        String startTime = request.startTimeHHmm();
-        String blockEnd = ScheduleService.addMinutes(startTime, totalDuration);
-
-        pgAdvisoryLockService.lockProfessionalSchedule(professionalId, request.date());
-        if (scheduleService.checkConflict(t.getId(), professionalId, request.date(), startTime, blockEnd, null)) {
-            throw new AppException("Horário não disponível. Por favor escolha outro horário.", 409, "SCHEDULE_CONFLICT");
-        }
-
-        Client client = clientRepository.save(Client.builder()
-                .tenantId(t.getId()).name(request.name()).email(request.email()).phone(request.phone())
-                .passwordHash(passwordEncoder.encode(request.password())).emailVerified(false).build());
-
-        String token = createVerificationToken(client.getId());
-        List<Appointment> created = createChainedAppointments(t.getId(), client.getId(), professionalId, ordered, request.date(), startTime, request.notes());
-
-        String dateFormatted = LocalDate.parse(request.date())
-                .format(DateTimeFormatter.ofPattern("EEEE, dd/MM/yyyy", new Locale("pt", "BR")));
-        String serviceNames = ordered.stream().map(ServiceOffering::getName).collect(Collectors.joining(", "));
-        String totalFormatted = String.format(Locale.of("pt", "BR"), "R$ %,.2f", totalPrice);
-
-        sendVerification(t, client, slug, token, new BookingSummary(dateFormatted, startTime, professional.getName(), serviceNames, totalFormatted));
-
-        return new RegisterAndBookResponse(appointmentService.toResponses(created),
-                "Agendamento criado! Verifique seu WhatsApp para ativar sua conta.", whatsappService.normalizePhone(client.getPhone()));
     }
 
     private record BookingSummary(String date, String time, String professional, String services, String total) {
