@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { AlertTriangle, CheckCircle, ChevronDown, Clock, MessageCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Clock, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -130,10 +130,10 @@ export default function PendingConfirmations() {
           className="flex min-h-11 w-full items-center gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Clock className="h-4 w-4 shrink-0" aria-hidden />
-          <span className="text-base font-semibold">Aguardando confirmação</span>
+          <span className="whitespace-nowrap text-base font-semibold">Aguardando confirmação</span>
           <span aria-label={`${rows.length} aguardando`} className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-semibold text-yellow-900 dark:bg-yellow-900/40 dark:text-yellow-200">{rows.length}</span>
           <span className="ml-auto flex items-center gap-1 text-sm font-medium text-primary">
-            {open ? 'Recolher' : 'Revisar'}
+            <span className="hidden min-[420px]:inline">{open ? 'Recolher' : 'Revisar'}</span>
             <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
           </span>
         </button>
@@ -143,8 +143,8 @@ export default function PendingConfirmations() {
             : 'Reservaram sem código. Confirme depois de falar com o cliente.'}
         </p>
         {open && (
-          <details className="text-sm text-muted-foreground">
-            <summary className="flex min-h-11 cursor-pointer items-center font-medium text-foreground">Como funciona?</summary>
+          <details className="group text-sm text-muted-foreground">
+            <summary className="flex min-h-11 cursor-pointer items-center gap-1 font-medium text-foreground"><ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" aria-hidden />Como funciona?</summary>
             <p className="pb-2">
               O cliente tem 3 horas para tocar em "Confirmar no WhatsApp" e mandar a mensagem para o seu número; se não tocar,
               o horário volta a ficar livre. Quem já confirmou fica reservado até você confirmar aqui.
@@ -173,11 +173,11 @@ export default function PendingConfirmations() {
           {groups.map(g => (
             <section key={g.key} className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-semibold">{g.title} ({g.rows.length})</h3>
+                <h3 className="min-w-0 text-sm font-semibold">{g.title} ({g.rows.length})</h3>
                 {several && (
-                  <Button type="button" variant="ghost" size="sm" className="min-h-11 sm:min-h-9"
+                  <Button type="button" variant="ghost" size="sm" className="min-h-11 shrink-0 sm:min-h-9" aria-label="Selecionar este grupo"
                     onClick={() => setSelected(prev => new Set([...prev, ...g.rows.map(r => r.appt.id)]))}>
-                    Selecionar este grupo
+                    <span className="sm:hidden">Selecionar</span><span className="hidden sm:inline">Selecionar este grupo</span>
                   </Button>
                 )}
               </div>
