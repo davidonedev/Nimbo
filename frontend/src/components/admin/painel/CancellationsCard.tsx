@@ -29,16 +29,20 @@ export function CancellationsCard({ data, loading, error, onRetry }: Props) {
         {loading ? <LinesSkeleton lines={2} /> : error || !data ? <CardError onRetry={onRetry} /> : data.total === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">Nenhum cancelamento ou falta nos últimos 7 dias.</p>
         ) : (
-          <div className="space-y-4">
-            <p className="text-3xl font-bold">{data.total}</p>
-            <ul className="grid grid-cols-2 gap-3">
-              <li className="flex items-center gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
+          <div className="flex items-center gap-5">
+            {/* Total à esquerda; o detalhe à direita, cada item numa linha só */}
+            <div className="shrink-0">
+              <p className="text-5xl font-bold leading-none tabular-nums">{data.total}</p>
+              <p className="mt-1.5 text-xs text-muted-foreground">no total</p>
+            </div>
+            <ul className="ml-auto flex flex-col gap-2.5 whitespace-nowrap border-l pl-5 text-sm" aria-label="Detalhe">
+              <li className="flex items-center gap-2">
                 <XCircle className="h-4 w-4 shrink-0 text-red-500 dark:text-red-400" aria-hidden />
-                <span><strong>{data.cancelled}</strong> {data.cancelled === 1 ? 'cancelado' : 'cancelados'}</span>
+                <span><strong className="tabular-nums">{data.cancelled}</strong> {data.cancelled === 1 ? 'cancelado' : 'cancelados'}</span>
               </li>
-              <li className="flex items-center gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
+              <li className="flex items-center gap-2">
                 <UserX className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
-                <span><strong>{data.noShow}</strong> {data.noShow === 1 ? 'falta' : 'faltas'}</span>
+                <span><strong className="tabular-nums">{data.noShow}</strong> {data.noShow === 1 ? 'falta' : 'faltas'}</span>
               </li>
             </ul>
           </div>
