@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ConfirmAppointmentDialog } from '@/components/appointments/ConfirmAppointmentDialog';
 import { useTenant } from '@/context/TenantContext';
 import { formatCurrency } from '@/lib/utils';
 import { addMinutes, isPastInBrasilia, isSlotConflict, nowBrasilia } from '@/lib/scheduling';
@@ -55,7 +54,6 @@ export function NewAppointmentDialog({ open, onOpenChange, initialDate, initialP
   const [form, setForm] = useState<ApptForm>(() => emptyForm({ date: initialDate, professionalId: initialProfessionalId }));
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [askCreate, setAskCreate] = useState(false);
 
   const handleOpenChange = (o: boolean) => { setError(''); onOpenChange(o); };
 
@@ -64,8 +62,7 @@ export function NewAppointmentDialog({ open, onOpenChange, initialDate, initialP
     form.serviceId ? professionals.filter(p => p.services.includes(form.serviceId)) : professionals,
     [professionals, form.serviceId]);
 
-  /** `confirmed`: o dono já disse "sim" no modal de segurança (criar já confirmado avisa o cliente). */
-  const handleSave = async (confirmed = false) => {
+  const handleSave = async () => {
     setError('');
     if (!form.professionalId || !form.serviceId || !form.date || !form.startTime) {
       setError('Preencha todos os campos obrigatórios.'); return;
@@ -85,8 +82,6 @@ export function NewAppointmentDialog({ open, onOpenChange, initialDate, initialP
     if (isSlotConflict(form.date, form.professionalId, form.startTime, endTime, appointments, blockedSlots)) {
       setError('Conflito de horário: o profissional já tem um compromisso neste intervalo.'); return;
     }
-    // Criar já como "Confirmado" avisa o cliente na hora: pede uma segunda confirmação antes.
-    if (form.status === 'confirmed' && !confirmed) { setAskCreate(true); return; }
     setSaving(true);
     try {
       // Garante formato HH:mm independente do browser (alguns retornam HH:mm:ss)
@@ -299,7 +294,7 @@ export function NewAppointmentDialog({ open, onOpenChange, initialDate, initialP
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={saving}>Cancelar</Button>
           <Button
-            onClick={() => void handleSave()}
+            onClick={handleSave}
             disabled={
               saving ||
               !form.serviceId ||
@@ -315,15 +310,6 @@ export function NewAppointmentDialog({ open, onOpenChange, initialDate, initialP
           </Button>
         </DialogFooter>
       </DialogContent>
-
-      <ConfirmAppointmentDialog scope="admin" busy={saving}
-        title="Criar e confirmar agendamento?" confirmLabel="Sim, criar e confirmar"
-        target={askCreate && selectedService ? {
-          clientName: form.newClientMode ? form.newName.trim() : (clients.find(c => c.id === form.clientId)?.name ?? 'Cliente'),
-          date: form.date, startTime: form.startTime, serviceName: selectedService.name,
-        } : null}
-        onCancel={() => setAskCreate(false)}
-        onConfirm={() => { setAskCreate(false); void handleSave(true); }} />
     </Dialog>
   );
 }
