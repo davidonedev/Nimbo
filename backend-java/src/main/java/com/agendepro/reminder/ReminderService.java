@@ -6,6 +6,7 @@ import com.agendepro.catalog.ServiceOffering;
 import com.agendepro.catalog.ServiceOfferingRepository;
 import com.agendepro.client.Client;
 import com.agendepro.client.ClientRepository;
+import com.agendepro.notification.NotificationService;
 import com.agendepro.notification.WhatsappService;
 import com.agendepro.professional.Professional;
 import com.agendepro.professional.ProfessionalRepository;
@@ -20,24 +21,22 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.time.format.TextStyle;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Envia lembretes automáticos de agendamento via WhatsApp.
- * - 24h antes: lembrete completo com data, horário e profissional.
- * - 2h antes:  lembrete curto de confirmação.
- *
- * Usa pg_advisory_xact_lock implícito via transação — cada instância processa
- * o mesmo conjunto de linhas mas o UPDATE em reminder_*_sent_at é atômico,
- * então não há risco de envio duplo em ambientes horizontalmente escalados.
+ * Lembretes automáticos de agendamento CONFIRMADO (24 h e 2 h antes). Não envia direto: grava na fila de avisos
+ * (notification_outbox), cujo dispatcher tenta de novo se o provedor falhar e envia o que ficou atrasado quando o
+ * serviço acorda. A chave de idempotência por agendamento garante que o mesmo lembrete não sai duas vezes, mesmo com
+ * mais de uma instância.
  */
 @Slf4j
 @Service
@@ -50,6 +49,7 @@ public class ReminderService {
     private final ServiceOfferingRepository serviceOfferingRepository;
     private final TenantRepository tenantRepository;
     private final WhatsappService whatsappService;
+    private final NotificationService notificationService;
 
     @Value("${app.app-url}")
     private String appUrl;
@@ -57,25 +57,16 @@ public class ReminderService {
     @Value("${app.reminders.enabled:true}")
     private boolean remindersEnabled;
 
+    private static final ZoneId SAO_PAULO = ZoneId.of("America/Sao_Paulo");
+    private static final DateTimeFormatter SHORT_DATE = DateTimeFormatter.ofPattern("dd/MM");
+
     // ── 24h ────────────────────────────────────────────────────────────────────
 
     @Scheduled(fixedDelayString = "${app.reminders.check-interval-ms:300000}")
     @Transactional
     public void send24hReminders() {
         if (!remindersEnabled) return;
-        List<Appointment> pending = appointmentRepository.findNeedingReminder24h();
-        if (pending.isEmpty()) return;
-
-        log.info("[reminders] 24h: {} agendamentos para lembrar", pending.size());
-        for (Appointment a : pending) {
-            try {
-                sendReminder(a, WhatsappService.REMINDER_24H_TEMPLATE, "24h");
-                a.setReminder24hSentAt(Instant.now());
-                appointmentRepository.save(a);
-            } catch (Exception ex) {
-                log.error("[reminders] Falha no lembrete 24h para agendamento {}: {}", a.getId(), ex.getMessage());
-            }
-        }
+        queueAll(appointmentRepository.findNeedingReminder24h(), NotificationService.Event.REMINDER_24H, WhatsappService.REMINDER_24H_TEMPLATE);
     }
 
     // ── 2h ─────────────────────────────────────────────────────────────────────
@@ -84,60 +75,68 @@ public class ReminderService {
     @Transactional
     public void send2hReminders() {
         if (!remindersEnabled) return;
-        List<Appointment> pending = appointmentRepository.findNeedingReminder2h();
-        if (pending.isEmpty()) return;
-
-        log.info("[reminders] 2h: {} agendamentos para lembrar", pending.size());
-        for (Appointment a : pending) {
-            try {
-                sendReminder(a, WhatsappService.REMINDER_2H_TEMPLATE, "2h");
-                a.setReminder2hSentAt(Instant.now());
-                appointmentRepository.save(a);
-            } catch (Exception ex) {
-                log.error("[reminders] Falha no lembrete 2h para agendamento {}: {}", a.getId(), ex.getMessage());
-            }
-        }
+        queueAll(appointmentRepository.findNeedingReminder2h(), NotificationService.Event.REMINDER_2H, WhatsappService.REMINDER_2H_TEMPLATE);
     }
 
     // ── Helper ─────────────────────────────────────────────────────────────────
 
-    private void sendReminder(Appointment a, String template, String label) {
-        Optional<Client> clientOpt = clientRepository.findById(a.getClientId());
-        if (clientOpt.isEmpty() || clientOpt.get().getPhone() == null) {
-            log.warn("[reminders] {}h: cliente {} sem telefone, pulando", label, a.getClientId());
+    private void queueAll(List<Appointment> due, NotificationService.Event event, String template) {
+        if (due.isEmpty()) return;
+        log.info("[reminders] {}: {} agendamento(s) para lembrar", event, due.size());
+        for (Appointment a : due) {
+            try {
+                queueReminder(a, event, template);
+                Instant now = Instant.now();
+                if (event == NotificationService.Event.REMINDER_24H) a.setReminder24hSentAt(now);
+                else a.setReminder2hSentAt(now);
+                appointmentRepository.save(a);
+            } catch (Exception ex) {
+                log.error("[reminders] Falha ao enfileirar {} do agendamento {}: {}", event, a.getId(), ex.getMessage());
+            }
+        }
+    }
+
+    private void queueReminder(Appointment a, NotificationService.Event event, String template) {
+        Client client = clientRepository.findById(a.getClientId()).orElse(null);
+        Tenant tenant = tenantRepository.findById(a.getTenantId()).orElse(null);
+        if (client == null || tenant == null) {
+            log.warn("[reminders] {}: cliente ou estabelecimento do agendamento {} não existe mais, pulando", event, a.getId());
             return;
         }
-        Client client = clientOpt.get();
-
-        Optional<Tenant> tenantOpt = tenantRepository.findById(a.getTenantId());
-        if (tenantOpt.isEmpty()) return;
-        Tenant tenant = tenantOpt.get();
 
         String professionalName = professionalRepository.findById(a.getProfessionalId())
                 .map(Professional::getName).orElse("—");
-
         String serviceName = serviceOfferingRepository.findById(a.getServiceId())
                 .map(ServiceOffering::getName).orElse("—");
 
-        String formattedDate = formatDate(a.getDate());
-        String portalLink = appUrl + "/" + tenant.getSlug() + "/my-appointments";
-
         Map<String, String> vars = Map.of(
-                "clientName",  client.getName(),
-                "tenantName",  tenant.getName(),
-                "date",        formattedDate,
-                "time",        a.getStartTime(),
+                "clientName",   client.getName(),
+                "tenantName",   tenant.getName(),
+                "date",         formatDate(a.getDate()),
+                "dayLabel",     dayLabel(a.getDate()),
+                "time",         a.getStartTime(),
                 "professional", professionalName,
-                "services",    serviceName,
-                "portalLink",  portalLink
+                "services",     serviceName,
+                "portalLink",   appUrl + "/" + tenant.getSlug() + "/my-appointments"
         );
 
         String message = whatsappService.interpolateTemplate(template, vars);
-        WhatsappService.TenantWhatsappConfig cfg = new WhatsappService.TenantWhatsappConfig(
-                tenant.getWhatsappApiUrl(), tenant.getWhatsappApiKey(), tenant.getWhatsappInstance());
+        if (!notificationService.clientReminder(a, tenant, client, event, message)) {
+            log.warn("[reminders] {}: cliente {} sem celular nem e-mail, nada a enviar", event, a.getClientId());
+        }
+    }
 
-        whatsappService.sendMessage(cfg, client.getPhone(), message);
-        log.debug("[reminders] {}h: mensagem enviada para {} (appt {})", label, client.getPhone(), a.getId());
+    /** "hoje", "amanhã" ou "em dd/MM": com a janela de recuperação o lembrete de 24 h pode sair no mesmo dia. */
+    private String dayLabel(String date) {
+        try {
+            LocalDate d = LocalDate.parse(date);
+            LocalDate today = LocalDate.now(SAO_PAULO);
+            if (d.equals(today)) return "hoje";
+            if (d.equals(today.plusDays(1))) return "amanhã";
+            return "em " + d.format(SHORT_DATE);
+        } catch (Exception e) {
+            return "em breve";
+        }
     }
 
     // ── Clientes ausentes (porta de reminder.controller.ts) ────────────────────

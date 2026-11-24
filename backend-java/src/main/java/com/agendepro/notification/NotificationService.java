@@ -34,7 +34,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class NotificationService {
 
-    public enum Event { NEW_REQUEST, CLIENT_CANCELLED, CLIENT_RESCHEDULED, APPROVED, REFUSED, CANCELLED_BY_OWNER }
+    public enum Event { NEW_REQUEST, CLIENT_CANCELLED, CLIENT_RESCHEDULED, APPROVED, REFUSED, CANCELLED_BY_OWNER,
+        REMINDER_24H, REMINDER_2H }
 
     private static final DateTimeFormatter BR_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
@@ -102,6 +103,21 @@ public class NotificationService {
                 g.tenant().getName() + ": horário cancelado",
                 "Olá, " + firstName(g.client().getName()) + ". Seu horário de " + br(g.date()) + " às " + g.start()
                         + " em " + g.tenant().getName() + " foi cancelado. Para reagendar: " + appUrl + "/" + g.tenant().getSlug()));
+    }
+
+    /**
+     * Lembrete de 24 h ou 2 h antes. A chave é por agendamento: enfileirar de novo não duplica. Devolve false quando o
+     * cliente não tem e-mail nem celular (nada a enviar).
+     */
+    @Transactional
+    public boolean clientReminder(Appointment appointment, Tenant tenant, Client client, Event event, String text) {
+        String phone = !blank(client.getPhoneE164()) ? client.getPhoneE164() : client.getPhone();
+        if (blank(phone) && blank(client.getEmail())) return false;
+        String subject = tenant.getName() + ": lembrete do seu horário";
+        String key = event + ":" + appointment.getId();
+        enqueue(tenant, appointment.getId(), event, key, Channel.EMAIL, client.getEmail(), subject, text);
+        enqueue(tenant, appointment.getId(), event, key, Channel.WHATSAPP, phone, subject, text);
+        return true;
     }
 
     // ─── montagem ───────────────────────────────────────────────────────────────
