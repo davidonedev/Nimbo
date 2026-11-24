@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useTenant, PLAN_LIMITS } from '@/context/TenantContext';
+import { ImageError, prepareImage } from '@/lib/imageResize';
 import { ApiError } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import type { Professional, Service } from '@/types';
@@ -49,10 +50,12 @@ function formFromProf(p: Professional): ProfFormData {
 // ─── PhotoUpload — defined outside to keep stable identity ───────────────────
 function PhotoUpload({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const ref = useRef<HTMLInputElement>(null);
-  const handleFile = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = e => onChange(e.target?.result as string);
-    reader.readAsDataURL(file);
+  const [error, setError] = useState('');
+  // A foto original do celular tem vários MB: reduz e comprime no navegador antes de enviar (como o logo do estabelecimento).
+  const handleFile = async (file: File) => {
+    setError('');
+    try { onChange(await prepareImage(file, 512, 512)); }
+    catch (e) { setError(e instanceof ImageError ? e.message : 'Não foi possível usar essa imagem. Tente outra.'); }
   };
   return (
     <div className="flex items-center gap-4">
@@ -66,19 +69,19 @@ function PhotoUpload({ value, onChange }: { value: string; onChange: (v: string)
       </div>
       <div className="space-y-1">
         <p className="text-sm font-medium">Foto do profissional</p>
-        <p className="text-xs text-muted-foreground">Clique no círculo para enviar. PNG/JPG, máx. 2 MB.</p>
+        <p className="text-xs text-muted-foreground">Clique no círculo para enviar. PNG, JPG ou WebP, máx. 5 MB (a imagem é reduzida sozinha).</p>
+        {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
         {value && (
-          <button type="button" className="text-xs text-destructive hover:underline flex items-center gap-1" onClick={() => onChange('')}>
+          <button type="button" className="text-xs text-destructive hover:underline flex items-center gap-1" onClick={() => { setError(''); onChange(''); }}>
             <X className="h-3 w-3" /> Remover foto
           </button>
         )}
       </div>
       <input ref={ref} type="file" accept="image/*" className="hidden"
-        onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }} />
+        onChange={e => { const f = e.target.files?.[0]; if (f) void handleFile(f); e.target.value = ''; }} />
     </div>
   );
 }
-
 // ─── ProfFormFields — defined outside to prevent remount on every keystroke ──
 interface ProfFormFieldsProps {
   form: ProfFormData;

@@ -13,6 +13,9 @@ import java.util.UUID;
 /** DTOs de profissionais — porta de professional.controller.ts + trechos de professional.routes.ts. */
 public final class ProfessionalDtos {
 
+    /** Limite do texto da foto (data URL base64 ≈ 1,5 MB de arquivo), o mesmo das imagens do estabelecimento. */
+    public static final int MAX_IMAGE_CHARS = 2_000_000;
+
     private ProfessionalDtos() {
     }
 
@@ -49,7 +52,7 @@ public final class ProfessionalDtos {
             @Size(max = 100) String specialty,
             @Size(max = 500) String bio,
             String avatar,
-            String photoUrl,
+            @Size(max = MAX_IMAGE_CHARS, message = "A foto é grande demais (máx. ~1,5 MB)") String photoUrl,
             String workingHoursStart,
             String workingHoursEnd,
             List<Integer> workingDays,
@@ -73,7 +76,7 @@ public final class ProfessionalDtos {
             @Size(max = 100) String specialty,
             @Size(max = 500) String bio,
             String avatar,
-            String photoUrl,
+            @Size(max = MAX_IMAGE_CHARS, message = "A foto é grande demais (máx. ~1,5 MB)") String photoUrl,
             String workingHoursStart,
             String workingHoursEnd,
             List<Integer> workingDays,
@@ -95,7 +98,7 @@ public final class ProfessionalDtos {
             @Size(max = 500) String bio,
             @Size(max = 100) String specialty,
             String avatar,
-            String photoUrl
+            @Size(max = MAX_IMAGE_CHARS, message = "A foto é grande demais (máx. ~1,5 MB)") String photoUrl
     ) {
     }
 

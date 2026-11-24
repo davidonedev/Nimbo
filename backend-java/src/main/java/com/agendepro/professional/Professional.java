@@ -39,7 +39,8 @@ public class Professional {
 
     private String avatar;
 
-    @Column(name = "photo_url", length = 2000)
+    /** URL ou imagem em data URL (base64): por isso TEXT (V15). */
+    @Column(name = "photo_url", columnDefinition = "text")
     private String photoUrl;
 
     private String bio;
