@@ -1,21 +1,25 @@
 import { useMemo, useState } from 'react';
-import { format, parseISO, isToday, isFuture, isPast } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import {
-  Bell, Calendar, CalendarPlus, CheckCircle, Clock,
-  List, Loader2, ThumbsDown, ThumbsUp, X, XCircle,
-} from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Bell, CalendarPlus, FilterX, Search, SlidersHorizontal, ThumbsDown, ThumbsUp, X } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { AppointmentCard, type AppointmentCardData } from '@/components/appointments/AppointmentCard';
+import { FilterChips } from '@/components/appointments/FilterChips';
+import { StatusBadge } from '@/components/appointments/StatusBadge';
+import { SummaryStrip } from '@/components/appointments/SummaryStrip';
+import { actionLabel, dayHeading, fmtDate } from '@/components/appointments/appointmentUi';
 import { useProfessional } from '@/context/ProfessionalContext';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { todaySP } from '@/lib/agendaDates';
+import { statusActionsFor, statusErrorMessage, type StatusAction } from '@/lib/appointmentFilters';
 import { formatCurrency } from '@/lib/utils';
-import { AppointmentCardList, type ApptCardData } from '@/components/ui/AppointmentCards';
+import { ownAppointments } from './ownData';
 import type { Appointment, AppointmentStatus } from '@/types';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -32,171 +36,179 @@ const emptyForm = (): ApptForm => ({
   clientId: '', serviceId: '', date: format(new Date(), 'yyyy-MM-dd'), startTime: '09:00', notes: '',
 });
 
-const STATUS_LABEL: Record<AppointmentStatus, string> = {
-  pending:   'Agendado',
-  confirmed: 'Confirmado',
-  completed: 'Concluído',
-  cancelled: 'Cancelado',
-  no_show:   'Não compareceu',
-};
-
-const STATUS_COLOR: Record<AppointmentStatus, string> = {
-  pending:   'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-  confirmed: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-  completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-  cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-  no_show:   'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400',
-};
-
+type View = 'today' | 'upcoming' | 'past' | 'all';
 type StatusFilter = AppointmentStatus | 'all';
-type ViewMode = 'table' | 'calendar';
-type FilterTab = 'upcoming' | 'today' | 'past';
 
-const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
-  { key: 'all',       label: 'Todos'           },
-  { key: 'pending',   label: 'Agendado'        },
-  { key: 'confirmed', label: 'Confirmado'      },
-  { key: 'completed', label: 'Concluído'       },
-  { key: 'cancelled', label: 'Cancelado'       },
-  { key: 'no_show',   label: 'Não compareceu'  },
+const STATUS_CHIPS: { value: StatusFilter; label: string }[] = [
+  { value: 'all', label: 'Todos' },
+  { value: 'pending', label: 'Pendentes' },
+  { value: 'confirmed', label: 'Confirmados' },
+  { value: 'completed', label: 'Concluídos' },
+  { value: 'no_show', label: 'Faltas' },
+  { value: 'cancelled', label: 'Cancelados' },
 ];
 
-// ─── TableRow ────────────────────────────────────────────────────────────────
-function TableRow({ appt, clients, services, onStatusSave }: {
-  appt: Appointment;
-  clients: { id: string; name: string }[];
-  services: { id: string; name: string }[];
-  onStatusSave: (id: string, status: AppointmentStatus) => Promise<void>;
+const VIEW_LABEL: Record<View, string> = { today: 'Hoje', upcoming: 'Próximos', past: 'Anteriores', all: 'Todos' };
+const VIEW_ORDER: View[] = ['today', 'upcoming', 'past', 'all'];
+
+interface Row extends AppointmentCardData { appt: Appointment }
+
+/** O agendamento entra na visão? Cancelados só aparecem em "Todos" ou quando o filtro de status é Cancelados. */
+function matchesView(r: { date: string; status: AppointmentStatus }, v: View, today: string, includeCancelled: boolean): boolean {
+  if (r.status === 'cancelled' && v !== 'all' && !includeCancelled) return false;
+  return v === 'all' ? true : v === 'today' ? r.date === today : v === 'upcoming' ? r.date > today : r.date < today;
+}
+
+// ─── Aguardando sua confirmação ──────────────────────────────────────────────
+/** Pedidos novos: os dois primeiros à vista, o resto atrás de "Ver todos". Aceitar confirma; Recusar pede confirmação. */
+function PendingBox({ rows, busy, onAccept, onRefuse }: {
+  rows: Row[]; busy: boolean; onAccept: (r: Row) => void; onRefuse: (r: Row) => void;
 }) {
-  const [localStatus, setLocalStatus] = useState<AppointmentStatus>(appt.status);
-  const [saving, setSaving] = useState(false);
-  const dirty = localStatus !== appt.status;
-
-  const client  = clients.find(c => c.id === appt.clientId);
-  const service = services.find(s => s.id === appt.serviceId);
-
-  const handleSave = async () => {
-    setSaving(true);
-    try { await onStatusSave(appt.id, localStatus); }
-    finally { setSaving(false); }
-  };
-
+  const [all, setAll] = useState(false);
+  if (rows.length === 0) return null;
+  const shown = all ? rows : rows.slice(0, 2);
   return (
-    <tr className="border-b hover:bg-muted/40 transition-colors">
-      <td className="px-3 py-2.5 text-sm whitespace-nowrap">
-        {format(parseISO(appt.date), "dd/MM/yyyy")}
-      </td>
-      <td className="px-3 py-2.5 text-sm whitespace-nowrap">
-        {appt.startTime}–{appt.endTime}
-      </td>
-      <td className="px-3 py-2.5 text-sm">{client?.name ?? '—'}</td>
-      <td className="px-3 py-2.5 text-sm">{service?.name ?? '—'}</td>
-      <td className="px-3 py-2.5 text-sm font-medium">{formatCurrency(appt.price)}</td>
-      <td className="px-3 py-2.5">
-        <select
-          value={localStatus}
-          onChange={e => setLocalStatus(e.target.value as AppointmentStatus)}
-          className={`text-xs font-medium rounded px-2 py-1 border-0 outline-none cursor-pointer ${STATUS_COLOR[localStatus]}`}
-        >
-          {(Object.keys(STATUS_LABEL) as AppointmentStatus[]).map(s => (
-            <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+    <Card className="border-yellow-300 dark:border-yellow-700">
+      <CardContent className="space-y-3 p-4">
+        <h3 className="flex items-center gap-2 text-base font-semibold">
+          <Bell className="h-4 w-4" aria-hidden /> Aguardando sua confirmação
+          <span aria-label={`${rows.length} aguardando`} className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-semibold text-yellow-900 dark:bg-yellow-900/40 dark:text-yellow-200">{rows.length}</span>
+        </h3>
+        <ul className="divide-y rounded-xl border bg-card" aria-label="Aguardando sua confirmação">
+          {shown.map(r => (
+            <li key={r.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
+              <div className="min-w-0 flex-1 text-sm">
+                <p className="truncate text-base font-semibold">{r.clientName}</p>
+                <p className="truncate text-muted-foreground">
+                  {format(parseISO(r.date), "EEE, d 'de' MMM", { locale: ptBR })} às {r.startTime} · {r.serviceName}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <Button type="button" size="sm" disabled={busy}
+                  className="min-h-11 flex-1 gap-1.5 bg-green-600 text-white hover:bg-green-700 sm:min-h-9 sm:flex-none"
+                  aria-label={actionLabel('Aceitar', r.clientName, r.date, r.startTime)} onClick={() => onAccept(r)}>
+                  <ThumbsUp aria-hidden /> Aceitar
+                </Button>
+                <Button type="button" size="sm" variant="outline" disabled={busy}
+                  className="min-h-11 flex-1 gap-1.5 text-destructive sm:min-h-9 sm:flex-none"
+                  aria-label={actionLabel('Recusar', r.clientName, r.date, r.startTime)} onClick={() => onRefuse(r)}>
+                  <ThumbsDown aria-hidden /> Recusar
+                </Button>
+              </div>
+            </li>
           ))}
-        </select>
-      </td>
-      <td className="px-3 py-2.5">
-        <Button
-          size="sm"
-          variant={dirty ? 'default' : 'ghost'}
-          className="h-7 text-xs"
-          disabled={!dirty || saving}
-          onClick={handleSave}
-        >
-          {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Salvar'}
-        </Button>
-      </td>
-    </tr>
+        </ul>
+        {rows.length > 2 && (
+          <Button type="button" variant="ghost" className="min-h-11 w-full" onClick={() => setAll(v => !v)}>
+            {all ? 'Mostrar menos' : `Ver todos (${rows.length})`}
+          </Button>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
 // ─── Main ────────────────────────────────────────────────────────────────────
+/**
+ * "Minha Agenda" do profissional: do quadro geral (hoje, próximos, receita) para o detalhe. Primeiro o que precisa de
+ * decisão (pedidos aguardando), depois uma única lista por visão (Hoje, Próximos, Anteriores, Todos) com filtros
+ * em camadas: cartões agrupados por dia no celular, tabela no desktop. O profissional só vê o que é dele.
+ */
 export default function ProfAgendaView() {
-  const { appointments, clients, allClients, services, professional, addAppointment, updateAppointmentStatus, cancelAppointment } = useProfessional();
+  const { appointments: all, clients, allClients, services, professional, addAppointment, updateAppointmentStatus, cancelAppointment } = useProfessional();
+  const appointments = useMemo(() => ownAppointments(all, professional.id), [all, professional.id]);
+  const { isMobile } = useBreakpoint();
 
-  const [view, setView]         = useState<ViewMode>('table');
+  const [view, setView] = useState<View>('today');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [search, setSearch]     = useState('');
+  const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo]     = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
 
-  // Calendar-mode state
-  const [tab, setTab]           = useState<FilterTab>('today');
   const [rejectId, setRejectId] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState('');
 
   // New appointment dialog
   const [apptDialog, setApptDialog] = useState(false);
   const [apptForm,   setApptForm]   = useState<ApptForm>(emptyForm());
   const [apptError,  setApptError]  = useState('');
 
-  const today = format(new Date(), 'yyyy-MM-dd');
+  const today = todaySP();
 
-  // ── Table filtered appointments ──────────────────────────────────────────
-  const tableFiltered = useMemo(() => {
-    let list = [...appointments];
-    if (statusFilter !== 'all') list = list.filter(a => a.status === statusFilter);
-    if (dateFrom)               list = list.filter(a => a.date >= dateFrom);
-    if (dateTo)                 list = list.filter(a => a.date <= dateTo);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(a => {
-        const client  = clients.find(c => c.id === a.clientId);
-        const service = services.find(s => s.id === a.serviceId);
-        return client?.name.toLowerCase().includes(q) || service?.name.toLowerCase().includes(q);
-      });
-    }
-    return list.sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime));
-  }, [appointments, statusFilter, search, dateFrom, dateTo, clients, services]);
+  const rows = useMemo<Row[]>(() => {
+    const clientById = new Map(clients.map(c => [c.id, c]));
+    const svcById = new Map(services.map(s => [s.id, s]));
+    return appointments.map(a => ({
+      appt: a,
+      id: a.id, date: a.date, startTime: a.startTime, endTime: a.endTime, status: a.status, price: a.price,
+      clientName: clientById.get(a.clientId)?.name ?? 'Cliente',
+      clientPhone: clientById.get(a.clientId)?.phone,
+      serviceName: svcById.get(a.serviceId)?.name ?? '—',
+    }));
+  }, [appointments, clients, services]);
 
-  const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: appointments.length };
-    appointments.forEach(a => { counts[a.status] = (counts[a.status] ?? 0) + 1; });
-    return counts;
-  }, [appointments]);
+  const viewCounts = useMemo(() => {
+    const out = {} as Record<View, number>;
+    for (const v of VIEW_ORDER) out[v] = rows.filter(r => matchesView(r, v, today, false)).length;
+    return out;
+  }, [rows, today]);
 
-  // ── Calendar mode helpers ────────────────────────────────────────────────
+  const q = search.trim().toLowerCase();
+  const filtered = useMemo(() => {
+    const list = rows.filter(r => {
+      if (!matchesView(r, view, today, statusFilter === 'cancelled')) return false;
+      if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+      if (dateFrom && r.date < dateFrom) return false;
+      if (dateTo && r.date > dateTo) return false;
+      if (q && !r.clientName.toLowerCase().includes(q) && !r.serviceName.toLowerCase().includes(q)) return false;
+      return true;
+    });
+    const asc = view === 'today' || view === 'upcoming';
+    return list.sort((a, b) => (asc
+      ? a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime)
+      : b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime)));
+  }, [rows, view, statusFilter, dateFrom, dateTo, q, today]);
+
+  const groups = useMemo(() => {
+    const byDay = new Map<string, Row[]>();
+    for (const r of filtered) { const l = byDay.get(r.date); if (l) l.push(r); else byDay.set(r.date, [r]); }
+    return [...byDay.entries()];
+  }, [filtered]);
+
+  const statusCountsMap = useMemo(() => {
+    const c: Record<StatusFilter, number> = { all: 0, pending: 0, confirmed: 0, completed: 0, no_show: 0, cancelled: 0 };
+    for (const r of rows) { c.all += 1; c[r.status] += 1; }
+    return c;
+  }, [rows]);
+
   const pending = useMemo(() =>
-    appointments.filter(a => a.status === 'pending').sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime)),
-  [appointments]);
+    rows.filter(r => r.status === 'pending').sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime)),
+  [rows]);
 
-  const calFiltered = useMemo(() => {
-    const active = appointments.filter(a => a.status !== 'cancelled');
-    switch (tab) {
-      case 'today':    return active.filter(a => a.date === today).sort((a, b) => a.startTime.localeCompare(b.startTime));
-      case 'upcoming': return active.filter(a => a.date > today).sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
-      case 'past':     return active.filter(a => a.date < today).sort((a, b) => b.date.localeCompare(a.date));
-    }
-  }, [appointments, tab, today]);
+  const stats = useMemo(() => ({
+    today: rows.filter(r => r.date === today && r.status !== 'cancelled').length,
+    upcoming: rows.filter(r => r.date > today && r.status !== 'cancelled').length,
+    revenue: rows.filter(r => r.status === 'completed').reduce((s, r) => s + r.price, 0),
+  }), [rows, today]);
 
-  const stats = useMemo(() => {
-    const todayAppts = appointments.filter(a => a.date === today && a.status !== 'cancelled');
-    const upcoming   = appointments.filter(a => a.date > today && a.status !== 'cancelled');
-    const completed  = appointments.filter(a => a.status === 'completed');
-    return { today: todayAppts.length, upcoming: upcoming.length, completed: completed.length, revenue: completed.reduce((s, a) => s + a.price, 0) };
-  }, [appointments, today]);
-
-  const TAB_LABELS: Record<FilterTab, string> = { today: 'Hoje', upcoming: 'Próximos', past: 'Anteriores' };
-
-  const grouped = useMemo(() => {
-    if (tab === 'today') return null;
-    const map = new Map<string, Appointment[]>();
-    calFiltered.forEach(a => { if (!map.has(a.date)) map.set(a.date, []); map.get(a.date)!.push(a); });
-    return map;
-  }, [calFiltered, tab]);
-
-  const getClient  = (id: string) => clients.find(c => c.id === id);
-  const getService = (id: string) => services.find(s => s.id === id);
+  const panelCount = (statusFilter !== 'all' ? 1 : 0) + (dateFrom || dateTo ? 1 : 0);
+  const anyFilter = panelCount > 0 || q !== '';
+  const clearFilters = () => { setSearch(''); setDateFrom(''); setDateTo(''); setStatusFilter('all'); };
+  const panelOpen = !isMobile || showFilters;
 
   const myServices = useMemo(() => services.filter(s => professional.services.includes(s.id)), [services, professional.services]);
   const selectedSvc = myServices.find(s => s.id === apptForm.serviceId);
+
+  const run = async (id: string, action: () => Promise<unknown>) => {
+    setActionError(''); setBusyId(id);
+    try { await action(); }
+    catch (err) { setActionError(statusErrorMessage(err)); }
+    finally { setBusyId(null); }
+  };
+  const apply = (r: Row, status: AppointmentStatus) => run(r.id, () => updateAppointmentStatus(r.id, status));
+  const onAction = (r: Row, a: StatusAction) => { if (a.status === 'cancelled') setRejectId(r.id); else void apply(r, a.status); };
 
   const handleApptSave = async () => {
     setApptError('');
@@ -236,320 +248,146 @@ export default function ProfAgendaView() {
     }
   };
 
-  const handleStatusSave = async (id: string, status: AppointmentStatus) => {
-    await updateAppointmentStatus(id, status);
-  };
-
-  // ── Calendar card component ──────────────────────────────────────────────
-  const ApptCard = ({ appt }: { appt: Appointment }) => {
-    const client = getClient(appt.clientId);
-    const svc    = getService(appt.serviceId);
-    const isPending   = appt.status === 'pending';
-    const isConfirmed = appt.status === 'confirmed';
-    const hasActions  = isPending || isConfirmed;
-
-    return (
-      <div className={`flex flex-col sm:flex-row sm:items-center gap-2 p-3 rounded-lg border bg-card transition-colors ${isPending ? 'border-yellow-300 dark:border-yellow-700' : ''}`}>
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="text-center min-w-[48px]">
-            <p className="text-sm font-bold text-primary">{appt.startTime}</p>
-            <p className="text-xs text-muted-foreground">{appt.endTime}</p>
-          </div>
-          <Avatar className="h-9 w-9 shrink-0">
-            <AvatarFallback className="text-xs bg-primary/10 text-primary font-semibold">
-              {client?.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <p className="font-medium text-sm truncate">{client?.name ?? '—'}</p>
-            <p className="text-xs text-muted-foreground truncate">{svc?.name} · {svc?.duration} min</p>
-          </div>
-          <div className="text-right shrink-0">
-            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLOR[appt.status]}`}>
-              {STATUS_LABEL[appt.status]}
-            </span>
-            <p className="text-xs font-semibold mt-1">{formatCurrency(appt.price)}</p>
-          </div>
-        </div>
-        {hasActions && (
-          <div className="flex gap-2 sm:shrink-0">
-            {isPending && (
-              <>
-                <Button size="sm" className="h-8 gap-1 bg-green-600 hover:bg-green-700 text-white flex-1 sm:flex-none sm:w-8 sm:p-0"
-                  title="Aceitar agendamento" onClick={() => updateAppointmentStatus(appt.id, 'confirmed')}>
-                  <ThumbsUp className="h-3.5 w-3.5" /><span className="sm:hidden">Aceitar</span>
-                </Button>
-                <Button size="sm" variant="destructive" className="h-8 gap-1 flex-1 sm:flex-none sm:w-8 sm:p-0"
-                  title="Recusar agendamento" onClick={() => setRejectId(appt.id)}>
-                  <ThumbsDown className="h-3.5 w-3.5" /><span className="sm:hidden">Recusar</span>
-                </Button>
-              </>
-            )}
-            {isConfirmed && (
-              <>
-                <Button size="sm" variant="outline" className="h-8 gap-1 text-green-600 border-green-300 hover:bg-green-50 flex-1 sm:flex-none sm:w-8 sm:p-0"
-                  title="Marcar como concluído" onClick={() => updateAppointmentStatus(appt.id, 'completed')}>
-                  <CheckCircle className="h-3.5 w-3.5" /><span className="sm:hidden">Concluir</span>
-                </Button>
-                <Button size="sm" variant="outline" className="h-8 gap-1 text-destructive border-destructive/30 hover:bg-destructive/10 flex-1 sm:flex-none sm:w-8 sm:p-0"
-                  title="Cancelar agendamento" onClick={() => setRejectId(appt.id)}>
-                  <XCircle className="h-3.5 w-3.5" /><span className="sm:hidden">Cancelar</span>
-                </Button>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  };
+  const rejectTarget = rows.find(r => r.id === rejectId);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <h2 className="text-2xl font-bold tracking-tight">Minha Agenda</h2>
-          <p className="text-muted-foreground text-sm">{professional.name} · {professional.specialty}</p>
+          <p className="truncate text-sm text-muted-foreground">{professional.name} · {professional.specialty}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {/* View toggle */}
-          <div className="flex border rounded-md overflow-hidden">
-            <button
-              onClick={() => setView('table')}
-              className={`px-3 py-1.5 text-sm font-medium flex items-center gap-1.5 transition-colors ${view === 'table' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
-            >
-              <List className="h-3.5 w-3.5" /> Tabela
-            </button>
-            <button
-              onClick={() => setView('calendar')}
-              className={`px-3 py-1.5 text-sm font-medium flex items-center gap-1.5 transition-colors ${view === 'calendar' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
-            >
-              <Calendar className="h-3.5 w-3.5" /> Lista
-            </button>
-          </div>
-          <Button size="sm" onClick={() => { setApptError(''); setApptForm(emptyForm()); setApptDialog(true); }}>
-            <CalendarPlus className="h-4 w-4 mr-1" /> Novo Agend.
-          </Button>
-        </div>
+        <Button className="h-11 shrink-0 gap-1.5 sm:h-9" size="sm" onClick={() => { setApptError(''); setApptForm(emptyForm()); setApptDialog(true); }}>
+          <CalendarPlus aria-hidden /> Novo Agend.
+        </Button>
       </div>
 
-      {/* ── TABLE VIEW ─────────────────────────────────────────────────────── */}
-      {view === 'table' && (
-        <div className="space-y-4">
-          {/* Status filter tabs */}
-          <div className="flex flex-wrap gap-1">
-            {STATUS_FILTERS.map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setStatusFilter(key)}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
-                  statusFilter === key
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'text-muted-foreground border-muted-foreground/20 hover:bg-muted'
-                }`}
-              >
-                {label}
-                <span className="ml-1.5 opacity-70">{statusCounts[key] ?? 0}</span>
-              </button>
-            ))}
-          </div>
+      <SummaryStrip label="Resumo da agenda" items={[
+        { label: 'Hoje', value: stats.today },
+        { label: 'Próximos', value: stats.upcoming },
+        { label: 'Receita', value: formatCurrency(stats.revenue) },
+      ]} />
 
-          {/* Filters row */}
-          <div className="flex flex-wrap gap-2">
-            <Input
-              placeholder="Buscar cliente ou serviço…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="h-8 text-sm max-w-xs"
-            />
-            <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-8 text-sm w-36" title="De" />
-            <Input type="date" value={dateTo}   onChange={e => setDateTo(e.target.value)}   className="h-8 text-sm w-36" title="Até" />
-            {(search || dateFrom || dateTo || statusFilter !== 'all') && (
-              <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { setSearch(''); setDateFrom(''); setDateTo(''); setStatusFilter('all'); }}>
-                <X className="h-3 w-3 mr-1" /> Limpar
-              </Button>
-            )}
-          </div>
+      <PendingBox rows={pending} busy={busyId !== null} onAccept={r => void apply(r, 'confirmed')} onRefuse={r => setRejectId(r.id)} />
 
-          {/* Tabela — visível apenas em telas médias+ */}
-          <Card className="hidden md:block">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50">
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground">Data</th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground">Hora</th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground">Cliente</th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground">Serviço</th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground">Pagamento</th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground">Status</th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground">Ação</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tableFiltered.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="px-3 py-10 text-center text-muted-foreground">
-                        Nenhum agendamento encontrado
+      {/* Visões e filtros */}
+      <form role="search" aria-label="Filtrar agendamentos" onSubmit={e => e.preventDefault()} className="space-y-3">
+        <FilterChips label="Visão" value={view} onChange={setView}
+          options={VIEW_ORDER.map(v => ({ value: v, label: VIEW_LABEL[v], count: viewCounts[v] }))} />
+
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Input type="search" className="h-11 pl-9" placeholder="Buscar cliente ou serviço"
+              aria-label="Buscar cliente ou serviço" value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          {isMobile && (
+            <Button type="button" variant="outline" className="h-11 shrink-0 gap-2 px-3"
+              aria-expanded={showFilters} aria-controls="prof-filter-panel" onClick={() => setShowFilters(v => !v)}>
+              <SlidersHorizontal aria-hidden /> Filtros
+              {panelCount > 0 && (
+                <span aria-label={`${panelCount} ${panelCount === 1 ? 'filtro ativo' : 'filtros ativos'}`}
+                  className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1 text-xs font-semibold text-primary-foreground">{panelCount}</span>
+              )}
+            </Button>
+          )}
+        </div>
+
+        {panelOpen && (
+          <div id="prof-filter-panel" className="space-y-3 rounded-2xl border bg-muted/30 p-3 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0">
+            <FilterChips label="Status" value={statusFilter} onChange={setStatusFilter}
+              options={STATUS_CHIPS.map(s => ({ ...s, count: statusCountsMap[s.value] }))} />
+            <div className="grid grid-cols-2 gap-3 lg:max-w-md">
+              <div className="min-w-0 space-y-1">
+                <Label htmlFor="prof-from">De</Label>
+                <Input id="prof-from" type="date" className="h-11 min-w-0 px-2" value={dateFrom} max={dateTo || undefined} onChange={e => setDateFrom(e.target.value)} />
+              </div>
+              <div className="min-w-0 space-y-1">
+                <Label htmlFor="prof-to">Até</Label>
+                <Input id="prof-to" type="date" className="h-11 min-w-0 px-2" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)} />
+              </div>
+            </div>
+            <Button type="button" variant="outline" className="min-h-11 w-full gap-2 lg:w-auto" disabled={!anyFilter} onClick={clearFilters}>
+              <FilterX aria-hidden /> Limpar filtros
+            </Button>
+          </div>
+        )}
+        {dateFrom && dateTo && dateFrom > dateTo && (
+          <p role="alert" className="text-sm text-destructive">A data inicial é depois da data final. Ajuste o período.</p>
+        )}
+      </form>
+
+      {actionError && <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{actionError}</p>}
+
+      {filtered.length === 0 ? (
+        <Card><CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+          <p className="max-w-sm text-sm text-muted-foreground">
+            {anyFilter ? 'Nenhum agendamento com esses filtros. Tente ampliar o período ou limpar os filtros.'
+              : view === 'today' ? 'Nenhum agendamento para hoje.' : `Nenhum agendamento em "${VIEW_LABEL[view]}".`}
+          </p>
+          {anyFilter ? (
+            <Button type="button" variant="outline" className="min-h-11 gap-2" onClick={clearFilters}><FilterX aria-hidden /> Limpar filtros</Button>
+          ) : view === 'today' && viewCounts.upcoming > 0 && (
+            <Button type="button" variant="outline" className="min-h-11" onClick={() => setView('upcoming')}>Ver próximos ({viewCounts.upcoming})</Button>
+          )}
+        </CardContent></Card>
+      ) : isMobile ? (
+        <div className="space-y-5">
+          {groups.map(([d, items]) => (
+            <section key={d} aria-label={dayHeading(d, today)} className="space-y-2">
+              <h3 className="px-1 text-sm font-semibold text-muted-foreground">{dayHeading(d, today)}</h3>
+              <ul className="space-y-3">
+                {items.map(r => (
+                  <li key={r.id}><AppointmentCard data={r} busy={busyId === r.id} onAction={(d2, a) => onAction(d2 as Row, a)} /></li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <caption className="sr-only">Lista de agendamentos</caption>
+              <thead>
+                <tr className="border-b bg-muted/40">
+                  {['Data', 'Hora', 'Cliente', 'Serviço', 'Valor', 'Status', 'Ações'].map(h => (
+                    <th key={h} scope="col" className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(r => {
+                  const actions = statusActionsFor(r.status);
+                  return (
+                    <tr key={r.id} className="border-b transition-colors last:border-0 hover:bg-muted/30">
+                      <td className="whitespace-nowrap px-4 py-3 text-sm font-medium">{fmtDate(r.date)}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-muted-foreground">{r.startTime} – {r.endTime}</td>
+                      <td className="px-4 py-3 text-sm"><div className="max-w-[180px] truncate font-medium">{r.clientName}</div></td>
+                      <td className="px-4 py-3 text-sm"><div className="max-w-[160px] truncate">{r.serviceName}</div></td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold">{formatCurrency(r.price)}</td>
+                      <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
+                      <td className="px-4 py-3">
+                        {actions.length === 0 ? <span className="text-xs text-muted-foreground">Sem ações</span> : (
+                          <div className="flex flex-wrap gap-2" role="group" aria-label={`Ações do agendamento de ${r.clientName}`}>
+                            {actions.map(a => (
+                              <Button key={a.status} type="button" size="sm" disabled={busyId === r.id}
+                                variant={a.status === 'cancelled' ? 'outline' : a.status === 'confirmed' ? 'default' : 'secondary'}
+                                className={`min-h-9 ${a.status === 'cancelled' ? 'text-destructive' : ''}`}
+                                aria-label={actionLabel(a.label, r.clientName, r.date, r.startTime)} onClick={() => onAction(r, a)}>
+                                {a.label}
+                              </Button>
+                            ))}
+                          </div>
+                        )}
                       </td>
                     </tr>
-                  ) : (
-                    tableFiltered.map(appt => (
-                      <TableRow
-                        key={appt.id}
-                        appt={appt}
-                        clients={clients}
-                        services={services}
-                        onStatusSave={handleStatusSave}
-                      />
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-
-          {/* Cards — visível apenas em mobile */}
-          <div className="md:hidden">
-            <AppointmentCardList
-              appointments={tableFiltered.map((a): ApptCardData => {
-                const client  = clients.find(c => c.id === a.clientId);
-                const svc     = services.find(s => s.id === a.serviceId);
-                return {
-                  id: a.id,
-                  date: a.date,
-                  startTime: a.startTime,
-                  endTime: a.endTime,
-                  status: a.status,
-                  price: a.price,
-                  notes: a.notes,
-                  clientName: client?.name,
-                  clientPhone: client?.phone,
-                  serviceName: svc?.name,
-                  serviceDuration: svc?.duration,
-                  // sem professionalName — é a agenda do próprio profissional
-                };
-              })}
-              onSave={handleStatusSave}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* ── CALENDAR/LIST VIEW ─────────────────────────────────────────────── */}
-      {view === 'calendar' && (
-        <>
-          {/* Pending alert */}
-          {pending.length > 0 && (
-            <Card className="border-yellow-300 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20">
-              <CardHeader className="pb-2 pt-4">
-                <CardTitle className="text-sm font-semibold text-yellow-800 dark:text-yellow-400 flex items-center gap-2">
-                  <Bell className="h-4 w-4" />
-                  {pending.length} agendamento{pending.length > 1 ? 's' : ''} aguardando sua confirmação
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 pb-4">
-                {pending.map(appt => {
-                  const client = getClient(appt.clientId);
-                  const svc    = getService(appt.serviceId);
-                  return (
-                    <div key={appt.id} className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 rounded-lg bg-background border">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <Avatar className="h-8 w-8 shrink-0">
-                          <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
-                            {client?.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{client?.name ?? '—'}</p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {format(parseISO(appt.date), "d 'de' MMM", { locale: ptBR })} às {appt.startTime} · {svc?.name}
-                          </p>
-                        </div>
-                        <p className="text-sm font-semibold shrink-0 sm:hidden">{formatCurrency(appt.price)}</p>
-                      </div>
-                      <div className="flex items-center justify-between sm:justify-end gap-2">
-                        <p className="text-sm font-semibold hidden sm:block">{formatCurrency(appt.price)}</p>
-                        <div className="flex gap-2">
-                          <Button size="sm" className="h-8 gap-1 bg-green-600 hover:bg-green-700 text-white flex-1 sm:flex-none"
-                            onClick={() => updateAppointmentStatus(appt.id, 'confirmed')}>
-                            <ThumbsUp className="h-3.5 w-3.5" /> Aceitar
-                          </Button>
-                          <Button size="sm" variant="destructive" className="h-8 gap-1 flex-1 sm:flex-none"
-                            onClick={() => setRejectId(appt.id)}>
-                            <ThumbsDown className="h-3.5 w-3.5" /> Recusar
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
                   );
                 })}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* KPI strip */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {[
-              { label: 'Hoje',       value: stats.today,                   icon: Calendar,    color: 'text-primary' },
-              { label: 'Próximos',   value: stats.upcoming,                icon: Clock,       color: 'text-blue-600' },
-              { label: 'Concluídos', value: stats.completed,               icon: CheckCircle, color: 'text-green-600' },
-              { label: 'Receita',    value: formatCurrency(stats.revenue), icon: XCircle,     color: 'text-foreground' },
-            ].map(kpi => {
-              const Icon = kpi.icon;
-              return (
-                <Card key={kpi.label}>
-                  <CardContent className="pt-4 pb-4">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Icon className={`h-4 w-4 ${kpi.color}`} />
-                      <p className="text-xs text-muted-foreground">{kpi.label}</p>
-                    </div>
-                    <p className={`text-xl font-bold ${kpi.color}`}>{kpi.value}</p>
-                  </CardContent>
-                </Card>
-              );
-            })}
+              </tbody>
+            </table>
           </div>
-
-          {/* Day tabs */}
-          <div className="flex gap-1 border rounded-md overflow-hidden w-fit">
-            {(['today', 'upcoming', 'past'] as FilterTab[]).map(t => (
-              <button key={t} onClick={() => setTab(t)}
-                className={`px-4 py-2 text-sm font-medium transition-colors ${tab === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
-                {TAB_LABELS[t]}
-              </button>
-            ))}
-          </div>
-
-          {calFiltered.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center text-muted-foreground">
-                Nenhum agendamento {TAB_LABELS[tab].toLowerCase()}
-              </CardContent>
-            </Card>
-          ) : tab === 'today' ? (
-            <div className="space-y-2">
-              {calFiltered.map(a => <ApptCard key={a.id} appt={a} />)}
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {[...grouped!.entries()].map(([date, appts]) => {
-                const d = parseISO(date);
-                const label = isToday(d) ? 'Hoje'
-                  : isFuture(d) ? format(d, "EEEE, d 'de' MMMM", { locale: ptBR })
-                  : isPast(d)   ? format(d, "d 'de' MMMM", { locale: ptBR })
-                  : date;
-                return (
-                  <div key={date}>
-                    <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">{label}</p>
-                    <div className="space-y-2">
-                      {appts.map(a => <ApptCard key={a.id} appt={a} />)}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </>
+        </Card>
       )}
 
       {/* ── New Appointment Dialog ── */}
@@ -615,18 +453,21 @@ export default function ProfAgendaView() {
         </DialogContent>
       </Dialog>
 
-      {/* Reject / Cancel confirm dialog */}
+      {/* Recusar / cancelar: pede confirmação */}
       <Dialog open={!!rejectId} onOpenChange={o => !o && setRejectId(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Confirmar cancelamento</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Tem certeza que deseja {appointments.find(a => a.id === rejectId)?.status === 'pending' ? 'recusar' : 'cancelar'} este agendamento? O cliente será notificado.
+            Tem certeza que deseja {rejectTarget?.status === 'pending' ? 'recusar' : 'cancelar'} este agendamento? O cliente será notificado.
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectId(null)}>Voltar</Button>
-            <Button variant="destructive" onClick={() => { if (rejectId) cancelAppointment(rejectId); setRejectId(null); }}>
+            <Button variant="outline" className="min-h-11" onClick={() => setRejectId(null)}>Voltar</Button>
+            <Button variant="destructive" className="min-h-11" onClick={() => {
+              const id = rejectId; setRejectId(null);
+              if (id) void run(id, () => cancelAppointment(id));
+            }}>
               Confirmar
             </Button>
           </DialogFooter>

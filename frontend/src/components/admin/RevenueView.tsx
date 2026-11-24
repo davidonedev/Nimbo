@@ -7,9 +7,10 @@ import {
   startOfYear, endOfYear,
   eachDayOfInterval, eachWeekOfInterval, eachMonthOfInterval,
   differenceInDays,
+  addDays, addWeeks, addMonths, addYears, subDays, subMonths,
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CalendarRange } from 'lucide-react';
+import { CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,13 +22,23 @@ import type { RevenueRange } from '@/types';
 
 const PIE_PALETTE = ['#2563eb','#16a34a','#d97706','#dc2626','#0891b2','#db2777'];
 
+/** Rótulo do período em andamento (o botão central do navegador, no período atual). */
 const RANGE_LABELS: Record<RevenueRange, string> = {
   day:    'Hoje',
-  week:   'Esta Semana',
-  month:  'Este Mês',
-  year:   'Este Ano',
+  week:   'Esta semana',
+  month:  'Este mês',
+  year:   'Este ano',
   custom: 'Personalizado',
 };
+
+/** Rótulo curto do seletor, para caber os cinco numa linha só no celular. */
+const RANGE_SHORT: Record<RevenueRange, string> = {
+  day: 'Hoje', week: 'Semana', month: 'Mês', year: 'Ano', custom: 'Período',
+};
+
+const RANGE_ORDER: RevenueRange[] = ['day', 'week', 'month', 'year', 'custom'];
+
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export default function RevenueView() {
   const { appointments, services, professionals, tenant } = useTenant();
@@ -35,6 +46,9 @@ export default function RevenueView() {
   const COLORS = [adminColor, ...PIE_PALETTE];
 
   const [range, setRange] = useState<RevenueRange>('month');
+  /** Quantos períodos para trás (0 = o atual). Não há como avançar para o futuro. */
+  const [offset, setOffset] = useState(0);
+  const changeRange = (r: RevenueRange) => { setRange(r); setOffset(0); };
 
   // Custom range defaults: last 30 days
   const [customStart, setCustomStart] = useState(() => format(startOfMonth(new Date()), 'yyyy-MM-dd'));
@@ -49,12 +63,12 @@ export default function RevenueView() {
       return { start: startOfDay(s), end: endOfDay(e > s ? e : s) };
     }
     switch (range) {
-      case 'day':   return { start: startOfDay(now),  end: endOfDay(now)  };
-      case 'week':  return { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) };
-      case 'month': return { start: startOfMonth(now), end: endOfMonth(now) };
-      case 'year':  return { start: startOfYear(now),  end: endOfYear(now)  };
+      case 'day':   { const d = addDays(now, offset);   return { start: startOfDay(d), end: endOfDay(d) }; }
+      case 'week':  { const d = addWeeks(now, offset);  return { start: startOfWeek(d, { weekStartsOn: 1 }), end: endOfWeek(d, { weekStartsOn: 1 }) }; }
+      case 'month': { const d = addMonths(now, offset); return { start: startOfMonth(d), end: endOfMonth(d) }; }
+      case 'year':  { const d = addYears(now, offset);  return { start: startOfYear(d), end: endOfYear(d) }; }
     }
-  }, [range, customStart, customEnd]);
+  }, [range, offset, customStart, customEnd]);
 
   // ── Filtered appointments ───────────────────────────────────────────────────
   const completedInRange = useMemo(() =>
@@ -122,71 +136,103 @@ export default function RevenueView() {
   }));
 
   // ── Period label ────────────────────────────────────────────────────────────
-  const periodLabel = range === 'custom'
-    ? `${format(interval.start, "d 'de' MMM", { locale: ptBR })} → ${format(interval.end, "d 'de' MMM 'de' yyyy", { locale: ptBR })}`
-    : RANGE_LABELS[range];
+  const periodDetail = (() => {
+    const d = (date: Date, pattern: string) => format(date, pattern, { locale: ptBR });
+    if (range === 'custom') return `${d(interval.start, "d 'de' MMM")} → ${d(interval.end, "d 'de' MMM 'de' yyyy")}`;
+    if (range === 'day') return capitalize(d(interval.start, "EEEE, d 'de' MMMM"));
+    if (range === 'week') return `${d(interval.start, "d 'de' MMM")} – ${d(interval.end, "d 'de' MMM")}`;
+    if (range === 'month') return capitalize(d(interval.start, "MMMM 'de' yyyy"));
+    return d(interval.start, 'yyyy');
+  })();
+  // Botão central do navegador: "Hoje", "Esta semana"… no período atual; "Ontem", "Semana passada" ou as datas nos anteriores.
+  const periodName = offset === 0 ? RANGE_LABELS[range]
+    : range === 'day' && offset === -1 ? 'Ontem'
+    : range === 'week' && offset === -1 ? 'Semana passada'
+    : periodDetail;
 
+  const setCustomPreset = (key: '7d' | '30d' | 'lastMonth') => {
+    const today = new Date();
+    const iso = (date: Date) => format(date, 'yyyy-MM-dd');
+    if (key === 'lastMonth') {
+      const lm = subMonths(today, 1);
+      setCustomStart(iso(startOfMonth(lm))); setCustomEnd(iso(endOfMonth(lm)));
+    } else {
+      setCustomStart(iso(subDays(today, key === '7d' ? 6 : 29))); setCustomEnd(iso(today));
+    }
+  };
+  const invalidCustom = customStart > customEnd;
   return (
     <div className="space-y-6">
 
-      {/* Header + range selector */}
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">Faturamento</h2>
-            <p className="text-muted-foreground text-sm">{periodLabel}</p>
-          </div>
-          <div className="flex gap-1 border rounded-md overflow-hidden w-fit flex-wrap">
-            {(['day','week','month','year','custom'] as RevenueRange[]).map(r => (
-              <Button
-                key={r}
-                variant={range === r ? 'default' : 'ghost'}
-                size="sm"
-                className="rounded-none"
-                onClick={() => setRange(r)}
-              >
-                {r === 'custom' ? <><CalendarRange className="h-3.5 w-3.5 mr-1" />Período</> : RANGE_LABELS[r]}
-              </Button>
-            ))}
-          </div>
+      {/* Header + filtros de período */}
+      <div className="space-y-3">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Faturamento</h2>
+          <p className="text-muted-foreground text-sm" aria-live="polite">{periodDetail}</p>
         </div>
 
-        {/* Custom date range inputs */}
+        <div role="radiogroup" aria-label="Período do relatório" className="flex gap-1 overflow-x-auto rounded-xl bg-muted/50 p-1 sm:w-fit">
+          {RANGE_ORDER.map(r => (
+            <button
+              key={r} type="button" role="radio" aria-checked={range === r}
+              onClick={() => changeRange(r)}
+              className={`inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-sm font-medium sm:px-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:flex-none ${range === r ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              {r === 'custom' && <CalendarRange className="hidden h-3.5 w-3.5 sm:block" aria-hidden />}{RANGE_SHORT[r]}
+            </button>
+          ))}
+        </div>
+
+        {range !== 'custom' && (
+          <div className="flex items-center gap-1 rounded-xl border bg-card p-1 sm:w-fit sm:min-w-[20rem]">
+            <Button type="button" variant="ghost" size="icon" className="h-11 w-11 shrink-0 sm:h-10 sm:w-10" onClick={() => setOffset(o => o - 1)} aria-label="Período anterior">
+              <ChevronLeft className="h-4 w-4" aria-hidden />
+            </Button>
+            <button
+              type="button" disabled={offset === 0} onClick={() => setOffset(0)}
+              aria-label={offset === 0 ? `Período atual: ${periodName}` : `${periodName}. Voltar para ${RANGE_LABELS[range].toLowerCase()}`}
+              className="flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center rounded-lg px-2 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default sm:min-h-10"
+            >
+              <span className="max-w-full truncate text-sm font-semibold">{periodName}</span>
+              {offset !== 0 && <span className="text-xs text-primary">Voltar para {RANGE_LABELS[range].toLowerCase()}</span>}
+            </button>
+            <Button type="button" variant="ghost" size="icon" className="h-11 w-11 shrink-0 sm:h-10 sm:w-10" onClick={() => setOffset(o => Math.min(0, o + 1))} disabled={offset === 0} aria-label="Próximo período">
+              <ChevronRight className="h-4 w-4" aria-hidden />
+            </Button>
+          </div>
+        )}
+
+        {/* Período personalizado: atalhos + datas */}
         {range === 'custom' && (
           <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
+            <CardContent className="space-y-4 p-4">
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Atalhos de período">
+                {([['7d', 'Últimos 7 dias'], ['30d', 'Últimos 30 dias'], ['lastMonth', 'Mês passado']] as const).map(([key, label]) => (
+                  <Button key={key} type="button" variant="outline" size="sm" className="h-11 rounded-full px-4 sm:h-9" onClick={() => setCustomPreset(key)}>{label}</Button>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:max-w-md">
                 <div className="space-y-1">
-                  <Label className="text-xs">Data inicial</Label>
-                  <Input
-                    type="date"
-                    value={customStart}
-                    max={customEnd}
-                    onChange={e => setCustomStart(e.target.value)}
-                    className="w-44"
-                  />
+                  <Label htmlFor="rev-from" className="text-xs">Data inicial</Label>
+                  <Input id="rev-from" type="date" className="h-11 min-w-0 px-2" value={customStart} max={customEnd} onChange={e => setCustomStart(e.target.value)} />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Data final</Label>
-                  <Input
-                    type="date"
-                    value={customEnd}
-                    min={customStart}
-                    max={format(new Date(), 'yyyy-MM-dd')}
-                    onChange={e => setCustomEnd(e.target.value)}
-                    className="w-44"
-                  />
-                </div>
-                <div className="text-xs text-muted-foreground self-center sm:self-end pb-2">
-                  {spanDays} {spanDays === 1 ? 'dia' : 'dias'} selecionado{spanDays !== 1 ? 's' : ''}
-                  {useWeeks ? ' · agrupado por semana' : useMonths ? ' · agrupado por mês' : ' · agrupado por dia'}
+                  <Label htmlFor="rev-to" className="text-xs">Data final</Label>
+                  <Input id="rev-to" type="date" className="h-11 min-w-0 px-2" value={customEnd} min={customStart} max={format(new Date(), 'yyyy-MM-dd')} onChange={e => setCustomEnd(e.target.value)} />
                 </div>
               </div>
+              {invalidCustom ? (
+                <p role="alert" className="text-sm text-destructive">A data inicial é depois da data final. Ajuste o período.</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {spanDays} {spanDays === 1 ? 'dia' : 'dias'} selecionado{spanDays !== 1 ? 's' : ''}
+                  {useWeeks ? ' · agrupado por semana' : useMonths ? ' · agrupado por mês' : ' · agrupado por dia'}
+                </p>
+              )}
             </CardContent>
           </Card>
         )}
       </div>
-
       {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
@@ -198,7 +244,7 @@ export default function RevenueView() {
           <Card key={kpi.label}>
             <CardContent className="pt-6">
               <p className="text-muted-foreground text-sm">{kpi.label}</p>
-              <p className={`text-2xl font-bold mt-1 ${kpi.className ?? ''}`}>{kpi.value}</p>
+              <p className={`mt-1 text-xl font-bold tabular-nums sm:text-2xl ${kpi.className ?? ''}`}>{kpi.value}</p>
             </CardContent>
           </Card>
         ))}

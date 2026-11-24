@@ -17,9 +17,12 @@ export function CancellationsCard({ data, loading, error, onRetry }: Props) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
-          <XCircle className="h-5 w-5 text-red-500 dark:text-red-400" aria-hidden />
-          Cancelamentos e faltas recentes
-          <Badge variant="outline" className="ml-auto text-xs font-normal">últimos 7 dias</Badge>
+          <XCircle className="h-5 w-5 shrink-0 text-red-500 dark:text-red-400" aria-hidden />
+          <span className="min-w-0 flex-1 leading-tight">Cancelamentos e faltas recentes</span>
+          {/* Nunca quebra de linha: em tela estreita encurta de "últimos 7 dias" para "7 dias". */}
+          <Badge variant="outline" className="shrink-0 whitespace-nowrap text-xs font-normal">
+            <span className="hidden min-[400px]:inline">últimos&nbsp;</span>7 dias
+          </Badge>
         </CardTitle>
       </CardHeader>
       <CardContent>

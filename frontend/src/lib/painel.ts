@@ -17,6 +17,12 @@ export function dayNumber(isoDay: string): string {
   return isoDay.split('-')[2];
 }
 
+/** "2026-11-26" → "Quinta-feira, 26 de novembro". */
+export function longDayLabel(isoDay: string): string {
+  const s = format(parseISO(isoDay), "EEEE, d 'de' MMMM", { locale: ptBR });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 /** Rótulo do próximo agendamento: "Hoje", "Amanhã" ou "qui, 14/11". */
 export function relativeDayLabel(isoDay: string, todayIso: string): string {
   if (isoDay === todayIso) return 'Hoje';
