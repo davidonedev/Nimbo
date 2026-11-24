@@ -1,0 +1,310 @@
+package com.agendepro.audit;
+
+import com.agendepro.appointment.Appointment;
+import com.agendepro.appointment.AppointmentStatus;
+import com.agendepro.appointment.OwnerPendingReminderService;
+import com.agendepro.appointment.PendingExpiryService;
+import com.agendepro.client.Client;
+import com.fasterxml.jackson.databind.JsonNode;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+/** AUDITORIA — B. Alternativos: recusa, cancelamento e reagendamento, falta, pendente sem resposta, cliente recorrente. */
+class AlternativosAuditTest extends AuditBase {
+
+    @Autowired private PendingExpiryService pendingExpiryService;
+    @Autowired private OwnerPendingReminderService ownerReminderService;
+
+    private Appointment confirmedIn(Ctx c, Client client, int days, String start, String end) {
+        return appt(c, client, LocalDate.now(SP).plusDays(days).toString(), start, end, AppointmentStatus.CONFIRMED);
+    }
+
+    private org.springframework.test.web.servlet.ResultActions clientCancel(Ctx c, Appointment a, Client who) throws Exception {
+        return mockMvc.perform(patch("/api/public/" + c.tenant.getSlug() + "/appointments/" + a.getId() + "/cancel")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"clientId\":\"" + who.getId() + "\"}"));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions clientReschedule(Ctx c, Appointment a, Client who, String day, String time) throws Exception {
+        return mockMvc.perform(patch("/api/public/" + c.tenant.getSlug() + "/appointments/" + a.getId() + "/reschedule")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"clientId\":\"" + who.getId() + "\",\"date\":\"" + day + "\",\"startTime\":\"" + time + "\"}"));
+    }
+
+    // ── B1. Admin recusa ───────────────────────────────────────────────────────────────────────────
+
+    @Test
+    void b1_refusing_cancelsTheAppointment_andFreesTheSlot() throws Exception {
+        Ctx c = ctx();
+        book(c, "Cliente Recusado", uniquePhone(), "10:00", null, 200);
+        Appointment a = appointmentsOf(c.tenant).get(0);
+        assertThat(slots(c, date)).doesNotContain("10:00");
+
+        patchStatus(adminToken(c.tenant), a.getId(), "cancelled").andExpect(status().isOk());
+
+        assertThat(reload(a).getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
+        assertThat(slots(c, date)).contains("10:00");
+        book(c, "Novo Cliente", uniquePhone(), "10:00", null, 200); // o horário voltou a ser reservável
+    }
+
+    @Test
+    void gap_b1_refusalHasNoReason_andNobodyIsNotified() throws Exception {
+        // documenta lacuna: não existe status "recusado", nem motivo, nem aviso ao cliente
+        Ctx c = ctx();
+        String phone = uniquePhone();
+        book(c, "Cliente Recusado", phone, "10:00", null, 200);
+        Appointment a = appointmentsOf(c.tenant).get(0);
+        Mockito.clearInvocations(whatsappService, emailService);
+
+        mockMvc.perform(patch("/api/admin/appointments/" + a.getId() + "/status").header("Authorization", bearer(adminToken(c.tenant)))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"cancelled\",\"reason\":\"Fechado nesse dia\"}"))
+                .andExpect(status().isOk());
+
+        assertThat(reload(a).getNotes()).isNull();          // o motivo enviado foi descartado
+        assertThat(whatsappRecipients()).isEmpty();
+        Mockito.verifyNoInteractions(emailService);
+    }
+
+    @Test
+    void gap_b2_adminHasNoRescheduleOrSuggestAnotherTimeEndpoint() throws Exception {
+        // documenta lacuna: só o cliente reagenda (rota pública); o admin não remarca nem sugere outro horário
+        Ctx c = ctx();
+        Client client = clientWithPhone(c.tenant, uniquePhone());
+        Appointment a = confirmedIn(c, client, 2, "10:00", "10:30");
+        String token = adminToken(c.tenant);
+
+        mockMvc.perform(patch("/api/admin/appointments/" + a.getId()).header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"date\":\"" + date + "\",\"startTime\":\"15:00\"}"))
+                .andExpect(status().is4xxClientError());
+        mockMvc.perform(patch("/api/admin/appointments/" + a.getId() + "/reschedule").header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"date\":\"" + date + "\",\"startTime\":\"15:00\"}"))
+                .andExpect(status().is4xxClientError());
+        assertThat(reload(a).getStartTime()).isEqualTo("10:00");
+    }
+
+    // ── B3. Cliente cancela ────────────────────────────────────────────────────────────────────────
+
+    @Test
+    void b3_clientCancelsWithEnoughNotice_slotIsFreed() throws Exception {
+        Ctx c = ctx();
+        Client client = clientWithPhone(c.tenant, uniquePhone());
+        Appointment a = confirmedIn(c, client, 2, "10:00", "10:30");
+
+        clientCancel(c, a, client).andExpect(status().isOk());
+
+        assertThat(reload(a).getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
+        assertThat(slots(c, date)).contains("10:00");
+    }
+
+    @Test
+    void b3_clientCannotCancelOrRescheduleWithLessThanOneHourNotice() throws Exception {
+        Ctx c = ctx();
+        Client client = clientWithPhone(c.tenant, uniquePhone());
+        Appointment a = appt(c, client, LocalDateTime.now(SP).plusMinutes(20), AppointmentStatus.CONFIRMED);
+
+        assertThat(body(clientCancel(c, a, client).andExpect(status().isBadRequest())).get("code").asText()).isEqualTo("CANCELLATION_WINDOW_EXPIRED");
+        assertThat(body(clientReschedule(c, a, client, date, "15:00").andExpect(status().isBadRequest())).get("code").asText()).isEqualTo("RESCHEDULE_WINDOW_EXPIRED");
+        assertThat(reload(a).getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
+    }
+
+    @Test
+    void gap_b3_clientCancellationDoesNotNotifyTheAdmin() throws Exception {
+        // documenta lacuna: inverter ao corrigir (o fluxo-alvo exige aviso ao admin quando o cliente cancela)
+        Ctx c = ctx();
+        Client client = clientWithPhone(c.tenant, uniquePhone());
+        Appointment a = confirmedIn(c, client, 2, "10:00", "10:30");
+        Mockito.clearInvocations(whatsappService, emailService);
+
+        clientCancel(c, a, client).andExpect(status().isOk());
+
+        assertThat(whatsappSentTo(c.tenant.getPhone())).isFalse();
+        assertThat(emailCallsMentioning(c.tenant.getEmail())).isEmpty();
+    }
+
+    // ── B4. Cliente reagenda ───────────────────────────────────────────────────────────────────────
+
+    @Test
+    void b4_clientReschedules_slotMoves_andRemindersAreReset() throws Exception {
+        Ctx c = ctx();
+        Client client = clientWithPhone(c.tenant, uniquePhone());
+        Appointment a = confirmedIn(c, client, 2, "10:00", "10:30");
+        a.setReminder24hSentAt(Instant.now());
+        a.setReminder2hSentAt(Instant.now());
+        appointmentRepository.save(a);
+
+        clientReschedule(c, a, client, date, "15:00").andExpect(status().isOk());
+
+        Appointment moved = reload(a);
+        assertThat(moved.getStartTime()).isEqualTo("15:00");
+        assertThat(moved.getEndTime()).isEqualTo("15:30");
+        assertThat(moved.getReminder24hSentAt()).isNull();
+        assertThat(moved.getReminder2hSentAt()).isNull();
+        assertThat(slots(c, date)).contains("10:00").doesNotContain("15:00");
+    }
+
+    @Test
+    void b4_rescheduleIntoABlockedSlotIsRejected() throws Exception {
+        Ctx c = ctx();
+        Client client = clientWithPhone(c.tenant, uniquePhone());
+        Appointment a = confirmedIn(c, client, 2, "10:00", "10:30");
+        fixtures.blockedSlot(c.tenant, c.professional, date, "15:00", "16:00");
+
+        assertThat(body(clientReschedule(c, a, client, date, "15:00").andExpect(status().isConflict())).get("code").asText()).isEqualTo("SCHEDULE_CONFLICT");
+    }
+
+    @Test
+    void gap_b4_rescheduleKeepsConfirmedStatus_andDoesNotNotifyTheAdmin() throws Exception {
+        // documenta lacuna: um CONFIRMED movido pelo cliente continua CONFIRMED sem o admin saber
+        Ctx c = ctx();
+        Client client = clientWithPhone(c.tenant, uniquePhone());
+        Appointment a = confirmedIn(c, client, 2, "10:00", "10:30");
+        Mockito.clearInvocations(whatsappService, emailService);
+
+        clientReschedule(c, a, client, date, "15:00").andExpect(status().isOk());
+
+        assertThat(reload(a).getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
+        assertThat(whatsappSentTo(c.tenant.getPhone())).isFalse();
+        assertThat(emailCallsMentioning(c.tenant.getEmail())).isEmpty();
+    }
+
+    @Test
+    void gap_b4_rescheduleDoesNotRevalidateWorkingHoursOrPastDates() throws Exception {
+        // documenta lacuna: o reagendamento só checa conflito — aceita fora do expediente e data passada
+        Ctx c = ctx();
+        Client client = clientWithPhone(c.tenant, uniquePhone());
+        Appointment outsideHours = confirmedIn(c, client, 2, "10:00", "10:30");
+        clientReschedule(c, outsideHours, client, date, "03:00").andExpect(status().isOk()); // expediente é 08:00–18:00
+        assertThat(reload(outsideHours).getStartTime()).isEqualTo("03:00");
+
+        Appointment toPast = confirmedIn(c, client, 3, "10:00", "10:30");
+        String yesterday = LocalDate.now(SP).minusDays(1).toString();
+        clientReschedule(c, toPast, client, yesterday, "10:00").andExpect(status().isOk());
+        assertThat(reload(toPast).getDate()).isEqualTo(yesterday);
+    }
+
+    // ── B5. Falta (no-show) e Painel ───────────────────────────────────────────────────────────────
+
+    @Test
+    void b5_noShow_isRecordedAndCountedInTheDashboard() throws Exception {
+        Ctx c = ctx();
+        Client client = clientWithPhone(c.tenant, uniquePhone());
+        Appointment missed = confirmedIn(c, client, 0, "09:00", "09:30");
+        Appointment cancelled = confirmedIn(c, client, 0, "10:00", "10:30");
+        String token = adminToken(c.tenant);
+
+        patchStatus(token, missed.getId(), "no_show").andExpect(status().isOk());
+        patchStatus(token, cancelled.getId(), "cancelled").andExpect(status().isOk());
+
+        JsonNode summary = json.readTree(mockMvc.perform(get("/api/admin/dashboard/summary").header("Authorization", bearer(token)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).get("data");
+        assertThat(summary.get("cancellations").get("noShow").asInt()).isEqualTo(1);
+        assertThat(summary.get("cancellations").get("cancelled").asInt()).isEqualTo(1);
+        assertThat(summary.get("cancellations").get("total").asInt()).isEqualTo(2);
+
+        JsonNode detail = json.readTree(mockMvc.perform(get("/api/admin/clients/" + client.getId()).header("Authorization", bearer(token)))
+                .andReturn().getResponse().getContentAsString()).get("data");
+        assertThat(detail.get("appointments")).extracting(n -> n.get("status").asText()).contains("no_show", "cancelled");
+    }
+
+    // ── B6. Pendente que ninguém responde ──────────────────────────────────────────────────────────
+
+    @Test
+    void b6_clientNeverTaps_slotIsReleasedAfterTheDeadline() throws Exception {
+        Ctx c = ctx();
+        book(c, "Cliente Sumido", uniquePhone(), "10:00", null, 200);
+        Appointment a = appointmentsOf(c.tenant).get(0);
+        assertThat(a.getConfirmBy()).isNotNull();
+
+        pendingExpiryService.expire(Instant.now().plus(4, ChronoUnit.HOURS)); // prazo do cliente é 3 h
+
+        assertThat(reload(a).getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
+        assertThat(slots(c, date)).contains("10:00");
+    }
+
+    @Test
+    void gap_b6_ownerSilentAfterClientConfirmed_neverExpires_andOwnerIsRemindedOnlyByEmail() throws Exception {
+        // documenta lacuna: o aviso ao dono é só e-mail (nada por WhatsApp); sem resposta o horário fica preso para sempre
+        Ctx c = ctx();
+        book(c, "Cliente Confirmou", uniquePhone(), "10:00", null, 200);
+        Appointment a = appointmentsOf(c.tenant).get(0);
+        mockMvc.perform(post("/api/public/" + c.tenant.getSlug() + "/book/client-confirmed").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"appointmentIds\":[\"" + a.getId() + "\"]}")).andExpect(status().isOk());
+
+        pendingExpiryService.expire(Instant.now().plus(365, ChronoUnit.DAYS));
+        assertThat(reload(a).getStatus()).isEqualTo(AppointmentStatus.PENDING); // nunca expira
+
+        // faltam ~100 min: o único aviso é o e-mail ao dono (2 h antes)
+        LocalDateTime start = LocalDateTime.now(SP).plusMinutes(100);
+        Appointment moved = reload(a);
+        moved.setDate(start.toLocalDate().toString());
+        moved.setStartTime(start.format(HHMM));
+        appointmentRepository.save(moved);
+        Mockito.clearInvocations(whatsappService, emailService);
+
+        ownerReminderService.run(Instant.now());
+
+        Mockito.verify(emailService).sendOwnerPendingReminder(eq(c.tenant.getEmail()), eq(c.tenant.getName()), eq("2 horas"), any(), any());
+        assertThat(whatsappSentTo(c.tenant.getPhone())).isFalse();
+    }
+
+    @Test
+    void gap_b6_tenantWithoutPhone_pendingBookingsHaveNoDeadlineAndNeverExpire() throws Exception {
+        // documenta lacuna: sem telefone do estabelecimento o cliente não tem como confirmar e o pedido nunca expira
+        Ctx c = ctx(false, 30);
+        JsonNode data = book(c, "Cliente Sem Destino", uniquePhone(), "10:00", null, 200).get("data");
+        assertThat(data.get("kind").asText()).isEqualTo("pending_confirmation");
+        assertThat(data.get("confirmBy").isNull()).isTrue();
+
+        pendingExpiryService.expire(Instant.now().plus(365, ChronoUnit.DAYS));
+        assertThat(appointmentsOf(c.tenant).get(0).getStatus()).isEqualTo(AppointmentStatus.PENDING);
+        assertThat(slots(c, date)).doesNotContain("10:00"); // horário segue preso
+    }
+
+    // ── B7. Cliente recorrente ─────────────────────────────────────────────────────────────────────
+
+    @Test
+    void b7_returningClientOnTheSameDevice_bookingIsDirect_noNewCode_noDuplicateClient() throws Exception {
+        Ctx c = ctx();
+        String phone = uniquePhone();
+        String deviceToken = bookWithCode(c, "Cliente Fiel", phone, "10:00").get("data").get("deviceToken").asText();
+        Mockito.clearInvocations(whatsappService);
+
+        JsonNode second = book(c, "Cliente Fiel", phone, "11:00", deviceToken, 200).get("data");
+
+        assertThat(second.get("kind").asText()).isEqualTo("booked");
+        Mockito.verify(whatsappService, Mockito.never()).sendNow(any(), any(), any());
+        long clientsWithPhone = clientRepository.findAll().stream()
+                .filter(cl -> cl.getTenantId().equals(c.tenant.getId()) && e164(phone).equals(cl.getPhoneE164())).count();
+        assertThat(clientsWithPhone).isEqualTo(1);
+
+        String clientId = appointmentsOf(c.tenant).get(0).getClientId().toString();
+        JsonNode detail = json.readTree(mockMvc.perform(get("/api/admin/clients/" + clientId).header("Authorization", bearer(adminToken(c.tenant))))
+                .andReturn().getResponse().getContentAsString()).get("data");
+        assertThat(detail.get("appointments")).hasSize(2);
+    }
+
+    @Test
+    void b7_sameClientFromAnotherDevice_isAskedForANewCode() throws Exception {
+        Ctx c = ctx();
+        String phone = uniquePhone();
+        bookWithCode(c, "Cliente Fiel", phone, "10:00");
+
+        JsonNode second = book(c, "Cliente Fiel", phone, "11:00", null, 200).get("data"); // sem o token do aparelho
+        assertThat(second.get("kind").asText()).isEqualTo("challenge_required");
+    }
+
+}
