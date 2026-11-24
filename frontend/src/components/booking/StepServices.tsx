@@ -1,21 +1,23 @@
 import { useMemo, useState } from 'react';
 import { ArrowRight, Check, Plus, RotateCcw, X } from 'lucide-react';
+import { usePublicTenant } from '@/context/PublicTenantContext';
 import { useBooking } from './BookingContext';
 import { StepHeader } from './parts';
 import { formatDuration, priceLabel } from './bookingFormat';
 
 /** Passo 1/3 — escolher o serviço. Tocar no cartão agenda esse serviço; o "+" junta vários numa vez só. */
 export default function StepServices() {
-  const { services, selectedServices, possession, go } = useBooking();
+  const { services, bookableServices, selectedServices, possession, go } = useBooking();
+  const { data: { tenant } } = usePublicTenant();
   const [category, setCategory] = useState<string | null>(null);
 
-  const categories = useMemo(() => [...new Set(services.map(s => s.category).filter(Boolean))], [services]);
-  const visible = category ? services.filter(s => s.category === category) : services;
+  const categories = useMemo(() => [...new Set(bookableServices.map(s => s.category).filter(Boolean))], [bookableServices]);
+  const visible = category ? bookableServices.filter(s => s.category === category) : bookableServices;
   const chosen = selectedServices.map(s => s.id);
   const isOn = (id: string) => chosen.includes(id);
 
   const lastService = possession?.recognized && possession.lastServiceId
-    ? services.find(s => s.id === possession.lastServiceId)
+    ? bookableServices.find(s => s.id === possession.lastServiceId)
     : undefined;
 
   const setChosen = (ids: string[]) => go('servico', { s: ids }, { replace: true });
@@ -54,6 +56,11 @@ export default function StepServices() {
 
       {services.length === 0 ? (
         <p className="bk-empty">Este estabelecimento ainda não cadastrou serviços.</p>
+      ) : bookableServices.length === 0 ? (
+        <p className="bk-empty" role="status">
+          O agendamento online deste estabelecimento ainda não está disponível.
+          {tenant.phone ? <> Fale com eles pelo <a href={`tel:${tenant.phone.replace(/[^0-9+]/g, '')}`}>{tenant.phone}</a>.</> : ' Fale diretamente com o estabelecimento.'}
+        </p>
       ) : (
         <ul className="bk-services" style={{ listStyle: 'none', padding: 0 }}>
           {visible.map(s => (

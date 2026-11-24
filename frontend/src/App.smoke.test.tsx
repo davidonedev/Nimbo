@@ -69,7 +69,9 @@ function respond(method: string, path: string): { status: number; body: unknown 
     if (path === '/api/public/login-data') return ok([]);
     if (path === '/api/public/studio') return ok(publicTenantDto);
     if (path === '/api/public/studio/services') return ok([service]);
-    if (path === '/api/public/studio/professionals') return ok([{ ...professionalDto, appointmentCount: undefined }]);
+    if (path === '/api/public/studio/professionals') {
+      return ok([{ ...professionalDto, services: professionalLinked ? professionalDto.services : [], appointmentCount: undefined }]);
+    }
     if (path === '/api/public/studio/products') return ok([]);
     if (path === '/api/public/studio/availability') return ok(['09:00', '10:00']);
     if (path === '/api/public/studio/book/possession') return ok({ recognized: false, fullName: null, phone: null, lastServiceId: null });
@@ -95,6 +97,8 @@ let unexpected: string[] = [];
 let posted: string[] = [];
 /** 'challenge' = estabelecimento com WhatsApp (código); 'pending' = sem código (reserva pendente + confirmação pelo WhatsApp). */
 let bookMode: 'challenge' | 'pending' = 'challenge';
+/** false = o profissional existe, mas ninguém o vinculou a nenhum serviço (caso do Max Barber). */
+let professionalLinked = true;
 
 beforeEach(() => {
   sessionStorage.clear();
@@ -102,6 +106,7 @@ beforeEach(() => {
   unexpected = [];
   posted = [];
   bookMode = 'challenge';
+  professionalLinked = true;
   setViewportWidth(1280);
   Element.prototype.scrollIntoView = vi.fn(); // jsdom não implementa
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -177,6 +182,30 @@ describe('portal público do cliente', { timeout: 60000 }, () => {
     expect(screen.getAllByText('Corte feminino').length).toBeGreaterThan(0);
     expect(screen.getByText(/R\$\s?80,00/)).toBeTruthy();
     expect(unexpected).toEqual([]);
+  });
+
+  it('profissional sem serviço vinculado: o cliente vê um aviso claro, e não uma lista que não dá para agendar', async () => {
+    professionalLinked = false;
+    open('/studio');
+    expect(await screen.findByText(/O agendamento online deste estabelecimento ainda não está disponível/, undefined, T)).toBeTruthy();
+    expect(screen.queryByText('Corte feminino')).toBeNull();
+    const phoneLinks = screen.getAllByRole('link', { name: '(11) 98888-7777' });
+    expect(phoneLinks.length).toBeGreaterThan(0);
+    expect(phoneLinks.some(a => a.getAttribute('href') === 'tel:11988887777')).toBe(true);
+  });
+
+  it('link direto de um serviço que ninguém atende explica o problema do serviço, sem falar em "juntos"', async () => {
+    professionalLinked = false;
+    open('/studio/horario?s=s1');
+    expect(await screen.findByText(/Este serviço ainda não tem profissional disponível para agendamento online/, undefined, T)).toBeTruthy();
+    expect(screen.queryByText(/faz todos esses serviços juntos/)).toBeNull();
+  });
+
+  it('com o profissional vinculado o serviço aparece e o agendamento segue normal', async () => {
+    open('/studio');
+    expect(await screen.findByText('Qual serviço você quer agendar?', undefined, T)).toBeTruthy();
+    expect(screen.getAllByText('Corte feminino').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/ainda não está disponível/)).toBeNull();
   });
 
   it('/:slug/booking (link antigo) cai no agendamento novo', async () => {

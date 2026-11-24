@@ -148,7 +148,11 @@ function TimePicker() {
       )}
 
       {eligible.length === 0 && (
-        <div className="bk-alert" role="alert">Nenhum profissional faz todos esses serviços juntos. Remova um serviço ou agende separado.</div>
+        <div className="bk-alert" role="alert">
+          {selectedServices.length === 1
+            ? 'Este serviço ainda não tem profissional disponível para agendamento online. Escolha outro serviço ou fale com o estabelecimento.'
+            : 'Nenhum profissional faz todos esses serviços juntos. Remova um serviço ou agende separado.'}
+        </div>
       )}
 
       <div className="bk-days-bar">
