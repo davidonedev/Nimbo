@@ -6,6 +6,7 @@ import com.agendepro.tenant.Tenant;
 import com.agendepro.tenant.TenantRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -64,6 +65,21 @@ public class NotificationDispatcher {
     @Scheduled(fixedDelayString = "${app.notifications.check-interval-ms:15000}")
     public void runOnSchedule() {
         if (enabled) run(Instant.now());
+    }
+
+    /**
+     * Envia já o que acabou de ser enfileirado, em segundo plano (chamado logo depois do commit de quem enfileirou),
+     * para a confirmação chegar ao cliente em segundos e não só na próxima rodada do agendador. O que falhar aqui
+     * continua na fila e o agendador tenta de novo. Reservas por SKIP LOCKED impedem envio em dobro.
+     */
+    @Async
+    public void dispatchNow() {
+        if (!enabled) return;
+        try {
+            run(Instant.now());
+        } catch (RuntimeException ex) {
+            log.error("[notificacoes] Envio imediato falhou (o agendador tenta de novo): {}", ex.toString());
+        }
     }
 
     /** Processa as mensagens devidas em {@code now}; devolve quantas foram tentadas. */
