@@ -122,28 +122,28 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
             @Param("excludeId") UUID excludeId);
 
     /**
-     * Agendamentos que precisam de lembrete de 24h:
-     * horário de início (Brasília) entre 23h e 25h a partir de agora, sem lembrete enviado.
+     * Agendamentos CONFIRMADOS que precisam de lembrete de 24h: início (Brasília) entre 20h e 25h a partir de agora,
+     * sem lembrete enfileirado. O piso de 20h recupera o atraso de até 3h de um serviço que dormiu (Render free).
      */
     @Query(value = """
             SELECT * FROM appointments
-            WHERE status NOT IN ('CANCELLED','COMPLETED')
+            WHERE status = 'confirmed'
               AND reminder_24h_sent_at IS NULL
               AND (date || 'T' || start_time || ':00')::timestamp AT TIME ZONE 'America/Sao_Paulo'
-                  BETWEEN (now() + interval '23 hours') AND (now() + interval '25 hours')
+                  BETWEEN (now() + interval '20 hours') AND (now() + interval '25 hours')
             """, nativeQuery = true)
     List<Appointment> findNeedingReminder24h();
 
     /**
-     * Agendamentos que precisam de lembrete de 2h:
-     * horário de início (Brasília) entre 1h e 2.5h a partir de agora, sem lembrete enviado.
+     * Agendamentos CONFIRMADOS que precisam de lembrete de 2h: início (Brasília) entre 30 min e 2h30 a partir de agora,
+     * sem lembrete enfileirado. Faltando menos de 30 min o lembrete já não ajuda.
      */
     @Query(value = """
             SELECT * FROM appointments
-            WHERE status NOT IN ('CANCELLED','COMPLETED')
+            WHERE status = 'confirmed'
               AND reminder_2h_sent_at IS NULL
               AND (date || 'T' || start_time || ':00')::timestamp AT TIME ZONE 'America/Sao_Paulo'
-                  BETWEEN (now() + interval '1 hour') AND (now() + interval '150 minutes')
+                  BETWEEN (now() + interval '30 minutes') AND (now() + interval '150 minutes')
             """, nativeQuery = true)
     List<Appointment> findNeedingReminder2h();
 

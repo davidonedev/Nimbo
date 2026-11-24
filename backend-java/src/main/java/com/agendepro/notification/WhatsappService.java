@@ -23,7 +23,7 @@ public class WhatsappService {
     public static final String REMINDER_24H_TEMPLATE = """
             Olá {{clientName}}! 👋
 
-            Lembrete: você tem um agendamento *amanhã* em *{{tenantName}}*!
+            Lembrete: você tem um agendamento *{{dayLabel}}* em *{{tenantName}}*!
 
             📅 *Data:* {{date}}
             🕐 *Horário:* {{time}}

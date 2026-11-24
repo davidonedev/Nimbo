@@ -360,3 +360,11 @@ Resultado dos testes após as correções: backend 185/185, frontend 432/432, `t
 | #3 notificações (1ª fatia) | Fila `notification_outbox` (V13) com retry e idempotência. Dono recebe e-mail em pedido novo, cancelamento e remarcação pelo cliente. Cliente recebe e-mail e WhatsApp, quando houver canal, ao ser aprovado, recusado ou cancelado. O painel mostra "Avisar no WhatsApp" (link `wa.me`) para quem não tem e-mail nem canal automático |
 
 **Ainda aberto no #3:** push web (exige chaves VAPID e inscrição no service worker), aviso ao cliente na aprovação feita pelo webhook do Pix, e agrupar em uma só mensagem os agendamentos encadeados nas aprovações individuais. O envio por e-mail só funciona depois de configurar `SMTP_USER` e `SMTP_PASS`; sem isso, a fila marca como ignorado.
+
+### Lembretes confiáveis (#6, branch `fix/lembretes-confiaveis`)
+
+- Os lembretes de 24 h e 2 h passaram a ser gravados na fila de avisos, que tenta de novo se o provedor falhar. Antes, o erro era engolido e o lembrete era dado como enviado.
+- Só agendamentos **confirmados** recebem lembrete. A consulta antiga comparava o status em maiúsculas com valores gravados em minúsculas, então o filtro nunca excluía ninguém: cancelados, concluídos, pendentes e faltas também recebiam.
+- Janela de recuperação: o de 24 h sai até 20 h antes (recupera até 3 h de serviço dormindo) e o de 2 h até 30 min antes. Se o envio cair no mesmo dia, a mensagem diz "hoje" em vez de "amanhã".
+- Usam o WhatsApp da plataforma quando o estabelecimento não tem o próprio, e o e-mail do cliente quando houver.
+- Segue aberto: pedir confirmação de presença exige receber a resposta do cliente (webhook de entrada), que não existe.
