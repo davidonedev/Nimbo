@@ -18,7 +18,7 @@ export default function ClientNoticeBar({ notice, onClose, settingsHref }: { not
   const event = notice.event ?? 'approved';
   if (sending.length === 0 && sent.length === 0 && links.length === 0) return null;
   return (
-    <div role="status" className="flex items-start justify-between gap-2 rounded-md border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-900 dark:bg-green-900/20 dark:text-green-200">
+    <div role="status" className="sticky top-2 z-30 flex items-start justify-between gap-2 rounded-md border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-900 shadow-md dark:bg-green-900 dark:text-green-100">
       <div className="min-w-0 space-y-2">
         {sending.length > 0 && (
           <p className="flex items-center gap-2 font-medium">
