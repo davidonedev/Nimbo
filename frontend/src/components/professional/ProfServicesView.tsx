@@ -1,16 +1,14 @@
 import { useState } from 'react';
-import { Clock, DollarSign, Edit2, Loader2, Plus, Tag, Trash2, Search } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Loader2, Plus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { FilterSelect } from '@/components/ui/filter-select';
+import { ServiceCard } from '@/components/services/ServiceCard';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useProfessional } from '@/context/ProfessionalContext';
 import { ApiError } from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
 import type { Service } from '@/types';
 import type { ServicePayload } from '@/services/services.service';
 
@@ -157,43 +155,7 @@ export default function ProfServicesView() {
       {/* Grade de serviços */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {filtered.map(service => (
-          <Card key={service.id} className="group relative overflow-hidden hover:shadow-md transition-shadow">
-            <CardContent className="pt-5 pb-4 px-5">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold truncate">{service.name}</p>
-                  {service.category && (
-                    <Badge variant="outline" className="mt-1 text-xs">
-                      <Tag className="h-2.5 w-2.5 mr-1" />{service.category}
-                    </Badge>
-                  )}
-                </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(service)}>
-                    <Edit2 className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(service)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
-
-              {service.description && (
-                <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{service.description}</p>
-              )}
-
-              <div className="flex items-center gap-4 mt-4 pt-3 border-t">
-                <div className="flex items-center gap-1.5 text-sm font-medium">
-                  <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
-                  {formatCurrency(service.price)}
-                </div>
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <Clock className="h-3.5 w-3.5" />
-                  {service.duration} min
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <ServiceCard key={service.id} service={service} onEdit={openEdit} onDelete={setDeleteTarget} />
         ))}
 
         {filtered.length === 0 && (

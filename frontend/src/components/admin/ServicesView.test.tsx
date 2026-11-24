@@ -21,7 +21,7 @@ vi.mock('@/context/TenantContext', async importOriginal => ({
   useTenant: () => tenantCtx,
 }));
 
-const cards = () => ['Corte', 'Escova', 'Barba', 'Hidratação', 'Sobrancelha'].filter(n => screen.queryByText(n, { selector: 'h3, p, span' }));
+const cards = () => ['Corte', 'Escova', 'Barba', 'Hidratação', 'Sobrancelha'].filter(n => screen.queryByText(n, { selector: 'h3' }));
 
 describe('Serviços (admin): filtros em dropdown', () => {
   it('Categoria e Situação são caixas de seleção, e não há mais fileira de botões de filtro', () => {

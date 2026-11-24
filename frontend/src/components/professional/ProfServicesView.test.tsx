@@ -10,7 +10,7 @@ vi.mock('@/context/ProfessionalContext', () => ({
   useProfessional: () => ({ services, addService: vi.fn(), updateService: vi.fn(), deleteService: vi.fn() }),
 }));
 
-const shown = () => ['Corte', 'Escova', 'Barba'].filter(n => screen.queryByText(n, { selector: 'h3, p, span' }));
+const shown = () => ['Corte', 'Escova', 'Barba'].filter(n => screen.queryByText(n, { selector: 'h3' }));
 
 describe('Serviços (profissional): filtro em dropdown', () => {
   it('a categoria é uma caixa de seleção com contagem, e não uma fileira de botões', () => {
