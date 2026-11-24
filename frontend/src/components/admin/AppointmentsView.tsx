@@ -17,6 +17,8 @@ import {
   type AppointmentFilters, type StatusAction,
 } from '@/lib/appointmentFilters';
 import PendingConfirmations from '@/components/admin/PendingConfirmations';
+import ClientNoticeBar from '@/components/admin/ClientNoticeBar';
+import { useClientNotice } from '@/hooks/useClientNotice';
 import type { Appointment, AppointmentStatus } from '@/types';
 
 const STATUS_OPTIONS: AppointmentStatus[] = ['pending', 'confirmed', 'completed', 'no_show', 'cancelled'];
@@ -73,6 +75,7 @@ function ActionButtons({ row, onAction, busy }: { row: RowData; onAction: (r: Ro
 export default function AppointmentsView() {
   const { appointments, clients, professionals, services, updateAppointmentStatus } = useTenant();
   const { isMobile } = useBreakpoint();
+  const clientNotice = useClientNotice();
   const uid = useId();
   // O texto da busca mora na URL (?q=): a busca global da navbar abre esta tela já filtrada.
   const [params, setParams] = useSearchParams();
@@ -104,8 +107,12 @@ export default function AppointmentsView() {
 
   const apply = async (row: RowData, status: AppointmentStatus) => {
     setError('');
+    clientNotice.clear();
     setBusyId(row.appt.id);
-    try { await updateAppointmentStatus(row.appt.id, status); }
+    try {
+      await updateAppointmentStatus(row.appt.id, status);
+      clientNotice.offer([row.appt], status);
+    }
     catch (err) { setError(statusErrorMessage(err)); }
     finally { setBusyId(null); }
   };
@@ -183,6 +190,7 @@ export default function AppointmentsView() {
       </form>
 
       {error && <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+      <ClientNoticeBar notice={clientNotice.notice} onClose={clientNotice.clear} />
 
       {rows.length === 0 ? (
         <Card><CardContent className="py-12 text-center text-sm text-muted-foreground">

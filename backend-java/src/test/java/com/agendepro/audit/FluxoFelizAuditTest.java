@@ -3,6 +3,7 @@ package com.agendepro.audit;
 import com.agendepro.appointment.Appointment;
 import com.agendepro.appointment.AppointmentStatus;
 import com.agendepro.client.Client;
+import com.agendepro.notification.NotificationOutbox;
 import com.agendepro.reminder.ReminderService;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
@@ -99,17 +100,23 @@ class FluxoFelizAuditTest extends AuditBase {
     }
 
     @Test
-    void gap_a2_newBookingNotifiesTheAdminByNeitherWhatsappNorEmail() throws Exception {
-        // documenta lacuna: inverter ao corrigir (o fluxo-alvo exige aviso ao admin por WhatsApp)
+    void a2_newBookingQueuesTheOwnerNotification_onlyOnceTheRequestIsReal() throws Exception {
         Ctx c = ctx();
-        String phone = uniquePhone();
-        book(c, "Cliente Sem Aviso", phone, "10:00", null, 200);                 // fluxo sem WhatsApp (pendente)
-        bookWithCode(c, "Cliente Com Codigo", uniquePhone(), "11:00");           // fluxo com código
+        book(c, "Cliente Sem Confirmar", uniquePhone(), "10:00", null, 200); // pendente com prazo: o cliente pode nunca confirmar
+        assertThat(outboxOf(c.tenant)).isEmpty();
 
-        assertThat(whatsappSentTo(c.tenant.getPhone())).isFalse();
-        assertThat(emailCallsMentioning(c.tenant.getEmail())).isEmpty();
-        // o único WhatsApp enviado é o código ao próprio cliente
-        assertThat(whatsappRecipients()).noneMatch(r -> r.endsWith(digits(c.tenant.getPhone())));
+        bookWithCode(c, "Cliente Com Codigo", uniquePhone(), "11:00");       // fluxo com código: pedido real
+
+        var email = outboxOf(c.tenant, "NEW_REQUEST", NotificationOutbox.Channel.EMAIL);
+        var wpp = outboxOf(c.tenant, "NEW_REQUEST", NotificationOutbox.Channel.WHATSAPP);
+        assertThat(email).hasSize(1);
+        assertThat(email.get(0).getRecipient()).isEqualTo(c.tenant.getEmail());
+        assertThat(email.get(0).getSubject()).isEqualTo("Novo pedido de agendamento: Cliente Com Codigo");
+        assertThat(wpp).hasSize(1);
+        assertThat(wpp.get(0).getRecipient()).isEqualTo(e164(c.tenant.getPhone()));
+        assertThat(wpp.get(0).getBody()).contains("Cliente Com Codigo", "Aprovar ou recusar:", "/admin/appointments");
+        // a fila só grava: nada saiu enquanto o dispatcher não rodou
+        Mockito.verify(emailService, Mockito.never()).sendNow(any(), any(), any());
     }
 
     // ── A3. Admin aprova ───────────────────────────────────────────────────────────────────────────
@@ -142,18 +149,20 @@ class FluxoFelizAuditTest extends AuditBase {
     }
 
     @Test
-    void gap_a3_approvalSendsNothingToTheClient() throws Exception {
-        // documenta lacuna: inverter ao corrigir (o fluxo-alvo exige WhatsApp de confirmação ao cliente)
+    void a3_approvalQueuesTheClientNotification() throws Exception {
         Ctx c = ctx();
         String phone = uniquePhone();
         book(c, "Cliente Aprovado", phone, "10:00", null, 200);
         Appointment a = appointmentsOf(c.tenant).get(0);
-        Mockito.clearInvocations(whatsappService, emailService);
 
         patchStatus(adminToken(c.tenant), a.getId(), "confirmed").andExpect(status().isOk());
 
-        assertThat(whatsappRecipients()).isEmpty();
-        Mockito.verifyNoInteractions(emailService);
+        var wpp = outboxOf(c.tenant, "APPROVED", NotificationOutbox.Channel.WHATSAPP);
+        assertThat(wpp).hasSize(1);
+        assertThat(wpp.get(0).getRecipient()).isEqualTo(e164(phone));
+        assertThat(wpp.get(0).getBody()).startsWith("Olá, Cliente! Seu horário em " + c.tenant.getName() + " está confirmado:");
+        // cliente do /book não tem e-mail: só WhatsApp
+        assertThat(outboxOf(c.tenant, "APPROVED", NotificationOutbox.Channel.EMAIL)).isEmpty();
     }
 
     // ── A4. Lembretes ──────────────────────────────────────────────────────────────────────────────

@@ -35,6 +35,7 @@ public class AppointmentService {
     private final ClientRepository clientRepository;
     private final ClientService clientService;
     private final PgAdvisoryLockService pgAdvisoryLockService;
+    private final com.agendepro.notification.NotificationService notificationService;
 
     @Transactional(readOnly = true)
     public List<AppointmentResponse> list(
@@ -148,9 +149,21 @@ public class AppointmentService {
                     + " e não pode passar para " + request.status().label() + ". Atualize a tela.", 409, "INVALID_STATUS_TRANSITION");
         }
 
+        AppointmentStatus previous = appointment.getStatus();
         appointment.setStatus(request.status());
         appointment.setConfirmBy(null); // decidido: não expira mais
-        return toResponse(appointmentRepository.save(appointment));
+        Appointment saved = appointmentRepository.save(appointment);
+
+        // Avisos do ciclo (só enfileira; o envio é em segundo plano). Concluir e marcar falta não avisam ninguém.
+        switch (saved.getStatus()) {
+            case CONFIRMED -> notificationService.clientApproved(List.of(saved));
+            case CANCELLED -> {
+                if (previous == AppointmentStatus.PENDING) notificationService.clientRefused(saved);
+                else notificationService.clientCancelledByOwner(saved);
+            }
+            default -> { }
+        }
+        return toResponse(saved);
     }
 
     /** Resultado da confirmação em massa: quantos foram confirmados e quantos já não estavam pendentes. */
@@ -163,13 +176,16 @@ public class AppointmentService {
         List<UUID> distinct = ids.stream().distinct().toList();
         List<Appointment> found = appointmentRepository.findByTenantIdAndIdIn(tenantId, distinct);
         List<UUID> confirmedIds = new java.util.ArrayList<>();
+        List<Appointment> confirmed = new java.util.ArrayList<>();
         for (Appointment a : found) {
             if (a.getStatus() != AppointmentStatus.PENDING) continue;
             a.setStatus(AppointmentStatus.CONFIRMED);
             a.setConfirmBy(null);
             appointmentRepository.save(a);
             confirmedIds.add(a.getId());
+            confirmed.add(a);
         }
+        notificationService.clientApproved(confirmed); // agrupa por cliente, dia e profissional
         return new BulkConfirmResult(confirmedIds.size(), distinct.size() - confirmedIds.size(), confirmedIds);
     }
 

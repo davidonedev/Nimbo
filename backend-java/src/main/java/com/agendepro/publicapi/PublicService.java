@@ -65,6 +65,7 @@ public class PublicService {
     private final ProfessionalService professionalService;
     private final com.agendepro.blockedslot.BlockedSlotRepository blockedSlotRepository;
     private final PgAdvisoryLockService pgAdvisoryLockService;
+    private final com.agendepro.notification.NotificationService notificationService;
 
     @org.springframework.beans.factory.annotation.Value("${app.app-url}")
     private String appUrl;
@@ -328,6 +329,9 @@ public class PublicService {
             throw new AppException("Horário não disponível. Por favor escolha outro horário.", 409, "SCHEDULE_CONFLICT");
         }
 
+        String oldDate = a.getDate();
+        String oldStart = a.getStartTime();
+        boolean ownerKnows = ownerKnowsAbout(a);
         a.setDate(request.date());
         a.setStartTime(newStart);
         a.setEndTime(newEnd);
@@ -335,6 +339,7 @@ public class PublicService {
         a.setReminder24hSentAt(null);
         a.setReminder2hSentAt(null);
         appointmentRepository.save(a);
+        if (ownerKnows) notificationService.ownerClientRescheduled(a, oldDate, oldStart);
 
         return new MessageResponse("Agendamento reagendado com sucesso.");
     }
@@ -362,9 +367,19 @@ public class PublicService {
                     400, "CANCELLATION_WINDOW_EXPIRED");
         }
 
+        boolean ownerKnows = ownerKnowsAbout(appointment);
         appointment.setStatus(AppointmentStatus.CANCELLED);
         appointmentRepository.save(appointment);
+        if (ownerKnows) notificationService.ownerClientCancelled(appointment);
         return new MessageResponse("Agendamento cancelado com sucesso.");
+    }
+
+    /**
+     * O dono só é avisado de um pedido depois que o cliente o confirmou (ver PhoneBookingService). Pendente com prazo e
+     * sem a confirmação do cliente ainda é "rascunho": cancelar ou remarcar esse pedido não precisa incomodar o dono.
+     */
+    private static boolean ownerKnowsAbout(Appointment a) {
+        return !(a.getStatus() == AppointmentStatus.PENDING && a.getConfirmBy() != null && a.getClientConfirmedAt() == null);
     }
 
     // ─── cadastro de profissional público ────────────────────────────────────────

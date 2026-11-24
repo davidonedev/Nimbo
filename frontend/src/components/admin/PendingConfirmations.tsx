@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTenant } from '@/context/TenantContext';
+import { useClientNotice } from '@/hooks/useClientNotice';
+import ClientNoticeBar from '@/components/admin/ClientNoticeBar';
 import { saveErrorMessage } from '@/lib/settingsPayload';
 import { nowBrasilia } from '@/lib/scheduling';
 import type { Appointment } from '@/types';
@@ -26,6 +28,7 @@ function waNumber(phone: string | null | undefined): string | null {
  */
 export default function PendingConfirmations() {
   const { appointments, clients, services, professionals, updateAppointmentStatus, confirmAppointments, refresh } = useTenant();
+  const clientNotice = useClientNotice();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [askBulk, setAskBulk] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -66,10 +69,15 @@ export default function PendingConfirmations() {
 
   // Lista vazia: some, mas deixa a mensagem do que acabou de acontecer (ex.: "3 agendamentos confirmados") por alguns segundos.
   if (rows.length === 0) {
-    if (!notice && !error) return null;
-    return error
-      ? <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
-      : <p role="status" className="rounded-md border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-800 dark:bg-green-900/20 dark:text-green-300">{notice}</p>;
+    if (!notice && !error && clientNotice.notice.links.length === 0) return null;
+    return (
+      <div className="space-y-2">
+        {error
+          ? <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
+          : notice && <p role="status" className="rounded-md border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-800 dark:bg-green-900/20 dark:text-green-300">{notice}</p>}
+        <ClientNoticeBar notice={clientNotice.notice} onClose={clientNotice.clear} />
+      </div>
+    );
   }
 
   const toggle = (id: string) => setSelected(prev => {
@@ -79,16 +87,23 @@ export default function PendingConfirmations() {
   });
 
   const confirmOne = async (id: string) => {
-    setError(''); setNotice(''); setBusy(true);
-    try { await updateAppointmentStatus(id, 'confirmed'); }
+    setError(''); setNotice(''); clientNotice.clear(); setBusy(true);
+    const target = rows.find(r => r.appt.id === id)?.appt;
+    try {
+      await updateAppointmentStatus(id, 'confirmed');
+      if (target) clientNotice.offer([target], 'confirmed');
+    }
     catch (err) { setError(saveErrorMessage(err)); }
     finally { setBusy(false); }
   };
 
   const confirmSelected = async () => {
-    setAskBulk(false); setError(''); setNotice(''); setBusy(true);
+    setAskBulk(false); setError(''); setNotice(''); clientNotice.clear(); setBusy(true);
+    const targets = rows.filter(r => selectedIds.includes(r.appt.id)).map(r => r.appt);
     try {
-      const { confirmed, skipped } = await confirmAppointments(selectedIds);
+      const { confirmed, skipped, confirmedIds } = await confirmAppointments(selectedIds);
+      const done = new Set(confirmedIds ?? selectedIds);
+      clientNotice.offer(targets.filter(a => done.has(a.id)), 'confirmed');
       setSelected(new Set());
       setNotice(`${confirmed} agendamento${confirmed !== 1 ? 's' : ''} confirmado${confirmed !== 1 ? 's' : ''}.${skipped > 0 ? ` ${skipped} já não estava${skipped !== 1 ? 'm' : ''} pendente${skipped !== 1 ? 's' : ''}.` : ''}`);
       if (skipped > 0) void refresh();
@@ -126,6 +141,7 @@ export default function PendingConfirmations() {
 
         {error && <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
         {notice && <p role="status" className="rounded-md border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-800 dark:bg-green-900/20 dark:text-green-300">{notice}</p>}
+        <ClientNoticeBar notice={clientNotice.notice} onClose={clientNotice.clear} />
 
         {groups.map(g => (
           <section key={g.key} className="space-y-2">

@@ -7,6 +7,9 @@ import com.agendepro.appointment.AppointmentStatus;
 import com.agendepro.catalog.ServiceOffering;
 import com.agendepro.client.Client;
 import com.agendepro.client.ClientRepository;
+import com.agendepro.notification.NotificationDispatcher;
+import com.agendepro.notification.NotificationOutbox;
+import com.agendepro.notification.NotificationOutboxRepository;
 import com.agendepro.notification.WhatsappService;
 import com.agendepro.professional.Professional;
 import com.agendepro.professional.ProfessionalRepository;
@@ -68,6 +71,8 @@ abstract class AuditBase extends AbstractIntegrationTest {
     @Autowired protected ProfessionalRepository professionalRepository;
     @Autowired protected ProfessionalServiceLinkRepository linkRepository;
     @MockBean protected WhatsappService whatsappService;
+    @Autowired protected NotificationOutboxRepository outboxRepository;
+    @Autowired protected NotificationDispatcher notificationDispatcher;
 
     protected final ObjectMapper json = new ObjectMapper();
     protected final String date = LocalDate.now(SP).plusDays(2).toString();
@@ -278,6 +283,16 @@ abstract class AuditBase extends AbstractIntegrationTest {
             }
         }
         return out;
+    }
+
+    /** Tudo que está na fila de avisos do estabelecimento (nada é enviado até o dispatcher rodar). */
+    protected List<NotificationOutbox> outboxOf(Tenant t) {
+        return outboxRepository.findByTenantIdOrderByCreatedAtAsc(t.getId());
+    }
+
+    /** Linhas da fila de um evento e canal. */
+    protected List<NotificationOutbox> outboxOf(Tenant t, String event, NotificationOutbox.Channel channel) {
+        return outboxOf(t).stream().filter(n -> n.getEvent().equals(event) && n.getChannel() == channel).toList();
     }
 
     /** Métodos de e-mail chamados cujos argumentos mencionam o texto (ex.: e-mail do dono). */

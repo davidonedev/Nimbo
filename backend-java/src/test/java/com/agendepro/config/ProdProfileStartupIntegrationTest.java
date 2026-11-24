@@ -97,6 +97,14 @@ class ProdProfileStartupIntegrationTest extends AbstractIntegrationTest {
         assertThat(context.getBean(com.agendepro.reminder.ReminderService.class)).isNotNull();
     }
 
+    @Test
+    void notificationDispatcherIsNeverLazy() {
+        // O envio da fila de avisos também depende de @Scheduled: tem de existir desde a partida.
+        DefaultListableBeanFactory bf = (DefaultListableBeanFactory) context.getBeanFactory();
+        assertThat(bf.containsSingleton("notificationDispatcher")).isTrue();
+        assertThat(context.getBean(com.agendepro.notification.NotificationDispatcher.class)).isNotNull();
+    }
+
     // ─── configuração de produção ──────────────────────────────────────────────
 
     @Test
