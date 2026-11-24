@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useTenant } from '@/context/TenantContext';
+import AdvanceNoticeCard from './AdvanceNoticeCard';
 import { useAuth } from '@/context/AuthContext';
 import { prepareImage } from '@/lib/imageResize';
 import { onlyChanged } from '@/lib/settingsPayload';
@@ -731,57 +732,10 @@ export default function SettingsView({ section = 'account' }: Props) {
       </div>
 
       {/* Antecedência mínima */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Clock className="h-4 w-4" /> Antecedência Mínima para Agendamento
-          </CardTitle>
-          <CardDescription>
-            Tempo mínimo antes do horário que o cliente pode agendar. Exemplo: 60 minutos = cliente só agenda a partir de 1 hora à frente.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-3">
-            <Input
-              type="number"
-              min={0}
-              max={1440}
-              step={15}
-              value={advanceMinutes}
-              onChange={e => setAdvanceMinutes(Number(e.target.value))}
-              className="w-28"
-            />
-            <span className="text-sm text-muted-foreground">minutos</span>
-            {advanceMinutes > 0 && (
-              <span className="text-xs text-muted-foreground">
-                ({advanceMinutes >= 60
-                  ? `${Math.floor(advanceMinutes / 60)}h${advanceMinutes % 60 > 0 ? ` ${advanceMinutes % 60}min` : ''}`
-                  : `${advanceMinutes} min`} de antecedência)
-              </span>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {[0, 30, 60, 120, 180, 240].map(m => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setAdvanceMinutes(m)}
-                className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                  advanceMinutes === m
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'text-muted-foreground border-muted-foreground/20 hover:bg-muted'
-                }`}
-              >
-                {m === 0 ? 'Sem mínimo' : m < 60 ? `${m} min` : `${m / 60}h`}
-              </button>
-            ))}
-          </div>
-          <Button onClick={saveAdvance} disabled={advanceSave.saving} size="sm" className="gap-2">
-            {advanceSave.saving ? 'Salvando...' : advanceSave.saved ? <><CheckCircle className="h-4 w-4" /> Salvo!</> : 'Salvar'}
-          </Button>
-          {advanceSave.error && <p role="alert" className="text-sm text-destructive">{advanceSave.error}</p>}
-        </CardContent>
-      </Card>
+      <AdvanceNoticeCard
+        value={advanceMinutes} saved={tenant.minAdvanceMinutes ?? 0} onChange={setAdvanceMinutes} onSave={saveAdvance}
+        saving={advanceSave.saving} justSaved={advanceSave.saved} error={advanceSave.error}
+      />
 
       <Card>
         <CardHeader>
