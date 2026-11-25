@@ -90,6 +90,7 @@ app:
     confirm-minutes: ${PENDING_CONFIRM_MINUTES:180}   # prazo do CLIENTE para tocar em "Confirmar no WhatsApp" (nunca passa do horário)
     expiry-enabled: true
     expiry-check-ms: 60000
+    past-grace-minutes: 15                            # pendente cujo horário já passou há mais que isto é cancelado
   # Aviso ao dono (e-mail) de agendamento que o cliente já confirmou e ele ainda não: 2 h e 1 h antes do horário.
   owner-reminders:
     enabled: ${OWNER_REMINDERS_ENABLED:true}
@@ -109,12 +110,12 @@ app:
   captcha:
     turnstile-secret: ${TURNSTILE_SECRET_KEY:}
   rate-limit:
-    auth-capacity: 20
+    auth-capacity: 60
     auth-refill-minutes: 15
     api-capacity: 200
     api-refill-minutes: 1
     # Limites extras por IP em rotas sensíveis (além do limite geral de /api/auth)
-    login-capacity: 10              # por 15 min
+    login-capacity: 30              # por 15 min (equipe no mesmo Wi-Fi / CGNAT dividem o IP)
     forgot-password-capacity: 5     # por 15 min
     reset-password-capacity: 10     # por 15 min (também vale para confirmar troca de e-mail)
     email-change-capacity: 5        # por 15 min
