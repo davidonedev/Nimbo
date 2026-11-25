@@ -48,6 +48,7 @@ class CancellationWindowIntegrationTest extends AbstractIntegrationTest {
 
         String body = "{\"clientId\":\"" + ctx.client.getId() + "\"}";
         mockMvc.perform(patch("/api/public/" + ctx.tenant.getSlug() + "/appointments/" + appointment.getId() + "/cancel")
+                        .header("X-Device-Token", fixtures.deviceToken(ctx.tenant, ctx.client))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
@@ -61,6 +62,7 @@ class CancellationWindowIntegrationTest extends AbstractIntegrationTest {
 
         String body = "{\"clientId\":\"" + ctx.client.getId() + "\"}";
         mockMvc.perform(patch("/api/public/" + ctx.tenant.getSlug() + "/appointments/" + appointment.getId() + "/cancel")
+                        .header("X-Device-Token", fixtures.deviceToken(ctx.tenant, ctx.client))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("CANCELLATION_WINDOW_EXPIRED"));

@@ -37,11 +37,13 @@ class AlternativosAuditTest extends AuditBase {
 
     private org.springframework.test.web.servlet.ResultActions clientCancel(Ctx c, Appointment a, Client who) throws Exception {
         return mockMvc.perform(patch("/api/public/" + c.tenant.getSlug() + "/appointments/" + a.getId() + "/cancel")
+                .header("X-Device-Token", fixtures.deviceToken(c.tenant, who))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"clientId\":\"" + who.getId() + "\"}"));
     }
 
     private org.springframework.test.web.servlet.ResultActions clientReschedule(Ctx c, Appointment a, Client who, String day, String time) throws Exception {
         return mockMvc.perform(patch("/api/public/" + c.tenant.getSlug() + "/appointments/" + a.getId() + "/reschedule")
+                .header("X-Device-Token", fixtures.deviceToken(c.tenant, who))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"clientId\":\"" + who.getId() + "\",\"date\":\"" + day + "\",\"startTime\":\"" + time + "\"}"));
     }
@@ -170,23 +172,26 @@ class AlternativosAuditTest extends AuditBase {
     }
 
     @Test
-    void gap_b4_rescheduleKeepsConfirmedStatus_butTheOwnerIsNowNotified() throws Exception {
-        // documenta lacuna: um CONFIRMED movido pelo cliente continua CONFIRMED sem nova aprovação (o aviso ao dono já existe)
+    void b4_rescheduleOfAConfirmedAppointmentGoesBackToPending_andTheOwnerIsNotified() throws Exception {
+        // remarcar um CONFIRMED volta para PENDENTE (o dono aprova o novo horário) e o dono é avisado
         Ctx c = ctx();
         Client client = clientWithPhone(c.tenant, uniquePhone());
         Appointment a = confirmedIn(c, client, 2, "10:00", "10:30");
 
         clientReschedule(c, a, client, date, "15:00").andExpect(status().isOk());
 
-        assertThat(reload(a).getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
+        Appointment moved = reload(a);
+        assertThat(moved.getStatus()).isEqualTo(AppointmentStatus.PENDING);
+        assertThat(moved.getConfirmBy()).isNull();
+        assertThat(moved.getClientConfirmedAt()).isNotNull();
         var email = outboxOf(c.tenant, "CLIENT_RESCHEDULED", NotificationOutbox.Channel.EMAIL);
         assertThat(email).hasSize(1);
         assertThat(email.get(0).getBody()).contains("às 15:00").contains("Horário anterior:").contains("às 10:00");
     }
 
     @Test
-    void gap_b4_rescheduleDoesNotRevalidateWorkingHoursOrPastDates() throws Exception {
-        // documenta lacuna: o reagendamento só checa conflito — aceita fora do expediente e data passada
+    void gap_b4_rescheduleDoesNotRevalidateWorkingHours_butRejectsPastDates() throws Exception {
+        // documenta lacuna: o reagendamento aceita fora do expediente (só checa conflito); data passada é rejeitada (INVALID_DATE)
         Ctx c = ctx();
         Client client = clientWithPhone(c.tenant, uniquePhone());
         Appointment outsideHours = confirmedIn(c, client, 2, "10:00", "10:30");
@@ -195,8 +200,8 @@ class AlternativosAuditTest extends AuditBase {
 
         Appointment toPast = confirmedIn(c, client, 3, "10:00", "10:30");
         String yesterday = LocalDate.now(SP).minusDays(1).toString();
-        clientReschedule(c, toPast, client, yesterday, "10:00").andExpect(status().isOk());
-        assertThat(reload(toPast).getDate()).isEqualTo(yesterday);
+        assertThat(body(clientReschedule(c, toPast, client, yesterday, "10:00").andExpect(status().isBadRequest())).get("code").asText()).isEqualTo("INVALID_DATE");
+        assertThat(reload(toPast).getDate()).isNotEqualTo(yesterday);
     }
 
     // ── B5. Falta (no-show) e Painel ───────────────────────────────────────────────────────────────

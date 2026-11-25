@@ -10,6 +10,7 @@ import com.agendepro.client.Client;
 import com.agendepro.client.ClientRepository;
 import com.agendepro.professional.Professional;
 import com.agendepro.professional.ProfessionalRepository;
+import com.agendepro.publicapi.ClientDeviceService;
 import com.agendepro.tenant.Tenant;
 import com.agendepro.tenant.TenantPlan;
 import com.agendepro.tenant.TenantRepository;
@@ -36,6 +37,7 @@ public class TestFixtures {
     private final BlockedSlotRepository blockedSlotRepository;
     private final AppointmentRepository appointmentRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ClientDeviceService clientDeviceService;
 
     public Tenant tenant(TenantPlan plan) {
         String unique = UUID.randomUUID().toString().substring(0, 8);
@@ -83,6 +85,11 @@ public class TestFixtures {
         String unique = UUID.randomUUID().toString().substring(0, 8);
         return clientRepository.save(Client.builder()
                 .tenantId(tenant.getId()).name("Client " + unique).email("client-" + unique + "@example.com").build());
+    }
+
+    /** Aparelho reconhecido do cliente: devolve o valor do header X-Device-Token. */
+    public String deviceToken(Tenant tenant, Client client) {
+        return clientDeviceService.issue(tenant, client);
     }
 
     public Appointment appointment(Tenant tenant, Professional professional, Client client, ServiceOffering service, String date, String start, String end) {
