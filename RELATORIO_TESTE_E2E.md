@@ -268,20 +268,22 @@ Branch `fix/problemas-teste-e2e`. Cada correção tem teste automatizado e cená
 **Rodadas finais (1ª leva de correções):** desktop 108 ok, celular 108 ok, 0 falhas, 0 ressalvas, 0 erros de página. Fila de notificações sem mensagem presa.
 
 **Ficou como decisão de produto (não é defeito):**
-- Cada login do portal antigo cria um aparelho novo (validade de 90 dias) e não há limpeza dos vencidos.
 - Quem reserva pelo caminho sem WhatsApp (pendente + "Confirmar no WhatsApp") não recebe token de aparelho e, por isso, não consegue ver nem cancelar pelo site.
 - A tela de confirmação tem o link "Meus agendamentos" no cabeçalho e o botão "Ver meus agendamentos" ao mesmo tempo (redundante); no celular a faixa de dias mostra pouco mais de 2 dias.
 
 ### 7.1 Segunda leva (2026-11-25): avisos do pendente, celular obrigatório e remarcação completa
 
-Branch `fix/regras-remarcacao-whatsapp`. Três itens que estavam como "decisão de produto" viraram regra:
+Branch `fix/regras-remarcacao-whatsapp`. Quatro itens que estavam como "decisão de produto" viraram regra:
 
 | Regra | O que mudou | Prova |
 |---|---|---|
 | Cancelamento automático avisa | Pedido pendente que ficou sem resposta até passar o horário (mais 15 min) é cancelado e o **cliente e o dono recebem** o aviso (WhatsApp e e-mail do dono). Pedido que o cliente nunca confirmou (celular não provado) continua sendo liberado em silêncio: nenhuma mensagem sai para um número não verificado | H3 ✅ |
 | Aviso 24 h antes | Quando falta 24 h ou menos e o pedido segue pendente (o cliente já o confirmou), **dono e cliente** recebem o aviso "ainda pendente, será cancelado automaticamente". Sai uma vez só; pedido feito já dentro das 24 h não recebe aviso logo em seguida | H4 ✅ (uma mensagem ao cliente, carimbo gravado; o de dias à frente não é avisado) |
 | Celular (WhatsApp) obrigatório | Reserva pública já exigia; agora também o cadastro do portal do cliente e o cliente criado pelo dono (API e tela). Celular curto ou sem DDD dá 400 `INVALID_PHONE` | G9 ✅ |
+| Limpeza de aparelhos | Cada login do portal antigo cria um aparelho (validade de 90 dias). Agora cada cliente guarda no máximo 10 (saem os de uso mais antigo) e, uma vez por dia, os expirados são apagados | testes de integração (`ClientDeviceCleanupTest`) |
 | Remarcar refaz toda a validação | Remarcar passa pelo mesmo caminho de um agendamento novo, na hora de remarcar: estabelecimento aberto, dia e expediente do profissional, bloqueios, outros agendamentos (sem contar o próprio), antecedência mínima e data/hora que já passou. Horário igual ao atual é recusado (`SAME_SLOT`) | F6 ✅, G8 ✅ e testes de integração (expediente, dia de folga, fechado, passado) |
 
-**Testes:** backend 263 verdes, frontend 567 (passam; 2 arquivos pesados estouraram o tempo numa execução completa com a máquina carregada e passaram quando rodados sozinhos), `tsc`, lint e build sem erro.
+**Também corrigido nesta leva:** em produção a inicialização é preguiçosa e os agendadores de pendentes (cancelamento automático) e de avisos ao dono nunca eram criados, e o da fila de notificações só depois do primeiro aviso; agora todos estão na lista dos que sobem na partida.
+
+**Testes:** backend 265 verdes, frontend 567 (passam; 2 arquivos pesados estouraram o tempo numa execução completa com a máquina carregada e passaram quando rodados sozinhos), `tsc`, lint e build sem erro.
 **Rodadas finais:** desktop 113 ok, celular 113 ok, 0 falhas, 0 ressalvas, 0 erros de página. Fila de notificações sem mensagem presa.

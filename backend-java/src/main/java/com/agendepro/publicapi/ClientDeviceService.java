@@ -5,6 +5,7 @@ import com.agendepro.common.AppException;
 import com.agendepro.tenant.Tenant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -13,6 +14,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -25,6 +27,8 @@ import java.util.UUID;
 public class ClientDeviceService {
 
     static final Duration DEVICE_TTL = Duration.ofDays(90);
+    /** Aparelhos guardados por cliente: cada login do portal cria um; passando disso, os de uso mais antigo saem. */
+    static final int MAX_DEVICES_PER_CLIENT = 10;
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final ClientDeviceRepository deviceRepository;
@@ -44,6 +48,7 @@ public class ClientDeviceService {
     }
 
     /** Cria um aparelho reconhecido e devolve o token em claro (só aqui; no banco fica o hash). */
+    @Transactional
     public String issue(Tenant t, Client client) {
         byte[] bytes = new byte[32];
         RANDOM.nextBytes(bytes);
@@ -51,7 +56,16 @@ public class ClientDeviceService {
         deviceRepository.save(ClientDevice.builder()
                 .tenantId(t.getId()).clientId(client.getId()).tokenHash(sha256(token))
                 .expiresAt(Instant.now().plus(DEVICE_TTL)).build());
+        trimOldDevices(client.getId());
         return token;
+    }
+
+    /** Mantém só os {@link #MAX_DEVICES_PER_CLIENT} aparelhos de uso mais recente do cliente. */
+    private void trimOldDevices(UUID clientId) {
+        List<ClientDevice> devices = deviceRepository.findByClientIdOrderByLastUsedAtDesc(clientId);
+        if (devices.size() > MAX_DEVICES_PER_CLIENT) {
+            deviceRepository.deleteAll(devices.subList(MAX_DEVICES_PER_CLIENT, devices.size()));
+        }
     }
 
     /**
