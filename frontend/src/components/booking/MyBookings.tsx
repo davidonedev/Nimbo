@@ -275,7 +275,7 @@ function Reschedule({ slug, appt, onBack, onDone, onDeviceRequired }: {
       <div className="bk-summary">
         <div className="bk-summary-row"><span>Serviço</span><b>{svc.name}</b></div>
         {pro.name && <div className="bk-summary-row"><span>Profissional</span><b>{pro.name}</b></div>}
-        <div className="bk-summary-row"><span>Agora</span><b>{whenLabel(appt.date, appt.startTime)}</b></div>
+        <div className="bk-summary-row"><span>Horário atual</span><b>{whenLabel(appt.date, appt.startTime)}</b></div>
       </div>
 
       {pick ? (
