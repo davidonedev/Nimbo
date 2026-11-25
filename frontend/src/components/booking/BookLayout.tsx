@@ -1,13 +1,26 @@
 import { useEffect, useMemo } from 'react';
-import { Link, Outlet } from 'react-router-dom';
-import { Clock, Phone } from 'lucide-react';
+import { Link, Outlet, useLocation } from 'react-router-dom';
+import { CalendarCheck, Clock, Phone } from 'lucide-react';
 import { usePublicTenant } from '@/context/PublicTenantContext';
 import { accentOnDark, readableOn } from '@/lib/bookingColor';
 import { businessHoursLabel, openStatus } from '@/lib/bookingHours';
 import { nowBrasilia } from '@/lib/scheduling';
-import { BookingProvider } from './BookingContext';
+import { BookingProvider, useBooking } from './BookingContext';
 import { initials } from './bookingFormat';
 import '@/styles/booking.css';
+
+/** Atalho para "Meus agendamentos" quando o aparelho já é reconhecido (ou acabou de agendar com confirmação). */
+function MyBookingsLink() {
+  const { slug, possession, booked } = useBooking();
+  const { pathname } = useLocation();
+  const known = possession?.recognized === true || (!!booked && !booked.pending);
+  if (!known || pathname.endsWith('/meus-agendamentos')) return null;
+  return (
+    <div className="bk-mine">
+      <Link to={`/${slug}/meus-agendamentos`} className="bk-link"><CalendarCheck size={16} aria-hidden /> Meus agendamentos</Link>
+    </div>
+  );
+}
 
 /** Moldura de todos os passos: capa, logo, nome, selo de aberto/fechado, cartão e rodapé. */
 export default function BookLayout() {
@@ -28,6 +41,7 @@ export default function BookLayout() {
   const phoneDigits = (tenant.phone ?? '').replace(/\D/g, '');
 
   return (
+    <BookingProvider>
     <div className="book-root" style={{ ['--bk-accent' as string]: accent, ['--bk-accent-fg' as string]: readableOn(accent) }}>
       <div className="bk-wrap">
         <div className={`bk-cover${tenant.bannerUrl ? ' has-image' : ''}`}>
@@ -40,6 +54,7 @@ export default function BookLayout() {
         <div className="bk-status">
           <span className={`bk-pill${status.kind === 'open' ? '' : ' muted'}`}>{status.label}</span>
         </div>
+        {status.kind !== 'paused' && <MyBookingsLink />}
 
         <main className="bk-card">
           {status.kind === 'paused' ? (
@@ -51,9 +66,7 @@ export default function BookLayout() {
               </p>
             </div>
           ) : (
-            <BookingProvider>
-              <Outlet />
-            </BookingProvider>
+            <Outlet />
           )}
         </main>
 
@@ -72,5 +85,6 @@ export default function BookLayout() {
         </footer>
       </div>
     </div>
+    </BookingProvider>
   );
 }

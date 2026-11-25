@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import type { Appointment } from '@/types';
 import { countAwaitingConfirmation, isAwaitingConfirmation } from './pendingConfirmation';
 
 const TODAY = '2030-05-10';
 const NOW = new Date('2030-05-10T15:00:00Z').getTime();
-const a = (over: Record<string, unknown>) => ({ status: 'pending', date: TODAY, confirmBy: null, ...over }) as never;
+const a = (over: Record<string, unknown>) => ({ status: 'pending', date: TODAY, confirmBy: null, ...over }) as Pick<Appointment, 'status' | 'date' | 'confirmBy'>;
 
 describe('isAwaitingConfirmation (regra única da caixa e do contador)', () => {
   it('pendente de hoje ou futuro, sem prazo ou com prazo valendo, conta', () => {
