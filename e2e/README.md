@@ -5,7 +5,7 @@ Roteiro automatizado que usa o sistema de verdade: navegador (Chrome), backend, 
 ## Pilha isolada (portas)
 | Peça | Porta |
 |---|---|
-| Postgres descartável (`nimbo-e2e-pg`, Docker) | 5434 |
+| Postgres descartável (`nimbo-e2e-pg`, Docker) | 5434 (ou `E2E_DB_PORT`, se a 5434 estiver ocupada por outro container) |
 | Backend (jar) | 3399 |
 | Frontend (Vite) | 5199 |
 | WhatsApp falso (`fake-evolution.mjs`) | 4599 |
@@ -24,12 +24,19 @@ node stack.mjs up --jar /tmp/be-wt/backend-java/target/agendepro-backend.jar
 node flow.mjs desktop            # 1280x900
 node flow.mjs mobile             # 390x844
 node make-report-table.mjs       # tabela em Markdown a partir dos results-*.json
+
+# limites de taxa REAIS (login 30/IP, auth 60/IP): o flow roda com limites elevados; esta checagem reinicia o backend sem sobrescrevê-los
+node stack.mjs restart-backend --real-limits
+node limits.mjs
+node stack.mjs restart-backend   # volta aos limites elevados
 node stack.mjs down              # para tudo e remove o container
 ```
 Cada rodada leva cerca de 10 minutos (espera dos lembretes e do vencimento do pedido). Para uma fase só: `node flow.mjs desktop --only C --resume` (o `--resume` reaproveita o estado salvo da rodada anterior).
 
 ## Fases
-A preparação do estabelecimento (pela interface) · B cliente agenda · N estabelecimento sem WhatsApp · C dono decide (modal de segurança, confirmação automática, WhatsApp fora do ar, massa, recusa, cancelamento, tela desatualizada) · D profissional · E atendimento, lembretes, vencimento e números · F cliente cancela e remarca · G regressão de problemas conhecidos.
+A preparação do estabelecimento (pela interface) · B cliente agenda · N estabelecimento sem WhatsApp · C dono decide (modal de segurança, confirmação automática, WhatsApp fora do ar, massa, recusa, cancelamento, tela desatualizada) · D profissional · E atendimento, lembretes, vencimento e números · F cliente cancela e remarca · G regressão de problemas conhecidos (inclui prova de posse por `X-Device-Token`, datas inválidas 400 `INVALID_DATE`) · H pendente com horário já passado há mais de 15 min vira cancelado sozinho (a data/hora é recuada por SQL só no banco isolado e o agendador roda a cada 5 s via `APP_PENDING_EXPIRY_CHECK_MS`).
+
+O log da aplicação fica em `.run/backend-app.log` (o stdout do java destacado no Windows não chega ao `backend.log`).
 
 ## Requisitos
 Docker, Java 21, Node 22, Chrome instalado (usa `channel: 'chrome'`) e `frontend/node_modules` instalado (`npm ci` no `frontend`).

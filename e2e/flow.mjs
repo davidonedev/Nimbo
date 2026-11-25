@@ -419,8 +419,9 @@ async function bookVerified(name, { svc = 'Corte E2E', pro = null, day = 2 } = {
   const code = waCode(msg);
   const v = await api('POST', `/public/${S.slug}/book/verify`, { challengeId: r.data?.challengeId, code });
   const ids = (v.data?.booking?.items ?? []).map(i => i.id);
-  return { name, first: name.split(' ')[0], ph, ids, id: ids[0], clientId: v.data?.client?.id, date, startTime, status: v.status };
+  return { name, first: name.split(' ')[0], ph, ids, id: ids[0], clientId: v.data?.client?.id, deviceToken: v.data?.deviceToken ?? null, date, startTime, status: v.status };
 }
+const dev = token => ({ 'X-Device-Token': token });
 const statusOf = id => sql(`select status from appointments where id='${id}'`)[0]?.[0];
 const waitStatus = async (id, want, ms = 15_000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (statusOf(id) === want) return true; await sleep(500); } return false; };
 const outboxOf = (id, event) => sql(`select channel, status, coalesce(last_error,''), attempts from notification_outbox where appointment_id='${id}' and event='${event}' order by channel`);
@@ -466,6 +467,10 @@ phase('C', async ({ browser }) => {
     await shot(page, `C2-agendamentos-pendentes-${tag}`);
     check('C2', 'Agendamentos mostra os pendentes no resumo e na caixa "Aguardando confirmação"', summary.includes(String(pendDb)) && boxCount.includes(String(pendDb)), `pendentes no banco=${pendDb}; resumo="${summary.replace(/\n/g, ' ')}"; caixa="${boxCount.replace(/\n/g, ' ')}"`);
 
+    const sumN = Number((/(\d+)\s*Pendentes/.exec(summary) ?? /Pendentes\s*(\d+)/.exec(summary) ?? [])[1]);
+    const boxN = Number((/(\d+)/.exec(boxCount) ?? [])[1]);
+    check('C2d', 'Contador "Pendentes" do resumo é igual ao número da caixa "Aguardando confirmação" (mesma regra)', Number.isFinite(sumN) && sumN === boxN && sumN === pendDb, `resumo=${sumN}; caixa=${boxN}; banco=${pendDb}`);
+
     // o sino avisa pedidos que CHEGAM com o painel aberto (consulta a cada 30 s): cria um agora, com a tela já carregada
     const nara = await bookVerified(`Nara ${RUN}`, { pro: S.ronaldId });
     const bell = await page.getByRole('button', { name: /Notificações \(\d+ nova/ }).first().waitFor({ timeout: 45_000 }).then(() => true).catch(() => false);
@@ -475,7 +480,7 @@ phase('C', async ({ browser }) => {
     // C2c o aviso do sino mostra QUEM pediu (cliente novo ainda não está na lista carregada ao abrir a tela)
     await page.getByRole('button', { name: /^Notificações/ }).first().click();
     await page.waitForTimeout(800);
-    const bellText = (await page.locator('body').innerText()).replace(/s+/g, ' ');
+    const bellText = (await page.locator('body').innerText()).replace(/\s+/g, ' ');
     const hasName = bellText.includes(nara.name);
     const dash = /Novo agendamento[^.]{0,40}—/.test(bellText) || /— · Corte E2E/.test(bellText);
     await shot(page, `C2c-sino-aberto-${tag}`);
@@ -808,44 +813,59 @@ phase('F', async ({ browser }) => {
   if (!S.token) { warn('F0', 'Fase A não rodou; pulando F'); return; }
   await wa.clear();
   const nina = await bookVerified(`Nina ${RUN}`, { pro: S.ronaldId, day: 3 });
-  const mine = await api('GET', `/public/${S.slug}/my-appointments?clientId=${nina.clientId}`);
-  check('F1', 'Cliente consulta os próprios agendamentos pelo id devolvido no cadastro', mine.status === 200 && JSON.stringify(mine.data).includes(nina.id), `status ${mine.status}`);
+  check('F0b', 'Confirmação por código devolve o X-Device-Token do aparelho (prova de posse)', !!nina.deviceToken && nina.deviceToken.length >= 30, `token=${nina.deviceToken ? nina.deviceToken.length + ' caracteres' : 'nenhum'}`);
+
+  // F1 listar: exige o token do aparelho (G2) e devolve só os do dono
+  const noTok = await api('GET', `/public/${S.slug}/my-appointments?clientId=${nina.clientId}`);
+  const mine = await api('GET', `/public/${S.slug}/my-appointments?clientId=${nina.clientId}`, undefined, undefined, dev(nina.deviceToken));
+  const mine2 = await api('GET', `/public/${S.slug}/book/my-appointments`, undefined, undefined, dev(nina.deviceToken));
+  const noTok2 = await api('GET', `/public/${S.slug}/book/my-appointments`);
+  check('F1', 'Listar "meus agendamentos": sem token 403 DEVICE_REQUIRED; com o token do aparelho 200 (por clientId e por /book/my-appointments)',
+    noTok.status === 403 && noTok.raw?.code === 'DEVICE_REQUIRED' && noTok2.status === 403 && mine.status === 200 && mine2.status === 200 && JSON.stringify(mine.data).includes(nina.id) && JSON.stringify(mine2.data).includes(nina.id),
+    `sem token=${noTok.status}/${noTok.raw?.code}; /book sem token=${noTok2.status}; com token=${mine.status}; /book com token=${mine2.status}`);
 
   const newSlots = await api('GET', `/public/${S.slug}/book/slots?serviceIds=${S.services['Corte E2E']}&date=${dayBR(3)}&professionalId=${S.ronaldId}`);
   const target = (newSlots.data ?? []).find(t => t !== nina.startTime);
-  const rs = await api('PATCH', `/public/${S.slug}/appointments/${nina.id}/reschedule`, { clientId: nina.clientId, date: dayBR(3), startTime: target });
+
+  // F2a remarcar para data passada / além de 60 dias dá 400 INVALID_DATE e nada muda
+  const rsPast = await api('PATCH', `/public/${S.slug}/appointments/${nina.id}/reschedule`, { date: dayBR(-1), startTime: '10:00' }, undefined, dev(nina.deviceToken));
+  const rsFar = await api('PATCH', `/public/${S.slug}/appointments/${nina.id}/reschedule`, { date: dayBR(250), startTime: '10:00' }, undefined, dev(nina.deviceToken));
+  const unchanged = sql(`select date, start_time from appointments where id='${nina.id}'`)[0] ?? [];
+  check('F2a', 'Remarcar para ontem ou para daqui a 250 dias é recusado (400 INVALID_DATE) e o agendamento não muda',
+    rsPast.status === 400 && rsPast.raw?.code === 'INVALID_DATE' && rsFar.status === 400 && rsFar.raw?.code === 'INVALID_DATE' && unchanged[0] === nina.date && unchanged[1]?.startsWith(nina.startTime),
+    `ontem=${rsPast.status}/${rsPast.raw?.code}; +250=${rsFar.status}/${rsFar.raw?.code}; no banco=${unchanged.join(' ')}`);
+
+  const rsNoTok = await api('PATCH', `/public/${S.slug}/appointments/${nina.id}/reschedule`, { clientId: nina.clientId, date: dayBR(3), startTime: target });
+  const rs = await api('PATCH', `/public/${S.slug}/appointments/${nina.id}/reschedule`, { date: dayBR(3), startTime: target }, undefined, dev(nina.deviceToken)); // clientId opcional
   const after = sql(`select status, start_time from appointments where id='${nina.id}'`)[0] ?? [];
   const ownerResched = await wa.waitFor(m => wa.to(ownerPhoneDigits)(m) && /remarc/i.test(m.text), 30_000);
-  check('F2', 'Cliente remarca: o horário muda e o dono é avisado', rs.status === 200 && after[1]?.startsWith(target) && !!ownerResched, `resposta ${rs.status}; novo horário=${after[1]}; status depois=${after[0]}; aviso ao dono=${!!ownerResched}`);
-  if (after[0] === 'confirmed') warn('F2b', 'Remarcação mantém o status', `status depois de remarcar = ${after[0]}`);
+  check('F2', 'Cliente remarca (com o token, sem clientId): o horário muda e o dono é avisado; sem token é 403', rsNoTok.status === 403 && rs.status === 200 && after[1]?.startsWith(target) && !!ownerResched, `sem token=${rsNoTok.status}; com token=${rs.status}; novo horário=${after[1]}; status depois=${after[0]}; aviso ao dono=${!!ownerResched}`);
 
   await wa.clear();
-  const cn = await api('PATCH', `/public/${S.slug}/appointments/${nina.id}/cancel`, { clientId: nina.clientId });
+  const cnNoTok = await api('PATCH', `/public/${S.slug}/appointments/${nina.id}/cancel`, { clientId: nina.clientId });
+  const cn = await api('PATCH', `/public/${S.slug}/appointments/${nina.id}/cancel`, {}, undefined, dev(nina.deviceToken)); // clientId opcional
   const ownerCancel = await wa.waitFor(m => wa.to(ownerPhoneDigits)(m) && /cancel/i.test(m.text), 30_000);
   const freed = await api('GET', `/public/${S.slug}/book/slots?serviceIds=${S.services['Corte E2E']}&date=${dayBR(3)}&professionalId=${S.ronaldId}`);
-  check('F3', 'Cliente cancela: CANCELADO, o dono é avisado e o horário volta a ficar livre', cn.status === 200 && statusOf(nina.id) === 'cancelled' && !!ownerCancel && (freed.data ?? []).includes(target), `resposta ${cn.status}; aviso ao dono=${!!ownerCancel}; horário livre=${(freed.data ?? []).includes(target)}`);
+  check('F3', 'Cliente cancela (com o token): CANCELADO, o dono é avisado e o horário volta a ficar livre; sem token é 403', cnNoTok.status === 403 && cn.status === 200 && statusOf(nina.id) === 'cancelled' && !!ownerCancel && (freed.data ?? []).includes(target), `sem token=${cnNoTok.status}; com token=${cn.status}; aviso ao dono=${!!ownerCancel}; horário livre=${(freed.data ?? []).includes(target)}`);
 
-  // F5 remarcar um agendamento que o dono já tinha confirmado: o novo horário continua confirmado sem o dono aprovar?
+  // F5 remarcar um agendamento que o dono já tinha confirmado: volta a PENDENTE (dono aprova de novo), sem prazo, e o dono é avisado
   const otto = await bookVerified(`Otto ${RUN}`, { pro: S.ronaldId, day: 3 });
   await api('PATCH', `/admin/appointments/${otto.id}/status`, { status: 'confirmed' }, S.token);
   const ottoSlots = await api('GET', `/public/${S.slug}/book/slots?serviceIds=${S.services['Corte E2E']}&date=${dayBR(3)}&professionalId=${S.ronaldId}`);
   const ottoTarget = (ottoSlots.data ?? []).find(x => x !== otto.startTime);
+  const ottoBefore = statusOf(otto.id);
   await wa.clear();
-  const ottoRs = await api('PATCH', `/public/${S.slug}/appointments/${otto.id}/reschedule`, { clientId: otto.clientId, date: dayBR(3), startTime: ottoTarget });
-  const ottoAfter = sql(`select status, start_time from appointments where id='${otto.id}'`)[0] ?? [];
+  const ottoRs = await api('PATCH', `/public/${S.slug}/appointments/${otto.id}/reschedule`, { date: dayBR(3), startTime: ottoTarget }, undefined, dev(otto.deviceToken));
+  const ottoAfter = sql(`select status, start_time, confirm_by is null, client_confirmed_at is not null from appointments where id='${otto.id}'`)[0] ?? [];
   const ottoOwnerMsg = await wa.waitFor(m => wa.to(ownerPhoneDigits)(m) && /remarc/i.test(m.text), 30_000);
-  if (ottoRs.status !== 200) check('F5', 'Remarcar um agendamento confirmado', false, `resposta ${ottoRs.status}`);
-  else if (ottoAfter[0] === 'confirmed') warn('F5', 'Remarcado pelo cliente, o agendamento continua CONFIRMADO no novo horário sem o dono aprovar', `status depois=${ottoAfter[0]}; novo horário=${ottoAfter[1]}; dono avisado=${!!ottoOwnerMsg}`);
-  else check('F5', 'Remarcado pelo cliente, o agendamento volta a PENDENTE para o dono aprovar o novo horário', ottoAfter[0] === 'pending' && !!ottoOwnerMsg, `status depois=${ottoAfter[0]}; dono avisado=${!!ottoOwnerMsg}`);
+  check('F5', 'Remarcar um CONFIRMADO: volta a PENDENTE (confirm_by nulo, client_confirmed_at preenchido) e o dono é avisado',
+    ottoBefore === 'confirmed' && ottoRs.status === 200 && ottoAfter[0] === 'pending' && ottoAfter[1]?.startsWith(ottoTarget) && ottoAfter[2] === 't' && ottoAfter[3] === 't' && !!ottoOwnerMsg,
+    `antes=${ottoBefore}; resposta=${ottoRs.status}; depois=${ottoAfter.join(',')}; dono avisado=${!!ottoOwnerMsg}`);
 
-  // F4 a nova tela de confirmação não oferece como o cliente gerencia o agendamento
-  const { ctx, page } = await newPage(browser, device, 'cliente-fim');
-  try {
-    await page.goto(`${URLS.front}/${S.slug}/my-appointments`, { waitUntil: 'networkidle' });
-    await shot(page, `F4-meus-agendamentos-${tag}`);
-    const txt = (await page.locator('body').innerText()).replace(/\n/g, ' ').slice(0, 140);
-    warn('F4', 'Cliente não tem caminho de "Meus agendamentos" no fluxo novo (a rota antiga pede login/cadastro)', txt);
-  } finally { await ctx.close(); }
+  // F4 "Meus agendamentos": a tela nova é testada no navegador pelo QA 2; aqui só o contrato da API (o token de Otto lista só o dele)
+  const ottoList = await api('GET', `/public/${S.slug}/book/my-appointments`, undefined, undefined, dev(otto.deviceToken));
+  const ottoIds = (ottoList.data ?? []).map(x => x.id);
+  check('F4', 'GET /book/my-appointments com o token de um cliente lista os agendamentos dele e não os de outro', ottoList.status === 200 && ottoIds.includes(otto.id) && !ottoIds.includes(nina.id), `status=${ottoList.status}; ids=${ottoIds.length}; tem o de outro cliente=${ottoIds.includes(nina.id)}`);
   saveState();
 });
 
@@ -861,17 +881,27 @@ phase('G', async () => {
   const leak = JSON.stringify(atk.data ?? {}).includes(`Vítima ${RUN}`) || JSON.stringify(atk.data ?? {}).includes('97777');
   check('G1', 'Pedido pendente não devolve nome/telefone/id do cliente já cadastrado', !leak && (atk.data?.client?.id ?? null) === null, `resposta=${JSON.stringify(atk.data?.client ?? null)}`);
 
-  // G2 cancelar só com o id do cliente (sem prova de posse)
+  // G2 prova de posse (X-Device-Token) para cancelar/remarcar/listar
   const fixed = await bookVerified(`Teresa ${RUN}`, { pro: S.ronaldId, day: 4 });
-  const stolen = await api('PATCH', `/public/${S.slug}/appointments/${fixed.id}/cancel`, { clientId: fixed.clientId }); // sem token, sem código
-  if (stolen.status === 200) warn('G2', 'Cancelar/reagendar exige só o id (UUID) do cliente, sem token nem código (lacuna conhecida)', 'qualquer posse do UUID cancela o agendamento');
-  else check('G2', 'Cancelar exige prova de posse', true, `resposta ${stolen.status}`);
+  const outro = await bookVerified(`Ulisses ${RUN}`, { pro: S.ronaldId, day: 4 });
+  const stolen = await api('PATCH', `/public/${S.slug}/appointments/${fixed.id}/cancel`, { clientId: fixed.clientId }); // só o UUID, sem token
+  const stolenR = await api('PATCH', `/public/${S.slug}/appointments/${fixed.id}/reschedule`, { clientId: fixed.clientId, date: dayBR(5), startTime: fixed.startTime });
+  const stolenL = await api('GET', `/public/${S.slug}/my-appointments?clientId=${fixed.clientId}`);
+  const otherTok = await api('PATCH', `/public/${S.slug}/appointments/${fixed.id}/cancel`, { clientId: fixed.clientId }, undefined, dev(outro.deviceToken)); // token de OUTRO cliente + clientId da vítima
+  const otherTok2 = await api('PATCH', `/public/${S.slug}/appointments/${fixed.id}/cancel`, {}, undefined, dev(outro.deviceToken)); // token de outro, sem clientId: o agendamento não é dele
+  const fakeTok = await api('PATCH', `/public/${S.slug}/appointments/${fixed.id}/cancel`, {}, undefined, dev('token-inventado-0123456789012345678901234567890'));
+  const crossTenant = await api('GET', `/public/${slug}/book/my-appointments`, undefined, undefined, dev(fixed.deviceToken)); // token válido, mas de OUTRO estabelecimento
+  const still = statusOf(fixed.id);
+  const denied = [stolen, stolenR, stolenL, otherTok, fakeTok, crossTenant];
+  check('G2', 'Cancelar/remarcar/listar exigem o token do MESMO cliente: sem token, token de outro cliente, inventado e de outro estabelecimento dão 403 DEVICE_REQUIRED e nada muda',
+    denied.every(r => r.status === 403 && r.raw?.code === 'DEVICE_REQUIRED') && otherTok2.status === 404 && still !== 'cancelled',
+    `sem token: cancelar=${stolen.status} remarcar=${stolenR.status} listar=${stolenL.status}; token de outro+clientId=${otherTok.status}; token de outro sem clientId=${otherTok2.status}/${otherTok2.raw?.code}; inventado=${fakeTok.status}; outro estabelecimento=${crossTenant.status}; status do agendamento=${still}`);
 
   // G3 datas inválidas no /book
   const yesterday = await api('POST', `/public/${slug}/book`, { name: 'Passado', phone: '(11) 96666-1111', serviceIds: [S.nowa.serviceId], professionalId: null, date: dayBR(-1), startTime: '10:00' });
   const far = await api('POST', `/public/${slug}/book`, { name: 'Longe', phone: '(11) 96666-2222', serviceIds: [S.nowa.serviceId], professionalId: null, date: dayBR(250), startTime: '10:00' });
   const stored = sql(`select a.date, a.status from appointments a join clients c on c.id=a.client_id where c.name in ('Passado','Longe') order by a.date`);
-  check('G3', 'Reserva pública rejeita data passada e data além de 60 dias', yesterday.status >= 400 && far.status >= 400, `ontem=${yesterday.status}; +250 dias=${far.status}; gravados no banco=${JSON.stringify(stored)}`);
+  check('G3', 'Reserva pública rejeita data passada e data além de 60 dias com 400 INVALID_DATE e nada é gravado', yesterday.status === 400 && yesterday.raw?.code === 'INVALID_DATE' && far.status === 400 && far.raw?.code === 'INVALID_DATE' && stored.length === 0, `ontem=${yesterday.status}; +250 dias=${far.status}; gravados no banco=${JSON.stringify(stored)}`);
 
   // G4 endpoints antigos removidos
   const legacy = await api('POST', `/public/${slug}/booking`, { name: 'x' });
@@ -879,8 +909,10 @@ phase('G', async () => {
 
   // G5 admin cadastra agendamento no passado
   const past = await api('POST', '/admin/appointments', { clientName: 'Retroativo', clientEmail: `retro-${tag}@e2e.test`, clientPhone: '(11) 95555-0001', professionalId: S.ronaldId, serviceId: S.services['Corte E2E'], date: dayBR(-2), startTime: '10:00' }, S.token);
-  if (past.status === 200 || past.status === 201) warn('G5', 'O backend aceita agendamento do admin em data passada (a tela bloqueia, a API não)', `status ${past.status}`);
-  else check('G5', 'Admin não cria agendamento no passado', true, `status ${past.status}`);
+  const pastHour = nowBR(-120);
+  const past2 = await api('POST', '/admin/appointments', { clientName: 'Retroativo2', clientEmail: `retro2-${tag}@e2e.test`, clientPhone: '(11) 95555-0002', professionalId: S.ronaldId, serviceId: S.services['Corte E2E'], date: pastHour.date, startTime: pastHour.time }, S.token);
+  const retro = sql(`select count(*) from appointments a join clients c on c.id=a.client_id where c.name like 'Retroativo%'`)[0]?.[0];
+  check('G5', 'Admin não cria agendamento no passado (ontem e há 2 h): 400 INVALID_DATE e nada gravado', past.status === 400 && past.raw?.code === 'INVALID_DATE' && past2.status === 400 && past2.raw?.code === 'INVALID_DATE' && retro === '0', `dia passado=${past.status}/${past.raw?.code}; há 2 h=${past2.status}/${past2.raw?.code}; gravados=${retro}`);
 
   // G6 isolamento entre estabelecimentos
   const foreign = await api('PATCH', `/admin/appointments/${S.cli?.edu?.id ?? fixed.id}/status`, { status: 'cancelled' }, S.nowa.token);
@@ -890,6 +922,208 @@ phase('G', async () => {
   // G7 sem login
   const anon = await api('GET', '/admin/appointments');
   check('G7', 'Sem login as rotas do dono respondem 401/403', [401, 403].includes(anon.status), `status ${anon.status}`);
+  saveState();
+});
+
+// ═══ H. Pendente com horário já passado vira cancelado sozinho ═════════════════════
+// Não há como CRIAR um pendente no passado pela API (G3/G5): o roteiro cria pela API e RECUA a data/hora direto no banco isolado
+// (nimbo-e2e-pg, só o agendamento criado aqui), como se o tempo tivesse passado. O backend sobe com APP_PENDING_EXPIRY_CHECK_MS=5000
+// (stack.mjs), então o agendador roda a cada 5 s em vez de 60 s; a folga (app.pending.past-grace-minutes) fica no padrão, 15 min.
+phase('H', async () => {
+  section('H. Pendente que já passou do horário é cancelado sozinho');
+  if (!S.token) { warn('H0', 'Fase A não rodou; pulando M'); return; }
+  const setWhen = (id, w) => sql(`update appointments set date='${w.date}', start_time='${w.time}' where id='${id}' returning id`);
+  const older = nowBR(-25), recent = nowBR(-5);
+  const old = await bookVerified(`Helena ${RUN}`, { pro: S.marcosId, day: 5 });      // pendente, horário passou há 25 min
+  const grace = await bookVerified(`Igor ${RUN}`, { pro: S.marcosId, day: 5 });      // pendente, passou há 5 min (dentro da folga)
+  const conf = await bookVerified(`Joana ${RUN}`, { pro: S.marcosId, day: 5 });      // CONFIRMADO, passou há 25 min (não é pendente)
+  const fut = await bookVerified(`Kleber ${RUN}`, { pro: S.marcosId, day: 5 });      // pendente no futuro
+  await api('PATCH', `/admin/appointments/${conf.id}/status`, { status: 'confirmed' }, S.token);
+  setWhen(old.id, older); setWhen(grace.id, recent); setWhen(conf.id, older);
+  const goneOld = await waitStatus(old.id, 'cancelled', 40_000);
+  await sleep(6000); // mais um ciclo do agendador (5 s) para os demais provarem que NÃO foram tocados
+  const sts = { grace: statusOf(grace.id), conf: statusOf(conf.id), fut: statusOf(fut.id) };
+  check('H1', 'Pendente cujo horário passou há 25 min vira CANCELADO sozinho (agendador de pendentes)', goneOld, `status=${statusOf(old.id)}`);
+  check('H2', 'Dentro da folga de 15 min (5 min atrás) continua pendente; confirmado e pendente futuro não são tocados', sts.grace === 'pending' && sts.conf === 'confirmed' && sts.fut === 'pending', `folga=${sts.grace}; confirmado=${sts.conf}; futuro=${sts.fut}`);
+  saveState();
+});
+
+// ═══ M. "Meus agendamentos" (cliente com aparelho reconhecido: ver, remarcar, cancelar) ═══════════════
+phase('M', async ({ browser }) => {
+  section('M. Meus agendamentos (aparelho reconhecido)');
+  if (!S.token || !S.services) { warn('M0', 'Fase A não rodou; pulando M'); return; }
+  const svc = S.services['Corte E2E'];
+  const li = (page, name) => page.locator('li.bk-appt').filter({ hasText: name });
+  const sameWidth = async (page, id, desc) => { const ox = await overflowX(page); return check(id, desc, ox <= 0, `overflowX=${ox}`); };
+
+  // cliente novo, pelo navegador: agenda com código do WhatsApp (o aparelho passa a ser reconhecido)
+  const NAME = `Meus ${RUN}`;
+  const ph = phone();
+  const { ctx, page } = await newPage(browser, device, 'cliente-meus');
+  try {
+    const dayFar = dayBR(5);
+    await page.goto(`${URLS.front}/${S.slug}/horario?s=${svc}&d=${dayFar}`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.bk-slot', { timeout: 20_000 });
+    const nSlots = await page.locator('.bk-slot').count();
+    const slotBtn = page.locator('.bk-slot').nth(Math.min(8, nSlots - 1));
+    const bookedTime = (await slotBtn.innerText()).trim();
+    await slotBtn.click();
+    await page.waitForURL(/dados/, { timeout: 15_000 });
+    await wa.clear();
+    await fillContact(page, NAME, ph);
+    await page.getByRole('button', { name: 'Confirmar agendamento' }).click();
+    await page.waitForURL(/codigo/, { timeout: 20_000 });
+    const code = waCode(await wa.waitFor(wa.to(ph.digits), 20_000));
+    await page.locator('#bk-code').fill(code ?? '');
+    await page.getByRole('button', { name: /Confirmar|Verificar/ }).last().click();
+    const done = await page.getByText('Agendamento confirmado!').waitFor({ timeout: 20_000 }).then(() => true).catch(() => false);
+    const row = apptsOf(`c.name='${NAME}'`)[0] ?? [];
+    const apptId = row[0];
+    check('M0', 'Preparação: cliente agenda pelo navegador com código e o aparelho fica reconhecido', done && !!apptId && row[1] === 'pending', `agendamento=${JSON.stringify(row.slice(0, 5))}`);
+    if (!apptId) return;
+
+    // H1 StepDone → "Ver meus agendamentos"
+    const toMine = page.getByRole('link', { name: /Ver meus agendamentos/ });
+    const hasEntry = await toMine.count();
+    await shot(page, `M1-done-entrada-${tag}`);
+    await toMine.click();
+    await page.waitForURL(/meus-agendamentos/, { timeout: 15_000 });
+    await li(page, 'Corte E2E').first().waitFor({ timeout: 15_000 }).catch(() => {});
+    const card = li(page, 'Corte E2E').first();
+    const cardTxt = (await card.innerText().catch(() => '')).replace(/\n/g, ' ');
+    await shot(page, `M1-meus-agendamentos-${tag}`);
+    check('M1', 'Tela de confirmação oferece "Ver meus agendamentos" e a lista mostra o agendamento (serviço, dia, hora, situação)', hasEntry === 1 && /Corte E2E/.test(cardTxt) && cardTxt.includes(bookedTime) && /Aguardando confirmação/.test(cardTxt), `entrada=${hasEntry}; cartão="${cardTxt.slice(0, 130)}"`);
+    await sameWidth(page, 'M1b', 'Meus agendamentos sem rolagem horizontal');
+
+    // H2 o aparelho segue reconhecido: o cabeçalho da página inicial mostra o atalho; recarregar a lista mantém tudo
+    await page.goto(`${URLS.front}/${S.slug}`, { waitUntil: 'networkidle' });
+    const headLink = page.getByRole('link', { name: /^Meus agendamentos$/ });
+    await headLink.waitFor({ timeout: 10_000 }).catch(() => {});
+    const headSeen = await headLink.count();
+    await shot(page, `M2-atalho-cabecalho-${tag}`);
+    await headLink.click().catch(() => {});
+    await page.waitForURL(/meus-agendamentos/, { timeout: 10_000 }).catch(() => {});
+    await li(page, 'Corte E2E').first().waitFor({ timeout: 15_000 }).catch(() => {});
+    await page.reload({ waitUntil: 'networkidle' });
+    const afterReload = await li(page, 'Corte E2E').count();
+    check('M2', 'Aparelho reconhecido: link "Meus agendamentos" no cabeçalho abre a lista (e ela sobrevive a recarregar)', headSeen === 1 && afterReload >= 1 && page.url().includes('meus-agendamentos'), `link=${headSeen}; cartões depois de recarregar=${afterReload}`);
+    const hiddenOnPage = await page.getByRole('link', { name: /^Meus agendamentos$/ }).count();
+    check('M2b', 'Dentro da própria tela o atalho do cabeçalho some (sem link para si mesmo)', hiddenOnPage === 0, `links=${hiddenOnPage}`);
+
+    // H3 REMARCAR um agendamento CONFIRMADO: o novo horário vale, mas volta a PENDENTE e o dono é avisado
+    await api('PATCH', `/admin/appointments/${apptId}/status`, { status: 'confirmed' }, S.token);
+    await page.reload({ waitUntil: 'networkidle' });
+    const tagConf = /Confirmado/.test((await li(page, 'Corte E2E').first().innerText().catch(() => '')));
+    await wa.clear();
+    await li(page, 'Corte E2E').first().getByRole('button', { name: /Remarcar/ }).click();
+    await page.getByRole('heading', { name: /Remarcar horário/ }).waitFor({ timeout: 10_000 });
+    await page.waitForSelector('.bk-slot', { timeout: 20_000 });
+    await shot(page, `M3-remarcar-escolha-${tag}`);
+    await sameWidth(page, 'M3a', 'Remarcar (escolha de dia e horário) sem rolagem horizontal');
+    // escolhe outro DIA (o dia seguinte ao atual na faixa) e um horário diferente do atual
+    const days = page.locator('.bk-day:not([disabled])');
+    const nDays = await days.count();
+    await days.nth(Math.min(2, nDays - 1)).click();
+    await page.waitForSelector('.bk-slot', { timeout: 20_000 });
+    const slots2 = page.locator('.bk-slot');
+    const n2 = await slots2.count();
+    const newSlot = slots2.nth(Math.min(3, n2 - 1));
+    const newTime = (await newSlot.innerText()).trim();
+    await newSlot.click();
+    const confirmBox = page.getByRole('group', { name: 'Confirmar remarcação' });
+    await confirmBox.waitFor({ timeout: 10_000 });
+    const confirmTxt = (await confirmBox.innerText()).replace(/\n/g, ' ');
+    await shot(page, `M3-remarcar-confirmar-${tag}`);
+    await sameWidth(page, 'M3b', 'Remarcar (confirmação) sem rolagem horizontal');
+    // "Escolher outro" volta à escolha sem alterar nada no banco
+    await confirmBox.getByRole('button', { name: 'Escolher outro' }).click();
+    await page.waitForSelector('.bk-slot', { timeout: 15_000 });
+    const untouched = apptsOf(`a.id='${apptId}'`)[0] ?? [];
+    check('M3c', '"Escolher outro" na confirmação não muda nada no banco', untouched[1] === 'confirmed' && untouched[3].startsWith(bookedTime), `banco=${JSON.stringify(untouched.slice(1, 4))}`);
+    await page.locator('.bk-slot').nth(Math.min(3, (await page.locator('.bk-slot').count()) - 1)).click();
+    await page.getByRole('group', { name: 'Confirmar remarcação' }).getByRole('button', { name: 'Confirmar remarcação' }).click();
+    const notice = await page.getByText(/Pedimos uma nova confirmação ao estabelecimento/).waitFor({ timeout: 20_000 }).then(() => true).catch(() => false);
+    await shot(page, `M3-remarcado-${tag}`);
+    const after = apptsOf(`a.id='${apptId}'`)[0] ?? [];
+    const ownerMsg = await wa.waitFor(m => wa.to(ownerPhoneDigits)(m) && /remarc/i.test(m.text), 30_000);
+    check('M3', 'Remarcar confirmado: novo horário no banco, status volta a PENDENTE, aviso "nova confirmação" na tela e dono avisado no WhatsApp',
+      tagConf && notice && after[1] === 'pending' && after[3].startsWith(newTime) && (after[2] !== untouched[2] || after[3] !== untouched[3]) && !!ownerMsg && /nova confirmação|confirmar de novo/.test(confirmTxt),
+      `etiqueta confirmado=${tagConf}; aviso=${notice}; banco=${JSON.stringify(after.slice(1, 4))} (era ${untouched[2]} ${untouched[3]}); dono avisado=${!!ownerMsg}; texto="${confirmTxt.slice(0, 120)}"`);
+    await sameWidth(page, 'M3d', 'Lista depois de remarcar sem rolagem horizontal');
+
+    // H4 CANCELAR: confirmação inline ("Manter horário" não cancela; "Sim, cancelar" cancela, libera o horário e avisa o dono)
+    await wa.clear();
+    const mineCard = li(page, 'Corte E2E').first();
+    await mineCard.getByRole('button', { name: /Cancelar/ }).click();
+    const ask = page.getByRole('group', { name: 'Confirmar cancelamento' });
+    await ask.waitFor({ timeout: 10_000 });
+    await shot(page, `M4-cancelar-confirmar-${tag}`);
+    await ask.getByRole('button', { name: 'Manter horário' }).click();
+    const keptStatus = apptsOf(`a.id='${apptId}'`)[0]?.[1];
+    check('M4a', '"Manter horário" não cancela nada', keptStatus === 'pending', `status=${keptStatus}`);
+    await li(page, 'Corte E2E').first().getByRole('button', { name: /Cancelar/ }).click();
+    await page.getByRole('group', { name: 'Confirmar cancelamento' }).getByRole('button', { name: 'Sim, cancelar' }).click();
+    const cancelNotice = await page.getByText(/Agendamento cancelado/).waitFor({ timeout: 20_000 }).then(() => true).catch(() => false);
+    const cancelled = await waitStatus(apptId, 'cancelled');
+    const ownerCancel = await wa.waitFor(m => wa.to(ownerPhoneDigits)(m) && /cancel/i.test(m.text), 30_000);
+    const histTxt = (await page.locator('main').innerText().catch(() => '')).replace(/\n/g, ' ');
+    await shot(page, `M4-cancelado-${tag}`);
+    check('M4', 'Cancelar: banco CANCELADO, aviso na tela, cartão vai para o Histórico e o dono é avisado no WhatsApp', cancelNotice && cancelled && !!ownerCancel && /Histórico/.test(histTxt) && /Cancelado/.test(histTxt), `aviso=${cancelNotice}; banco=${statusOf(apptId)}; dono avisado=${!!ownerCancel}`);
+    await sameWidth(page, 'M4b', 'Lista com histórico sem rolagem horizontal');
+
+    // H5 faltando menos de 1 hora: sem botões, com explicação (o horário é ajustado no banco ISOLADO do teste)
+    const soon = nowBR(30);
+    await page.goto(`${URLS.front}/${S.slug}/horario?s=${svc}&d=${dayBR(5)}`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.bk-slot', { timeout: 20_000 });
+    await page.locator('.bk-slot').nth(Math.min(12, (await page.locator('.bk-slot').count()) - 1)).click();
+    await page.waitForURL(/dados/, { timeout: 15_000 });
+    let pre = '';
+    for (let i = 0; i < 12 && !pre; i++) { pre = await page.getByLabel(/Nome completo/).inputValue().catch(() => ''); if (!pre) await sleep(500); }
+    await page.getByRole('button', { name: 'Confirmar agendamento' }).click();
+    const done2 = await page.getByText('Agendamento confirmado!').waitFor({ timeout: 20_000 }).then(() => true).catch(() => false);
+    const id2 = (apptsOf(`c.name='${NAME}' and a.status<>'cancelled'`)[0] ?? [])[0];
+    check('M5a', 'Aparelho reconhecido agenda de novo sem pedir código (preparação do cenário "menos de 1 h")', done2 && !!id2, `agendamento=${id2}`);
+    if (id2) {
+      sql(`update appointments set date='${soon.date}', start_time='${soon.time}', status='confirmed' where id='${id2}'`);
+      await page.getByRole('link', { name: /Ver meus agendamentos/ }).click();
+      await page.waitForURL(/meus-agendamentos/, { timeout: 15_000 });
+      await li(page, 'Corte E2E').first().waitFor({ timeout: 15_000 });
+      const c2 = li(page, 'Corte E2E').first();
+      const txt2 = (await c2.innerText()).replace(/\n/g, ' ');
+      const btns = await c2.getByRole('button').count();
+      await shot(page, `M5-menos-de-1h-${tag}`);
+      check('M5', 'Faltando menos de 1 h: o cartão não tem botões e explica que é preciso falar com o estabelecimento', btns === 0 && /menos de 1 hora/.test(txt2), `botões=${btns}; texto="${txt2.slice(0, 150)}"`);
+      await sameWidth(page, 'M5b', 'Cartão "menos de 1 h" sem rolagem horizontal');
+      // a regra também vale no servidor: cancelar à força é recusado
+      const token = await page.evaluate(s => localStorage.getItem(`nimbo_device_${s}`), S.slug);
+      const forced = await api('PATCH', `/public/${S.slug}/appointments/${id2}/cancel`, {}, undefined, { 'X-Device-Token': token ?? '' });
+      check('M5c', 'O servidor também recusa cancelar com menos de 1 h (400)', forced.status === 400 && statusOf(id2) === 'confirmed', `resposta=${forced.status}; status=${statusOf(id2)}`);
+    }
+
+    // H7 token inválido (aparelho "esquecido"): mensagem amigável em vez de erro técnico
+    await page.evaluate(s => localStorage.setItem(`nimbo_device_${s}`, 'token-invalido'), S.slug);
+    await page.goto(`${URLS.front}/${S.slug}/meus-agendamentos`, { waitUntil: 'networkidle' });
+    const bad = await page.getByText(/Confirme seu celular para gerenciar seus agendamentos/).waitFor({ timeout: 10_000 }).then(() => true).catch(() => false);
+    check('M7', 'Token do aparelho inválido: mensagem amigável "Confirme seu celular", sem erro técnico', bad, (await page.locator('main').innerText().catch(() => '')).replace(/\n/g, ' ').slice(0, 120));
+  } finally { await ctx.close(); }
+
+  // H6 aparelho SEM prova de posse (navegador novo): pede para confirmar o celular e leva ao início
+  const { ctx: c6, page: p6 } = await newPage(browser, device, 'cliente-sem-token');
+  try {
+    await p6.goto(`${URLS.front}/${S.slug}`, { waitUntil: 'networkidle' });
+    await sleep(1000);
+    const noHeadLink = await p6.getByRole('link', { name: /^Meus agendamentos$/ }).count();
+    await p6.goto(`${URLS.front}/${S.slug}/meus-agendamentos`, { waitUntil: 'networkidle' });
+    const msg = await p6.getByText(/Confirme seu celular para gerenciar seus agendamentos/).waitFor({ timeout: 10_000 }).then(() => true).catch(() => false);
+    const goHome = p6.getByRole('button', { name: 'Ir para o início' });
+    const hasBtn = await goHome.count();
+    await shot(p6, `M6-sem-token-${tag}`);
+    const ox = await overflowX(p6);
+    if (hasBtn) await goHome.click();
+    await p6.waitForTimeout(800);
+    const atHome = new URL(p6.url()).pathname.replace(/\/$/, '') === `/${S.slug}`;
+    check('M6', 'Aparelho sem token: sem atalho no cabeçalho; a tela diz "Confirme seu celular" e o botão leva ao início', noHeadLink === 0 && msg && hasBtn === 1 && atHome && ox <= 0, `atalho=${noHeadLink}; mensagem=${msg}; botão=${hasBtn}; voltou ao início=${atHome}; overflowX=${ox}`);
+  } finally { await c6.close(); }
   saveState();
 });
 
