@@ -44,6 +44,20 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
             """)
     int expireUnconfirmed(@Param("now") java.time.Instant now);
 
+    /**
+     * Cancela os pendentes cujo horário de início já passou além da folga. date/start_time são texto no horário de
+     * Brasília ('yyyy-MM-dd' e 'HH:mm'), então o corte (agora - folga, em Brasília) é calculado no Java e comparado
+     * como texto: início &lt; corte  ⇔  data &lt; dataCorte  OU  (data = dataCorte E hora &lt; horaCorte).
+     */
+    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true)
+    @Query("""
+            UPDATE Appointment a SET a.status = com.agendepro.appointment.AppointmentStatus.CANCELLED, a.updatedAt = :now
+            WHERE a.status = com.agendepro.appointment.AppointmentStatus.PENDING
+              AND (a.date < :cutoffDate OR (a.date = :cutoffDate AND a.startTime < :cutoffTime))
+            """)
+    int expirePastStart(@Param("now") java.time.Instant now,
+                        @Param("cutoffDate") String cutoffDate, @Param("cutoffTime") String cutoffTime);
+
     long countByTenantId(UUID tenantId);
 
     /** Agendamentos que mudaram para o status informado na janela [from, to) (usa updatedAt). */
