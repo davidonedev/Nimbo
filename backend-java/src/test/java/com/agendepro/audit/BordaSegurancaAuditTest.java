@@ -193,14 +193,14 @@ class BordaSegurancaAuditTest extends AuditBase {
     }
 
     @Test
-    void gap_c2_adminCreateAcceptsPastAndOutsideHours_butStillRespectsBlocks() throws Exception {
-        // documenta lacuna: AppointmentService.create só valida conflito (agendamento e bloqueio)
+    void c2_adminCreateRejectsPast_acceptsOutsideHours_andStillRespectsBlocks() throws Exception {
+        // data/hora passada é rejeitada (INVALID_DATE); fora do expediente segue aceito (admin decide); bloqueio e conflito valem
         Ctx c = ctx();
         String token = adminToken(c.tenant);
         Client client = fixtures.client(c.tenant);
         String yesterday = LocalDate.now(SP).minusDays(1).toString();
 
-        adminCreate(token, c, client, yesterday, "10:00").andExpect(status().isCreated());
+        adminCreate(token, c, client, yesterday, "10:00").andExpect(status().isBadRequest());
         adminCreate(token, c, client, date, "03:00").andExpect(status().isCreated());
 
         fixtures.blockedSlot(c.tenant, c.professional, date, "14:00", "15:00");
