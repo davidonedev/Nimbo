@@ -1,6 +1,10 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import type { Appointment, Client, Service } from '@/types';
 
+/** Texto neutro quando o cliente/serviço do aviso ainda não está na lista local (nunca mostrar "—" cru). */
+export const FALLBACK_CLIENT_NAME = 'Novo cliente';
+export const FALLBACK_SERVICE_NAME = 'Serviço';
+
 export interface AppNotification {
   id: string;
   /** pending_reminder = o cliente já confirmou pelo WhatsApp e o dono ainda não confirmou (perto do horário). */
@@ -129,8 +133,8 @@ export function useAppointmentNotifications(
         toAdd.push({
           id: `n-${now}-${a.id}-${reminder}`,
           type: 'pending_reminder', reminder,
-          clientName:  clientsRef.current.find(c => c.id === a.clientId)?.name ?? '—',
-          serviceName: servicesRef.current.find(s => s.id === a.serviceId)?.name ?? '—',
+          clientName:  clientsRef.current.find(c => c.id === a.clientId)?.name ?? FALLBACK_CLIENT_NAME,
+          serviceName: servicesRef.current.find(s => s.id === a.serviceId)?.name ?? FALLBACK_SERVICE_NAME,
           date: a.date, time: a.startTime, timestamp: now, read: false,
         });
       }
@@ -177,8 +181,8 @@ export function useAppointmentNotifications(
 
       const base: Omit<AppNotification, 'type'> = {
         id:          `n-${Date.now()}-${a.id}-${Math.random()}`,
-        clientName:  client?.name  ?? '—',
-        serviceName: svc?.name     ?? '—',
+        clientName:  client?.name  ?? FALLBACK_CLIENT_NAME,
+        serviceName: svc?.name     ?? FALLBACK_SERVICE_NAME,
         date:        a.date,
         time:        a.startTime,
         timestamp:   Date.now(),

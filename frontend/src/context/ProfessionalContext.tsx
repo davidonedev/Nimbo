@@ -104,6 +104,26 @@ export function ProfessionalProvider({ children }: { children: React.ReactNode }
     if (user?.role === 'professional') refresh();
   }, [user, refresh]);
 
+  // Auto-polling a cada 30s: pedidos novos e cancelamentos feitos pelo cliente chegam ao painel do profissional
+  // (aviso/sino). Busca os clientes junto: o cliente de um pedido novo ainda não está na lista antiga.
+  const professionalId = professional?.id;
+  useEffect(() => {
+    if (user?.role !== 'professional' || !professionalId) return;
+    const id = setInterval(async () => {
+      try {
+        const [apts, cls] = await Promise.all([
+          listProfAppointmentsApi(),
+          api.get<Client[]>('/professional/clients'),
+        ]);
+        setAllClients(cls);
+        setAppointments(apts.filter((a) => a.professionalId === professionalId));
+      } catch {
+        // falha silenciosa — não interrompe o uso do app
+      }
+    }, 30_000);
+    return () => clearInterval(id);
+  }, [user?.role, professionalId]);
+
   if (loading) {
     return (
       <div className="flex h-dvh items-center justify-center text-muted-foreground">
