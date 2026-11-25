@@ -862,6 +862,12 @@ phase('F', async ({ browser }) => {
     ottoBefore === 'confirmed' && ottoRs.status === 200 && ottoAfter[0] === 'pending' && ottoAfter[1]?.startsWith(ottoTarget) && ottoAfter[2] === 't' && ottoAfter[3] === 't' && !!ottoOwnerMsg,
     `antes=${ottoBefore}; resposta=${ottoRs.status}; depois=${ottoAfter.join(',')}; dono avisado=${!!ottoOwnerMsg}`);
 
+  // F6 remarcar passa por toda a validação de um agendamento novo: o mesmo horário é recusado e nada muda
+  const ottoSame = await api('PATCH', `/public/${S.slug}/appointments/${otto.id}/reschedule`, { date: dayBR(3), startTime: ottoTarget }, undefined, dev(otto.deviceToken));
+  check('F6', 'Remarcar para o mesmo dia e horário atuais é recusado (400 SAME_SLOT) e o agendamento fica como estava',
+    ottoSame.status === 400 && ottoSame.raw?.code === 'SAME_SLOT' && statusOf(otto.id) === 'pending',
+    `resposta=${ottoSame.status}/${ottoSame.raw?.code}; status=${statusOf(otto.id)}`);
+
   // F4 "Meus agendamentos": a tela nova é testada no navegador pelo QA 2; aqui só o contrato da API (o token de Otto lista só o dele)
   const ottoList = await api('GET', `/public/${S.slug}/book/my-appointments`, undefined, undefined, dev(otto.deviceToken));
   const ottoIds = (ottoList.data ?? []).map(x => x.id);
@@ -896,6 +902,22 @@ phase('G', async () => {
   check('G2', 'Cancelar/remarcar/listar exigem o token do MESMO cliente: sem token, token de outro cliente, inventado e de outro estabelecimento dão 403 DEVICE_REQUIRED e nada muda',
     denied.every(r => r.status === 403 && r.raw?.code === 'DEVICE_REQUIRED') && otherTok2.status === 404 && still !== 'cancelled',
     `sem token: cancelar=${stolen.status} remarcar=${stolenR.status} listar=${stolenL.status}; token de outro+clientId=${otherTok.status}; token de outro sem clientId=${otherTok2.status}/${otherTok2.raw?.code}; inventado=${fakeTok.status}; outro estabelecimento=${crossTenant.status}; status do agendamento=${still}`);
+
+  // G8 remarcar para um horário que outro cliente já ocupa (mesmo profissional e dia): 409, e nada muda
+  const intoTaken = await api('PATCH', `/public/${S.slug}/appointments/${fixed.id}/reschedule`, { date: outro.date, startTime: outro.startTime }, undefined, dev(fixed.deviceToken));
+  const fixedRow = sql(`select date, start_time from appointments where id='${fixed.id}'`)[0] ?? [];
+  check('G8', 'Remarcar para um horário já ocupado por outro cliente é recusado (409 SCHEDULE_CONFLICT) e o agendamento não muda',
+    intoTaken.status === 409 && intoTaken.raw?.code === 'SCHEDULE_CONFLICT' && fixedRow[0] === fixed.date && fixedRow[1]?.startsWith(fixed.startTime),
+    `resposta=${intoTaken.status}/${intoTaken.raw?.code}; no banco=${fixedRow.join(' ')}`);
+
+  // G9 celular (WhatsApp) obrigatório: cadastro do portal e cliente criado pelo dono
+  const regNoPhone = await api('POST', `/public/${S.slug}/register/client`, { name: 'Sem Celular', email: `semcel-${tag}@e2e.test`, password: 'senha123' });
+  const regBadPhone = await api('POST', `/public/${S.slug}/register/client`, { name: 'Celular Curto', email: `curto-${tag}@e2e.test`, phone: '99999-888', password: 'senha123' });
+  const cliNoPhone = await api('POST', '/admin/clients', { name: 'Admin Sem Celular', email: `adm-semcel-${tag}@e2e.test` }, S.token);
+  const created = sql(`select count(*) from clients where email in ('semcel-${tag}@e2e.test','curto-${tag}@e2e.test','adm-semcel-${tag}@e2e.test')`)[0]?.[0];
+  check('G9', 'Celular (WhatsApp) é obrigatório: cadastro do portal sem celular e com celular curto, e cliente do dono sem celular, são recusados e nada é gravado',
+    regNoPhone.status >= 400 && regNoPhone.status < 500 && regBadPhone.status === 400 && regBadPhone.raw?.code === 'INVALID_PHONE' && cliNoPhone.status >= 400 && cliNoPhone.status < 500 && created === '0',
+    `portal sem celular=${regNoPhone.status}; celular curto=${regBadPhone.status}/${regBadPhone.raw?.code}; dono sem celular=${cliNoPhone.status}; gravados=${created}`);
 
   // G3 datas inválidas no /book
   const yesterday = await api('POST', `/public/${slug}/book`, { name: 'Passado', phone: '(11) 96666-1111', serviceIds: [S.nowa.serviceId], professionalId: null, date: dayBR(-1), startTime: '10:00' });
@@ -945,6 +967,23 @@ phase('H', async () => {
   const sts = { grace: statusOf(grace.id), conf: statusOf(conf.id), fut: statusOf(fut.id) };
   check('H1', 'Pendente cujo horário passou há 25 min vira CANCELADO sozinho (agendador de pendentes)', goneOld, `status=${statusOf(old.id)}`);
   check('H2', 'Dentro da folga de 15 min (5 min atrás) continua pendente; confirmado e pendente futuro não são tocados', sts.grace === 'pending' && sts.conf === 'confirmed' && sts.fut === 'pending', `folga=${sts.grace}; confirmado=${sts.conf}; futuro=${sts.fut}`);
+  // H3 o cancelamento automático avisa o cliente (WhatsApp) e o dono
+  const toClientCancel = await wa.waitFor(m => wa.to(old.ph.digits)(m) && /cancelado automaticamente/i.test(m.text), 30_000);
+  const toOwnerCancel = await wa.waitFor(m => wa.to(ownerPhoneDigits)(m) && /cancelado automaticamente/i.test(m.text) && m.text.includes(old.name), 30_000);
+  check('H3', 'Pedido cancelado sozinho porque o horário passou: o cliente e o dono recebem o aviso no WhatsApp',
+    !!toClientCancel && !!toOwnerCancel, `cliente avisado=${!!toClientCancel}; dono avisado=${!!toOwnerCancel}`);
+
+  // H4 aviso 24 h antes: pendente que o cliente já deixou com o estabelecimento e falta menos de 24 h (20 h)
+  const warned = await bookVerified(`Lia ${RUN}`, { pro: S.marcosId, day: 5 });
+  setWhen(warned.id, nowBR(60 * 20));
+  const toClientWarn = await wa.waitFor(m => wa.to(warned.ph.digits)(m) && /ainda aguarda a confirmação/i.test(m.text), 30_000);
+  const toOwnerWarn = await wa.waitFor(m => wa.to(ownerPhoneDigits)(m) && /ainda não foi aprovado/i.test(m.text) && m.text.includes(warned.name), 30_000);
+  await sleep(6000); // mais um ciclo: o aviso não pode repetir
+  const sentWarn = (await wa.all()).filter(m => /ainda aguarda a confirmação/i.test(m.text) && wa.to(warned.ph.digits)(m)).length;
+  const stamps = { warned: sql(`select expiry_warned_at is not null from appointments where id='${warned.id}'`)[0]?.[0], far: sql(`select expiry_warned_at is not null from appointments where id='${fut.id}'`)[0]?.[0] };
+  check('H4', 'Pendente que falta menos de 24 h: cliente e dono recebem o aviso de cancelamento automático uma única vez; o que está a dias de distância não é avisado',
+    !!toClientWarn && !!toOwnerWarn && sentWarn === 1 && stamps.warned === 't' && stamps.far === 'f',
+    `cliente=${!!toClientWarn}; dono=${!!toOwnerWarn}; mensagens ao cliente=${sentWarn}; carimbo do avisado=${stamps.warned}; carimbo do futuro=${stamps.far}`);
   saveState();
 });
 
