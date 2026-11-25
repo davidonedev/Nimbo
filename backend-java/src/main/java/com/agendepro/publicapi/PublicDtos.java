@@ -49,7 +49,8 @@ public final class PublicDtos {
     public record ClientLoginRequest(@NotBlank @Email String email, @NotBlank String password) {
     }
 
-    public record ClientAuthResponse(UUID id, String name, String email, String phone) {
+    /** {@code deviceToken}: prova de posse (header X-Device-Token) para listar, cancelar e remarcar os agendamentos. */
+    public record ClientAuthResponse(UUID id, String name, String email, String phone, String deviceToken) {
     }
 
     public record ClientRegisterRequest(
@@ -83,14 +84,15 @@ public final class PublicDtos {
     public record ProfessionalRegisterResponse(String name, String email) {
     }
 
-    public record CancelBookingRequest(@NotNull UUID clientId) {
+    /** {@code clientId} é opcional: o cliente vem do X-Device-Token; se informado, tem de ser o dono do token. */
+    public record CancelBookingRequest(UUID clientId) {
     }
 
     public record ResendVerificationRequest(@NotBlank @Email String email) {
     }
 
     public record RescheduleRequest(
-            @NotNull UUID clientId,
+            UUID clientId, // opcional: vem do X-Device-Token; se informado, tem de ser o dono do token
             @NotBlank @Pattern(regexp = "^\\d{4}-\\d{2}-\\d{2}$") String date,
             @NotBlank @Pattern(regexp = "^\\d{2}:\\d{2}(:\\d{2})?$") String startTime
     ) {

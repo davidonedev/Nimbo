@@ -156,22 +156,35 @@ public class PublicController {
         return ResponseEntity.ok(ApiResponse.ok(publicService.googleAuthPublicClient(slug, request)));
     }
 
+    /** Exige o X-Device-Token; {@code clientId}, se vier, tem de ser o dono do token (senão 403 DEVICE_REQUIRED). */
     @GetMapping("/{slug}/my-appointments")
     public ResponseEntity<ApiResponse<List<AppointmentDtos.AppointmentResponse>>> myAppointments(
-            @PathVariable String slug, @RequestParam UUID clientId) {
-        return ResponseEntity.ok(ApiResponse.ok(publicService.getClientAppointments(slug, clientId)));
+            @PathVariable String slug, @RequestParam(required = false) UUID clientId,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken) {
+        return ResponseEntity.ok(ApiResponse.ok(publicService.getClientAppointments(slug, clientId, deviceToken)));
+    }
+
+    /** Agendamentos do cliente do aparelho (cliente resolvido só pelo X-Device-Token). */
+    @GetMapping("/{slug}/book/my-appointments")
+    public ResponseEntity<ApiResponse<List<AppointmentDtos.AppointmentResponse>>> bookMyAppointments(
+            @PathVariable String slug, @RequestHeader(value = "X-Device-Token", required = false) String deviceToken) {
+        return ResponseEntity.ok(ApiResponse.ok(publicService.getClientAppointments(slug, null, deviceToken)));
     }
 
     @PatchMapping("/{slug}/appointments/{id}/cancel")
     public ResponseEntity<ApiResponse<MessageResponse>> cancel(
-            @PathVariable String slug, @PathVariable UUID id, @Valid @RequestBody CancelBookingRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(publicService.cancelPublicAppointment(slug, id, request)));
+            @PathVariable String slug, @PathVariable UUID id,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken,
+            @Valid @RequestBody(required = false) CancelBookingRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(publicService.cancelPublicAppointment(slug, id, request, deviceToken)));
     }
 
     @PatchMapping("/{slug}/appointments/{id}/reschedule")
     public ResponseEntity<ApiResponse<MessageResponse>> reschedule(
-            @PathVariable String slug, @PathVariable UUID id, @Valid @RequestBody RescheduleRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(publicService.reschedulePublicAppointment(slug, id, request)));
+            @PathVariable String slug, @PathVariable UUID id,
+            @RequestHeader(value = "X-Device-Token", required = false) String deviceToken,
+            @Valid @RequestBody RescheduleRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(publicService.reschedulePublicAppointment(slug, id, request, deviceToken)));
     }
 
     @GetMapping("/{slug}/verify-email")

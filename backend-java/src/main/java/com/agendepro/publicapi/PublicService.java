@@ -66,6 +66,7 @@ public class PublicService {
     private final com.agendepro.blockedslot.BlockedSlotRepository blockedSlotRepository;
     private final PgAdvisoryLockService pgAdvisoryLockService;
     private final com.agendepro.notification.NotificationService notificationService;
+    private final ClientDeviceService devices;
 
     @org.springframework.beans.factory.annotation.Value("${app.app-url}")
     private String appUrl;
@@ -218,7 +219,7 @@ public class PublicService {
 
     // ─── auth de cliente ────────────────────────────────────────────────────────
 
-    @Transactional(readOnly = true)
+    @Transactional
     public ClientAuthResponse loginPublicClient(String slug, ClientLoginRequest request) {
         Tenant t = resolveTenant(slug);
         Client client = clientRepository.findByTenantIdAndEmail(t.getId(), request.email())
@@ -234,7 +235,12 @@ public class PublicService {
             throw new AppException("Você precisa verificar seu e-mail antes de entrar. Verifique sua caixa de entrada.", 403, "EMAIL_NOT_VERIFIED");
         }
 
-        return new ClientAuthResponse(client.getId(), client.getName(), client.getEmail(), client.getPhone());
+        return authResponse(t, client);
+    }
+
+    /** Resposta de login do portal: dados do cliente + aparelho reconhecido (X-Device-Token) para listar/cancelar/remarcar. */
+    private ClientAuthResponse authResponse(Tenant t, Client client) {
+        return new ClientAuthResponse(client.getId(), client.getName(), client.getEmail(), client.getPhone(), devices.issue(t, client));
     }
 
     @Transactional
@@ -260,7 +266,7 @@ public class PublicService {
                 : "Cadastro iniciado. Verifique seu e-mail para ativar sua conta.");
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public ClientAuthResponse googleAuthPublicClient(String slug, GoogleAuthRequest request) {
         Tenant t = resolveTenant(slug);
 
@@ -286,21 +292,27 @@ public class PublicService {
                 })
                 .orElseGet(() -> clientRepository.save(Client.builder().tenantId(t.getId()).name(name).email(email).build()));
 
-        return new ClientAuthResponse(client.getId(), client.getName(), client.getEmail(), client.getPhone());
+        return authResponse(t, client);
     }
 
-    @Transactional(readOnly = true)
-    public List<AppointmentDtos.AppointmentResponse> getClientAppointments(String slug, UUID clientId) {
+    /**
+     * Agendamentos do cliente do aparelho. Exige X-Device-Token válido; {@code clientId} (opcional) tem de ser o dono do
+     * token. Sem token válido → 403 DEVICE_REQUIRED.
+     */
+    @Transactional
+    public List<AppointmentDtos.AppointmentResponse> getClientAppointments(String slug, UUID clientId, String deviceToken) {
         Tenant t = resolveTenant(slug);
-        clientRepository.findByIdAndTenantId(clientId, t.getId()).orElseThrow(() -> AppException.notFound("Cliente não encontrado"));
-        List<Appointment> appointments = appointmentRepository.findByTenantIdAndClientIdOrderByDateAscStartTimeAsc(t.getId(), clientId);
+        UUID ownerId = devices.requireClientId(t, deviceToken, clientId);
+        clientRepository.findByIdAndTenantId(ownerId, t.getId()).orElseThrow(() -> AppException.notFound("Cliente não encontrado"));
+        List<Appointment> appointments = appointmentRepository.findByTenantIdAndClientIdOrderByDateAscStartTimeAsc(t.getId(), ownerId);
         return appointmentService.toResponses(appointments);
     }
 
     @Transactional
-    public MessageResponse reschedulePublicAppointment(String slug, UUID id, RescheduleRequest request) {
+    public MessageResponse reschedulePublicAppointment(String slug, UUID id, RescheduleRequest request, String deviceToken) {
         Tenant t = resolveTenant(slug);
-        Appointment a = appointmentRepository.findByIdAndTenantIdAndClientId(id, t.getId(), request.clientId())
+        UUID ownerId = devices.requireClientId(t, deviceToken, request.clientId());
+        Appointment a = appointmentRepository.findByIdAndTenantIdAndClientId(id, t.getId(), ownerId)
                 .orElseThrow(() -> AppException.notFound("Agendamento não encontrado"));
 
         if (a.getStatus() == AppointmentStatus.CANCELLED) {
@@ -321,7 +333,19 @@ public class PublicService {
         ServiceOffering service = serviceOfferingRepository.findById(a.getServiceId())
                 .orElseThrow(() -> AppException.notFound("Serviço não encontrado"));
 
+        // A nova data tem de ser de hoje (Brasília) em diante, até o limite de antecedência, e o horário não pode ter passado.
         String newStart = request.startTimeHHmm();
+        LocalDate newDay;
+        try {
+            newDay = LocalDate.parse(request.date());
+            LocalDateTime.parse(request.date() + "T" + newStart);
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new AppException("Data ou horário inválido.", 400, "INVALID_DATE");
+        }
+        PhoneBookingService.requireBookableDate(newDay);
+        if (LocalDateTime.parse(request.date() + "T" + newStart).isBefore(LocalDateTime.now(SAO_PAULO).truncatedTo(ChronoUnit.MINUTES))) {
+            throw new AppException("Esse horário já passou. Escolha outro.", 400, "INVALID_DATE");
+        }
         String newEnd = ScheduleService.addMinutes(newStart, service.getDuration());
 
         pgAdvisoryLockService.lockProfessionalSchedule(a.getProfessionalId(), request.date());
@@ -338,6 +362,13 @@ public class PublicService {
         // Reset reminders so they fire again for the new time
         a.setReminder24hSentAt(null);
         a.setReminder2hSentAt(null);
+        // Remarcar um horário já confirmado cria um pedido novo: o dono precisa aprovar o novo horário (volta a pendente,
+        // sem prazo para o cliente, que já pediu). Pendente continua pendente.
+        if (a.getStatus() == AppointmentStatus.CONFIRMED) {
+            a.setStatus(AppointmentStatus.PENDING);
+            a.setConfirmBy(null);
+            a.setClientConfirmedAt(Instant.now());
+        }
         appointmentRepository.save(a);
         if (ownerKnows) notificationService.ownerClientRescheduled(a, oldDate, oldStart);
 
@@ -345,9 +376,10 @@ public class PublicService {
     }
 
     @Transactional
-    public MessageResponse cancelPublicAppointment(String slug, UUID id, CancelBookingRequest request) {
+    public MessageResponse cancelPublicAppointment(String slug, UUID id, CancelBookingRequest request, String deviceToken) {
         Tenant t = resolveTenant(slug);
-        Appointment appointment = appointmentRepository.findByIdAndTenantIdAndClientId(id, t.getId(), request.clientId())
+        UUID ownerId = devices.requireClientId(t, deviceToken, request == null ? null : request.clientId());
+        Appointment appointment = appointmentRepository.findByIdAndTenantIdAndClientId(id, t.getId(), ownerId)
                 .orElseThrow(() -> AppException.notFound("Agendamento não encontrado"));
 
         if (appointment.getStatus() == AppointmentStatus.CANCELLED) {
@@ -424,7 +456,7 @@ public class PublicService {
         record.setUsedAt(Instant.now());
         clientEmailTokenRepository.save(record);
 
-        return new ClientAuthResponse(client.getId(), client.getName(), client.getEmail(), client.getPhone());
+        return authResponse(t, client);
     }
 
     @Transactional
