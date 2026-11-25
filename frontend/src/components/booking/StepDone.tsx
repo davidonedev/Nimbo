@@ -1,9 +1,9 @@
-import { Navigate } from 'react-router-dom';
-import { CalendarPlus, Check, Clock, MessageCircle } from 'lucide-react';
+import { Link, Navigate } from 'react-router-dom';
+import { CalendarCheck, CalendarPlus, Check, Clock, MessageCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { usePublicTenant } from '@/context/PublicTenantContext';
 import { formatCurrency } from '@/lib/utils';
-import { clientConfirmedApi } from '@/services/booking.service';
+import { clientConfirmedApi, getDeviceToken } from '@/services/booking.service';
 import { useBooking } from './BookingContext';
 import { priceLabel, whenLabel } from './bookingFormat';
 
@@ -27,6 +27,13 @@ export default function StepDone() {
   const first = booking.items[0];
   const last = booking.items[booking.items.length - 1];
   const names = booking.items.map(i => i.serviceName).join(' + ');
+  // Sem prova do celular (pedido pendente de um aparelho novo) o servidor não mostra a lista: só oferece se houver token.
+  const canManage = !pending || !!getDeviceToken(slug);
+  const mine = canManage && (
+    <Link className="bk-btn ghost block" to={`/${slug}/meus-agendamentos`}>
+      <CalendarCheck size={18} aria-hidden /> Ver meus agendamentos
+    </Link>
+  );
   const again = () => { setBooked(null); setChallenge(null); go('servico', { s: [] }); };
 
   // Link do Google Agenda (abre o app de calendário no celular). Horário de Brasília, UTC-3 fixo.
@@ -97,6 +104,7 @@ export default function StepDone() {
               <MessageCircle size={18} aria-hidden /> {clientConfirmed ? 'Abrir o WhatsApp de novo' : 'Confirmar no WhatsApp'}
             </a>
           )}
+          {mine}
           <button type="button" className="bk-btn ghost block" onClick={again}>Fazer outro agendamento</button>
         </div>
       </section>
@@ -117,6 +125,7 @@ export default function StepDone() {
         <a className="bk-btn ghost" href={calendarUrl} target="_blank" rel="noopener noreferrer">
           <CalendarPlus size={18} aria-hidden /> Adicionar ao calendário
         </a>
+        {mine}
         <button type="button" className="bk-btn block" onClick={again}>Fazer outro agendamento</button>
       </div>
     </section>

@@ -28,6 +28,7 @@ import {
   type PixPaymentData,
 } from '@/services/public.service';
 import { ApiError } from '@/lib/api';
+import { manageError } from '@/components/booking/manageErrors';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -116,8 +117,8 @@ export default function MyAppointments() {
     try {
       const data = await getClientAppointmentsApi(tenant.slug, client.id);
       setAppointments(data);
-    } catch {
-      setError('Não foi possível carregar seus agendamentos. Tente novamente.');
+    } catch (err) {
+      setError(manageError(err, 'load').message);
     } finally {
       setLoading(false);
     }
@@ -136,7 +137,7 @@ export default function MyAppointments() {
       setAppointments(prev => prev.map(a => a.id === cancelTarget.id ? { ...a, status: 'cancelled' } : a));
       setCancelSuccess(true);
     } catch (err) {
-      setCancelError(err instanceof ApiError ? err.message : 'Erro ao cancelar. Tente novamente.');
+      setCancelError(manageError(err, 'cancel').message);
     } finally {
       setCancelling(false);
     }
@@ -184,7 +185,7 @@ export default function MyAppointments() {
       ));
       setReschedSuccess(true);
     } catch (err) {
-      setReschedError(err instanceof ApiError ? err.message : 'Erro ao reagendar. Tente novamente.');
+      setReschedError(manageError(err, 'reschedule').message);
     } finally {
       setReschedLoading(false);
     }

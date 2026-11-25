@@ -12,6 +12,7 @@ import ClientNoticeBar from '@/components/admin/ClientNoticeBar';
 import { AutoSendNote, ConfirmAppointmentDialog } from '@/components/appointments/ConfirmAppointmentDialog';
 import { saveErrorMessage } from '@/lib/settingsPayload';
 import { nowBrasilia } from '@/lib/scheduling';
+import { isAwaitingConfirmation } from '@/lib/pendingConfirmation';
 import type { Appointment } from '@/types';
 
 const fmtWhen = (a: Appointment) => `${format(new Date(`${a.date}T00:00:00`), "EEE, d 'de' MMM", { locale: ptBR })} às ${a.startTime}`;
@@ -57,7 +58,7 @@ export default function PendingConfirmations() {
     const svcById = new Map(services.map(s => [s.id, s]));
     const profById = new Map(professionals.map(p => [p.id, p]));
     return appointments
-      .filter(a => a.status === 'pending' && a.date >= today && (!a.confirmBy || new Date(a.confirmBy).getTime() > now))
+      .filter(a => isAwaitingConfirmation(a, today, now))
       .sort((a, b) => `${a.date} ${a.startTime}`.localeCompare(`${b.date} ${b.startTime}`))
       .map(a => ({
         appt: a,

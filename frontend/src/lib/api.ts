@@ -187,10 +187,11 @@ export const api = {
       ...extra,
     }),
 
-  patch: <T>(path: string, body: unknown) =>
+  patch: <T>(path: string, body: unknown, extra?: RequestExtra) =>
     request<T>(path, {
       method: 'PATCH',
       body: JSON.stringify(body),
+      ...extra,
     }),
 
   put: <T>(path: string, body: unknown) =>

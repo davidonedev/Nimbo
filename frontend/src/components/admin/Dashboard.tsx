@@ -15,6 +15,7 @@ import { WeekStrip } from './painel/WeekStrip';
 import { UpcomingAppointments } from './painel/UpcomingAppointments';
 import { CancellationsCard } from './painel/CancellationsCard';
 import { formatCurrency } from '@/lib/utils';
+import { isAwaitingConfirmation } from '@/lib/pendingConfirmation';
 
 const STATUS_VARIANT = { confirmed: 'info', completed: 'success', cancelled: 'destructive', pending: 'warning', no_show: 'destructive' } as const;
 const STATUS_LABEL   = { pending: 'Pendente', confirmed: 'Confirmado', completed: 'Concluído', cancelled: 'Cancelado', no_show: 'Não compareceu' };
@@ -32,7 +33,7 @@ export default function Dashboard() {
     const todayAppts  = appointments.filter(a => a.date === today && a.status !== 'cancelled');
     const totalRev    = appointments.filter(a => a.status === 'completed').reduce((s, a) => s + a.price, 0);
     const todayRev    = appointments.filter(a => a.date === today && a.status === 'completed').reduce((s, a) => s + a.price, 0);
-    const pending     = todayAppts.filter(a => a.status === 'pending').length;
+    const pending     = todayAppts.filter(a => isAwaitingConfirmation(a, today)).length;
     const confirmed   = todayAppts.filter(a => a.status === 'confirmed').length;
     return { todayAppts, totalRev, todayRev, pending, confirmed };
   }, [appointments, today]);

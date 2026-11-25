@@ -16,6 +16,7 @@ import { useTenant } from '@/context/TenantContext';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { formatCurrency } from '@/lib/utils';
 import { todaySP } from '@/lib/agendaDates';
+import { countAwaitingConfirmation } from '@/lib/pendingConfirmation';
 import {
   EMPTY_FILTERS, PERIOD_PRESETS, activePeriodPreset, filterAppointments, hasActiveFilters, periodRange, statusActionsFor,
   statusCounts, statusErrorMessage,
@@ -123,7 +124,8 @@ export default function AppointmentsView() {
     const active = appointments.filter(a => a.status !== 'cancelled');
     return {
       today: active.filter(a => a.date === today).length,
-      pending: appointments.filter(a => a.status === 'pending').length,
+      // Mesma regra da caixa "Aguardando confirmação": pedido de horário já passado ou com prazo vencido não conta.
+      pending: countAwaitingConfirmation(appointments, today),
       week: active.filter(a => a.date >= today && a.date <= end).length,
     };
   }, [appointments, today]);

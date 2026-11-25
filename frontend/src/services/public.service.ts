@@ -1,4 +1,5 @@
 import { api } from '../lib/api';
+import { deviceHeaders, storeDeviceTokenFrom } from './booking.service';
 import type { Tenant, Service, Professional, Appointment } from '../types';
 
 // Normaliza professional do backend para tipo frontend
@@ -64,7 +65,7 @@ export async function getClientAppointmentsApi(
   slug: string,
   clientId: string,
 ): Promise<PublicAppointment[]> {
-  return api.get<PublicAppointment[]>(`/public/${slug}/my-appointments?clientId=${clientId}`);
+  return api.get<PublicAppointment[]>(`/public/${slug}/my-appointments?clientId=${clientId}`, { headers: deviceHeaders(slug) });
 }
 
 // ─── Cancelar agendamento pelo cliente ────────────────────────────────────────
@@ -73,7 +74,7 @@ export async function cancelPublicAppointmentApi(
   appointmentId: string,
   clientId: string,
 ): Promise<void> {
-  await api.patch(`/public/${slug}/appointments/${appointmentId}/cancel`, { clientId });
+  await api.patch(`/public/${slug}/appointments/${appointmentId}/cancel`, { clientId }, { headers: deviceHeaders(slug) });
 }
 
 // ─── Reagendar agendamento pelo cliente ───────────────────────────────────────
@@ -83,7 +84,7 @@ export async function reschedulePublicAppointmentApi(
   appointmentId: string,
   payload: { clientId: string; date: string; startTime: string },
 ): Promise<void> {
-  await api.patch(`/public/${slug}/appointments/${appointmentId}/reschedule`, payload);
+  await api.patch(`/public/${slug}/appointments/${appointmentId}/reschedule`, payload, { headers: deviceHeaders(slug) });
 }
 
 // ─── Pagamento Pix via Mercado Pago ───────────────────────────────────────────
@@ -124,13 +125,15 @@ export interface ClientSessionData {
   name:   string;
   email:  string;
   phone?: string;
+  /** Token do aparelho (resposta da verificação). O serviço o guarda e o remove da sessão devolvida. */
+  deviceToken?: string | null;
 }
 
 export async function verifyClientEmailApi(
   slug: string,
   token: string,
 ): Promise<ClientSessionData> {
-  return api.get<ClientSessionData>(`/public/${slug}/verify-email?token=${encodeURIComponent(token)}`);
+  return storeDeviceTokenFrom(slug, await api.get<ClientSessionData>(`/public/${slug}/verify-email?token=${encodeURIComponent(token)}`));
 }
 
 export async function resendVerificationEmailApi(

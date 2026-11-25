@@ -1,4 +1,5 @@
 import { api, type RequestExtra } from '../lib/api';
+import { storeDeviceTokenFrom } from './booking.service';
 
 // ─── Shared result type ───────────────────────────────────────────────────────
 
@@ -7,6 +8,8 @@ export interface ClientSessionData {
   name: string;
   email: string;
   phone?: string;
+  /** Token do aparelho (resposta do login). O serviço o guarda e o remove da sessão devolvida. */
+  deviceToken?: string | null;
 }
 
 // ─── Register (email + password) ─────────────────────────────────────────────
@@ -22,7 +25,7 @@ export async function registerClientApi(
   slug: string,
   payload: ClientRegisterPayload,
 ): Promise<ClientSessionData> {
-  return api.post<ClientSessionData>(`/public/${slug}/register/client`, payload);
+  return storeDeviceTokenFrom(slug, await api.post<ClientSessionData>(`/public/${slug}/register/client`, payload));
 }
 
 // ─── Login (email + password) ─────────────────────────────────────────────────
@@ -32,7 +35,7 @@ export async function clientLoginApi(
   email: string,
   password: string,
 ): Promise<ClientSessionData> {
-  return api.post<ClientSessionData>(`/public/${slug}/login/client`, { email, password });
+  return storeDeviceTokenFrom(slug, await api.post<ClientSessionData>(`/public/${slug}/login/client`, { email, password }));
 }
 
 // ─── Google OAuth ─────────────────────────────────────────────────────────────
@@ -41,7 +44,7 @@ export async function googleAuthClientApi(
   slug: string,
   accessToken: string,
 ): Promise<ClientSessionData> {
-  return api.post<ClientSessionData>(`/public/${slug}/auth/google`, { accessToken });
+  return storeDeviceTokenFrom(slug, await api.post<ClientSessionData>(`/public/${slug}/auth/google`, { accessToken }));
 }
 
 // ─── Professional register ────────────────────────────────────────────────────

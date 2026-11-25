@@ -72,6 +72,24 @@ describe('AppointmentsView (desktop)', () => {
     expect([...status.options].slice(0, 2).map(o => o.textContent)).toEqual(['Todos (2)', 'Pendentes (0)']);
   });
 
+  describe('resumo "Pendentes" usa a mesma regra da caixa "Aguardando confirmação"', () => {
+    const original = tenant.appointments;
+    beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-11-12T15:00:00Z')); });
+    afterEach(() => { vi.useRealTimers(); tenant.appointments = original; });
+
+    it('pendente de horário já passado não entra no número (só o de hoje em diante)', () => {
+      tenant.appointments = [
+        ...original,
+        { ...base, id: 'a9', clientId: 'c1', professionalId: 'p1', serviceId: 's1', date: '2026-11-01', status: 'pending' },
+      ];
+      renderView();
+      const pendentes = screen.getByText('Pendentes', { selector: 'dt' });
+      expect(pendentes.previousElementSibling?.textContent).toBe('1'); // a2 (12/11); a9 (01/11) já passou
+      // o seletor de status continua listando TODOS os pendentes (é filtro de lista, não contador de ação)
+      expect([...(screen.getByLabelText('Status') as HTMLSelectElement).options].map(o => o.textContent)).toContain('Pendentes (2)');
+    });
+  });
+
   describe('atalhos de período', () => {
     beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-11-12T15:00:00Z')); }); // quinta-feira
     afterEach(() => vi.useRealTimers());

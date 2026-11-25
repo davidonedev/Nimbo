@@ -4,6 +4,7 @@
  * "reconhecido" (token guardado no navegador, enviado em X-Device-Token) para agendar sem pedir código de novo.
  */
 import { api } from '../lib/api';
+import type { PublicAppointment } from './public.service';
 
 export interface BookedItem {
   id: string;
@@ -75,9 +76,20 @@ export function saveDeviceToken(slug: string, token: string) {
   }
 }
 
-function deviceHeaders(slug: string): Record<string, string> {
+export function deviceHeaders(slug: string): Record<string, string> {
   const token = getDeviceToken(slug);
   return token ? { 'X-Device-Token': token } : {};
+}
+
+/**
+ * Login do portal antigo (e-mail, Google, verificação de e-mail): a resposta traz o `deviceToken` do aparelho.
+ * Guarda-o (para o X-Device-Token das próximas chamadas) e devolve a sessão SEM o token, que não deve ir para o
+ * armazenamento da sessão do cliente.
+ */
+export function storeDeviceTokenFrom<T extends { deviceToken?: string | null }>(slug: string, data: T): Omit<T, 'deviceToken'> {
+  const { deviceToken, ...rest } = data;
+  if (deviceToken) saveDeviceToken(slug, deviceToken);
+  return rest;
 }
 
 // ─── Chamadas ────────────────────────────────────────────────────────────────────
@@ -117,6 +129,30 @@ export async function verifyBookApi(slug: string, challengeId: string, code: str
  */
 export function clientConfirmedApi(slug: string, appointmentIds: string[]) {
   return api.post<{ confirmed: number }>(`/public/${slug}/book/client-confirmed`, { appointmentIds });
+}
+
+// ─── Meus agendamentos (aparelho reconhecido) ────────────────────────────────────
+
+/** Agendamento do cliente (mesmo formato do portal antigo: profissional e serviço aninhados). */
+export type MyAppointment = PublicAppointment;
+
+/** Lista os agendamentos do cliente deste aparelho. 403 DEVICE_REQUIRED = aparelho ainda não confirmou o celular. */
+export function listMyAppointmentsApi(slug: string) {
+  return api.get<MyAppointment[]>(`/public/${slug}/book/my-appointments`, { headers: deviceHeaders(slug) });
+}
+
+/** Cancela (até 1 h antes). 400 CANCELLATION_WINDOW_EXPIRED = passou do prazo. */
+export async function cancelMyAppointmentApi(slug: string, appointmentId: string): Promise<void> {
+  await api.patch(`/public/${slug}/appointments/${appointmentId}/cancel`, {}, { headers: deviceHeaders(slug) });
+}
+
+/** Remarca (até 1 h antes). 409 SCHEDULE_CONFLICT = horário ocupado; 400 RESCHEDULE_WINDOW_EXPIRED = passou do prazo. */
+export async function rescheduleMyAppointmentApi(
+  slug: string,
+  appointmentId: string,
+  p: { date: string; startTime: string },
+): Promise<void> {
+  await api.patch(`/public/${slug}/appointments/${appointmentId}/reschedule`, p, { headers: deviceHeaders(slug) });
 }
 
 export function resendCodeApi(slug: string, challengeId: string) {
