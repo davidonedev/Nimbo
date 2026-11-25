@@ -17,6 +17,12 @@ describe('manageError: mensagens amigáveis', () => {
     expect(e.conflict).toBe(true);
     expect(e.message).toBe('Esse horário acabou de ser ocupado. Escolha outro horário.');
   });
+  it('remarcar refaz a validação: antecedência mínima, mesmo horário e estabelecimento fechado mostram a frase do servidor', () => {
+    const advance = 'Esse horário fica dentro da antecedência mínima de 120 minutos do estabelecimento. Escolha um horário mais à frente.';
+    expect(manageError(new ApiError(advance, 400, 'MIN_ADVANCE'), 'reschedule').message).toBe(advance);
+    expect(manageError(new ApiError('Escolha um horário diferente do atual.', 400, 'SAME_SLOT'), 'reschedule').message).toBe('Escolha um horário diferente do atual.');
+    expect(manageError(new ApiError('Este estabelecimento está fechado para novos agendamentos.', 403, 'CLOSED'), 'reschedule').message).toMatch(/fechado/);
+  });
   it('INVALID_DATE, rede fora e erro desconhecido nunca mostram texto técnico', () => {
     expect(manageError(new ApiError('x', 400, 'INVALID_DATE'), 'reschedule').message).toMatch(/data/);
     expect(manageError(new ApiError('Sem conexão.', 0, 'NETWORK'), 'cancel').message).toBe('Sem conexão.');

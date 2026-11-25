@@ -28,6 +28,10 @@ export function manageError(err: unknown, action: ManageAction): ManageError {
   if (status === 409 || code === 'SCHEDULE_CONFLICT') {
     return { ...base, conflict: true, message: 'Esse horário acabou de ser ocupado. Escolha outro horário.' };
   }
+  // Remarcar refaz toda a validação de um agendamento novo; o servidor já devolve a frase certa em cada caso.
+  if ((code === 'MIN_ADVANCE' || code === 'SAME_SLOT' || code === 'CLOSED') && err instanceof ApiError) {
+    return { ...base, message: err.message };
+  }
   if (code === 'INVALID_DATE') return { ...base, message: 'Essa data não está disponível. Escolha outra data.' };
   // Sem rede / servidor fora: a API já devolve uma frase em português.
   if (err instanceof ApiError && (status === 0 || status >= 500)) return { ...base, message: err.message };

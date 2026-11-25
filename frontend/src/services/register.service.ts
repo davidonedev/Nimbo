@@ -17,7 +17,8 @@ export interface ClientSessionData {
 export interface ClientRegisterPayload {
   name: string;
   email: string;
-  phone?: string;
+  /** Celular (WhatsApp) obrigatório: os avisos do agendamento saem por lá. */
+  phone: string;
   password: string;
 }
 

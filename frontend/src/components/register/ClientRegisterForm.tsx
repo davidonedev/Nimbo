@@ -27,6 +27,7 @@ interface FormState {
 interface FormErrors {
   name?: string;
   email?: string;
+  phone?: string;
   password?: string;
   confirmPassword?: string;
 }
@@ -39,6 +40,8 @@ function validate(form: FormState): FormErrors {
     errors.name = 'Nome deve ter ao menos 2 caracteres.';
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
     errors.email = 'E-mail inválido.';
+  if (form.phone.replace(/\D/g, '').length < 10)
+    errors.phone = 'Informe o celular (WhatsApp) com DDD.';
   if (form.password.length < 6)
     errors.password = 'Senha deve ter ao menos 6 caracteres.';
   if (form.password !== form.confirmPassword)
@@ -87,7 +90,7 @@ export default function ClientRegisterForm({ onBack, onSuccess, onSwitchToLogin 
       const result = await registerClientApi(getSlug(), {
         name:     form.name.trim(),
         email:    form.email.trim().toLowerCase(),
-        phone:    form.phone.trim() || undefined,
+        phone:    form.phone.trim(),
         password: form.password,
       });
       onSuccess(result);
@@ -148,17 +151,19 @@ export default function ClientRegisterForm({ onBack, onSuccess, onSwitchToLogin 
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="phone">Telefone</Label>
+          <Label htmlFor="phone">Celular (WhatsApp) *</Label>
           <Input
             id="phone"
             type="tel"
             placeholder="(11) 99999-9999"
             value={form.phone}
-            onChange={e => setForm(prev => ({ ...prev, phone: maskPhone(e.target.value) }))}
+            onChange={e => { setForm(prev => ({ ...prev, phone: maskPhone(e.target.value) })); setErrors(prev => ({ ...prev, phone: undefined })); }}
             disabled={saving}
             autoComplete="tel"
             maxLength={15}
+            aria-invalid={!!errors.phone}
           />
+          {errors.phone && <p className="text-xs text-destructive">{errors.phone}</p>}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

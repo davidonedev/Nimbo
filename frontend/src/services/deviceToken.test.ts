@@ -40,7 +40,7 @@ describe('portal antigo envia X-Device-Token (G2)', () => {
     for (const run of [
       () => clientLoginApi('loja', 'a@b.com', 'x'),
       () => googleAuthClientApi('loja', 'g'),
-      () => registerClientApi('loja', { name: 'Ana', email: 'a@b.com', password: 'x' }),
+      () => registerClientApi('loja', { name: 'Ana', email: 'a@b.com', phone: '(11) 99999-8888', password: 'x' }),
     ]) {
       localStorage.clear();
       vi.mocked(api.post).mockResolvedValueOnce({ id: 'c1', name: 'Ana', email: 'a@b.com', deviceToken: 'novo-tok' });
