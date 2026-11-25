@@ -66,6 +66,7 @@ public class ClientService {
 
     @Transactional
     public ClientResponse create(UUID tenantId, ClientCreateRequest request) {
+        com.agendepro.publicapi.PublicService.requireValidPhone(request.phone());
         Client client = clientRepository.save(Client.builder()
                 .tenantId(tenantId).name(request.name()).email(request.email()).phone(request.phone()).build());
         return ClientResponse.from(client);
@@ -78,7 +79,10 @@ public class ClientService {
 
         if (request.name() != null) client.setName(request.name());
         if (request.email() != null) client.setEmail(request.email());
-        if (request.phone() != null) client.setPhone(request.phone());
+        if (request.phone() != null) {
+            com.agendepro.publicapi.PublicService.requireValidPhone(request.phone());
+            client.setPhone(request.phone());
+        }
 
         return ClientResponse.from(clientRepository.save(client));
     }

@@ -401,12 +401,7 @@ public class PhoneBookingService {
     /** Horários livres de um profissional num dia, já sem os que passaram ou estão dentro da antecedência mínima. */
     private List<String> slotsFor(Tenant t, String slug, Professional p, List<UUID> serviceIds, LocalDate day) {
         String csv = serviceIds.stream().map(UUID::toString).collect(Collectors.joining(","));
-        List<String> all = publicService.getAvailableSlots(slug, p.getId(), null, csv, day.toString());
-        if (!day.equals(LocalDate.now(SAO_PAULO))) return all;
-
-        LocalTime now = LocalTime.now(SAO_PAULO);
-        int earliest = now.getHour() * 60 + now.getMinute() + (t.getMinAdvanceMinutes() == null ? 0 : t.getMinAdvanceMinutes());
-        return all.stream().filter(s -> ScheduleService.toMinutes(s) > earliest).toList();
+        return PublicService.applyMinAdvance(t, day, publicService.getAvailableSlots(slug, p.getId(), null, csv, day.toString()));
     }
 
     private static boolean withinWindow(LocalDate day) {

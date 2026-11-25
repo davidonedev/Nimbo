@@ -49,14 +49,18 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
      * Brasília ('yyyy-MM-dd' e 'HH:mm'), então o corte (agora - folga, em Brasília) é calculado no Java e comparado
      * como texto: início &lt; corte  ⇔  data &lt; dataCorte  OU  (data = dataCorte E hora &lt; horaCorte).
      */
-    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true)
     @Query("""
-            UPDATE Appointment a SET a.status = com.agendepro.appointment.AppointmentStatus.CANCELLED, a.updatedAt = :now
+            SELECT a FROM Appointment a
             WHERE a.status = com.agendepro.appointment.AppointmentStatus.PENDING
               AND (a.date < :cutoffDate OR (a.date = :cutoffDate AND a.startTime < :cutoffTime))
             """)
-    int expirePastStart(@Param("now") java.time.Instant now,
-                        @Param("cutoffDate") String cutoffDate, @Param("cutoffTime") String cutoffTime);
+    List<Appointment> findPendingPastStart(@Param("cutoffDate") String cutoffDate, @Param("cutoffTime") String cutoffTime);
+
+    /**
+     * Pendentes que o cliente já deixou em mãos do estabelecimento (sem prazo do cliente: confirm_by nulo) e ainda não
+     * receberam o aviso de cancelamento automático, nas datas informadas.
+     */
+    List<Appointment> findByStatusAndConfirmByIsNullAndExpiryWarnedAtIsNullAndDateIn(AppointmentStatus status, java.util.Collection<String> dates);
 
     long countByTenantId(UUID tenantId);
 

@@ -190,18 +190,55 @@ class AlternativosAuditTest extends AuditBase {
     }
 
     @Test
-    void gap_b4_rescheduleDoesNotRevalidateWorkingHours_butRejectsPastDates() throws Exception {
-        // documenta lacuna: o reagendamento aceita fora do expediente (só checa conflito); data passada é rejeitada (INVALID_DATE)
+    void b4_rescheduleRunsTheWholeBookingValidation_hoursPastClosedAndSameSlot() throws Exception {
+        // remarcar é pedir um horário novo: expediente, data passada, horário igual e estabelecimento fechado são conferidos de novo
         Ctx c = ctx();
         Client client = clientWithPhone(c.tenant, uniquePhone());
-        Appointment outsideHours = confirmedIn(c, client, 2, "10:00", "10:30");
-        clientReschedule(c, outsideHours, client, date, "03:00").andExpect(status().isOk()); // expediente é 08:00–18:00
-        assertThat(reload(outsideHours).getStartTime()).isEqualTo("03:00");
+        Appointment a = confirmedIn(c, client, 2, "10:00", "10:30");
 
+        // fora do expediente (08:00–18:00): recusado, e o agendamento fica onde estava
+        assertThat(body(clientReschedule(c, a, client, date, "03:00").andExpect(status().isConflict())).get("code").asText()).isEqualTo("SCHEDULE_CONFLICT");
+        assertThat(body(clientReschedule(c, a, client, date, "17:45").andExpect(status().isConflict())).get("code").asText()).isEqualTo("SCHEDULE_CONFLICT"); // 17:45 + 30 min passa das 18:00
+        assertThat(reload(a).getStartTime()).isEqualTo("10:00");
+        assertThat(reload(a).getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
+
+        // dia em que o profissional não atende
+        int blockedWeekday = LocalDate.parse(date).plusDays(1).getDayOfWeek().getValue() % 7;
+        Ctx weekdays = ctx();
+        weekdays.professional.setWorkingDays(java.util.stream.IntStream.range(0, 7).filter(d -> d != blockedWeekday).boxed().toArray(Integer[]::new));
+        professionalRepository.save(weekdays.professional);
+        Client other = clientWithPhone(weekdays.tenant, uniquePhone());
+        Appointment b = confirmedIn(weekdays, other, 2, "10:00", "10:30");
+        String dayOff = LocalDate.parse(date).plusDays(1).toString();
+        assertThat(body(clientReschedule(weekdays, b, other, dayOff, "10:00").andExpect(status().isConflict())).get("code").asText()).isEqualTo("SCHEDULE_CONFLICT");
+
+        // horário igual ao atual
+        assertThat(body(clientReschedule(c, a, client, date, "10:00").andExpect(status().isBadRequest())).get("code").asText()).isEqualTo("SAME_SLOT");
+
+        // data passada
         Appointment toPast = confirmedIn(c, client, 3, "10:00", "10:30");
         String yesterday = LocalDate.now(SP).minusDays(1).toString();
         assertThat(body(clientReschedule(c, toPast, client, yesterday, "10:00").andExpect(status().isBadRequest())).get("code").asText()).isEqualTo("INVALID_DATE");
         assertThat(reload(toPast).getDate()).isNotEqualTo(yesterday);
+
+        // estabelecimento fechado para novos agendamentos
+        c.tenant.setIsOpen(false);
+        fixtures.saveTenant(c.tenant);
+        assertThat(body(clientReschedule(c, a, client, date, "15:00").andExpect(status().isForbidden())).get("code").asText()).isEqualTo("CLOSED");
+        assertThat(reload(a).getStartTime()).isEqualTo("10:00");
+    }
+
+    @Test
+    void b4_rescheduleCanUseTheTimeTheAppointmentItselfOccupies() throws Exception {
+        // o próprio horário não conta como ocupado: dá para andar 15 min e sobrepor o horário atual
+        Ctx c = ctx();
+        Client client = clientWithPhone(c.tenant, uniquePhone());
+        Appointment a = confirmedIn(c, client, 2, "10:00", "10:30");
+
+        clientReschedule(c, a, client, date, "10:15").andExpect(status().isOk());
+
+        assertThat(reload(a).getStartTime()).isEqualTo("10:15");
+        assertThat(reload(a).getEndTime()).isEqualTo("10:45");
     }
 
     // ── B5. Falta (no-show) e Painel ───────────────────────────────────────────────────────────────

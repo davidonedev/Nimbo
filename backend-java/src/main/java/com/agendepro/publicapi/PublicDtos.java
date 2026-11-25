@@ -56,7 +56,7 @@ public final class PublicDtos {
     public record ClientRegisterRequest(
             @NotBlank @Size(min = 2, max = 100) String name,
             @NotBlank @Email String email,
-            String phone,
+            @NotBlank(message = "Informe o celular (WhatsApp)") String phone,
             @NotBlank @Size(min = 6) String password
     ) {
     }

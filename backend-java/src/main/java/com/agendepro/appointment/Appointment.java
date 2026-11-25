@@ -80,6 +80,10 @@ public class Appointment {
     @Column(name = "owner_remind_1h_at")
     private Instant ownerRemind1hAt;
 
+    /** Quando o aviso de cancelamento automático (24 h antes) foi enfileirado; null = ainda não. */
+    @Column(name = "expiry_warned_at")
+    private Instant expiryWarnedAt;
+
     @Column(name = "payment_status", length = 50)
     private String paymentStatus;
 
