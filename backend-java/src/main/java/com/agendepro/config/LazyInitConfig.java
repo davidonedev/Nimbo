@@ -1,5 +1,9 @@
 package com.agendepro.config;
 
+import com.agendepro.appointment.OwnerPendingReminderService;
+import com.agendepro.appointment.PendingExpiryService;
+import com.agendepro.notification.NotificationDispatcher;
+import com.agendepro.publicapi.ClientDeviceCleanupService;
 import com.agendepro.reminder.ReminderService;
 import org.springframework.boot.LazyInitializationExcludeFilter;
 import org.springframework.context.annotation.Bean;
@@ -18,6 +22,7 @@ public class LazyInitConfig {
 
     @Bean
     static LazyInitializationExcludeFilter eagerBeans() {
-        return LazyInitializationExcludeFilter.forBeanTypes(ReminderService.class);
+        return LazyInitializationExcludeFilter.forBeanTypes(ReminderService.class, PendingExpiryService.class,
+                OwnerPendingReminderService.class, NotificationDispatcher.class, ClientDeviceCleanupService.class);
     }
 }

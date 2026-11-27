@@ -38,3 +38,11 @@ backend/uploads/
 docker-compose.override.yml
 Dockerfile
 !backend-java/Dockerfile
+
+
+# Teste de ponta a ponta: dependências, logs, estado e capturas ficam só na máquina
+e2e/node_modules/
+e2e/.run/
+e2e/screenshots/
+e2e/results-*.json
+e2e/run-*.log

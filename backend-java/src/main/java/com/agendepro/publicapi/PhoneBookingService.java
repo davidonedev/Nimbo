@@ -21,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
@@ -53,7 +52,6 @@ public class PhoneBookingService {
     static final int MAX_DAYS_PER_REQUEST = 31;
     static final Duration CODE_TTL = Duration.ofMinutes(10);
     static final Duration RESEND_COOLDOWN = Duration.ofSeconds(30);
-    static final Duration DEVICE_TTL = Duration.ofDays(90);
     static final int MAX_ATTEMPTS = 5;
     static final int MAX_SENDS = 3;
     static final int MAX_CHALLENGES_PER_HOUR = 5;
@@ -64,7 +62,7 @@ public class PhoneBookingService {
     private final AppointmentRepository appointmentRepository;
     private final ClientRepository clientRepository;
     private final BookingChallengeRepository challengeRepository;
-    private final ClientDeviceRepository deviceRepository;
+    private final ClientDeviceService devices;
     private final WhatsappService whatsappService;
     private final PgAdvisoryLockService pgAdvisoryLockService;
 
@@ -166,6 +164,7 @@ public class PhoneBookingService {
         List<UUID> serviceIds = parseServiceIds(req.serviceIds());
         UUID professionalId = parseOptionalUuid(req.professionalId());
         LocalDate day = parseDate(req.date());
+        requireBookableDate(day);
         String start = req.startTimeHHmm();
 
         // Falha cedo se o horário já não existe, antes de gastar um código de WhatsApp.
@@ -356,6 +355,7 @@ public class PhoneBookingService {
         int totalDuration = ordered.stream().mapToInt(ServiceOffering::getDuration).sum();
         double totalPrice = ordered.stream().mapToDouble(ServiceOffering::getPrice).sum();
         LocalDate day = parseDate(date);
+        requireBookableDate(day); // também no caminho do código (verify), onde a data vem do pedido guardado
 
         for (Professional p : eligibleProfessionals(t, serviceIds, professionalId)) {
             pgAdvisoryLockService.lockProfessionalSchedule(p.getId(), date);
@@ -401,17 +401,20 @@ public class PhoneBookingService {
     /** Horários livres de um profissional num dia, já sem os que passaram ou estão dentro da antecedência mínima. */
     private List<String> slotsFor(Tenant t, String slug, Professional p, List<UUID> serviceIds, LocalDate day) {
         String csv = serviceIds.stream().map(UUID::toString).collect(Collectors.joining(","));
-        List<String> all = publicService.getAvailableSlots(slug, p.getId(), null, csv, day.toString());
-        if (!day.equals(LocalDate.now(SAO_PAULO))) return all;
-
-        LocalTime now = LocalTime.now(SAO_PAULO);
-        int earliest = now.getHour() * 60 + now.getMinute() + (t.getMinAdvanceMinutes() == null ? 0 : t.getMinAdvanceMinutes());
-        return all.stream().filter(s -> ScheduleService.toMinutes(s) > earliest).toList();
+        return PublicService.applyMinAdvance(t, day, publicService.getAvailableSlots(slug, p.getId(), null, csv, day.toString()));
     }
 
     private static boolean withinWindow(LocalDate day) {
         LocalDate today = LocalDate.now(SAO_PAULO);
         return !day.isBefore(today) && !day.isAfter(today.plusDays(MAX_ADVANCE_DAYS));
+    }
+
+    /** Data de agendamento: de hoje (Brasília) até {@link #MAX_ADVANCE_DAYS} dias à frente; fora disso, 400 INVALID_DATE. */
+    static void requireBookableDate(LocalDate day) {
+        if (!withinWindow(day)) {
+            throw new AppException("Escolha uma data a partir de hoje e dentro dos próximos " + MAX_ADVANCE_DAYS + " dias.",
+                    400, "INVALID_DATE");
+        }
     }
 
     // ─── código e aparelho ──────────────────────────────────────────────────────
@@ -439,37 +442,20 @@ public class PhoneBookingService {
     }
 
     private Optional<ClientDevice> resolveDevice(Tenant t, String token) {
-        if (token == null || token.isBlank() || token.length() > 200) return Optional.empty();
-        return deviceRepository.findByTokenHashAndTenantId(sha256(token.trim()), t.getId())
-                .filter(d -> d.getExpiresAt().isAfter(Instant.now()));
+        return devices.resolve(t, token);
     }
 
     private void touch(ClientDevice device) {
-        device.setLastUsedAt(Instant.now());
-        device.setExpiresAt(Instant.now().plus(DEVICE_TTL));
-        deviceRepository.save(device);
+        devices.touch(device);
     }
 
     /** Cria um aparelho reconhecido e devolve o token em claro (só aqui; no banco fica o hash). */
     private String issueDevice(Tenant t, Client client) {
-        byte[] bytes = new byte[32];
-        RANDOM.nextBytes(bytes);
-        String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-        deviceRepository.save(ClientDevice.builder()
-                .tenantId(t.getId()).clientId(client.getId()).tokenHash(sha256(token))
-                .expiresAt(Instant.now().plus(DEVICE_TTL)).build());
-        return token;
+        return devices.issue(t, client);
     }
 
     private static String sha256(String value) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (byte b : digest) sb.append(String.format("%02x", b));
-            return sb.toString();
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
+        return ClientDeviceService.sha256(value);
     }
 
     // ─── utilidades ─────────────────────────────────────────────────────────────

@@ -1,0 +1,15 @@
+{
+  "name": "nimbo-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Teste de ponta a ponta do fluxo do cliente à finalização do serviço (pilha local isolada).",
+  "scripts": {
+    "up": "node stack.mjs up",
+    "down": "node stack.mjs down",
+    "status": "node stack.mjs status",
+    "test": "node flow.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.49.0"
+  }
+}

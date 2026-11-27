@@ -37,7 +37,8 @@ import java.util.stream.Collectors;
 public class NotificationService {
 
     public enum Event { NEW_REQUEST, CLIENT_CANCELLED, CLIENT_RESCHEDULED, APPROVED, REFUSED, CANCELLED_BY_OWNER,
-        REMINDER_24H, REMINDER_2H }
+        REMINDER_24H, REMINDER_2H,
+        PENDING_WARNING_OWNER, PENDING_WARNING_CLIENT, AUTO_CANCELLED_OWNER, AUTO_CANCELLED_CLIENT }
 
     private static final DateTimeFormatter BR_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
@@ -77,6 +78,43 @@ public class NotificationService {
                 "Cliente remarcou: " + g.client().getName(),
                 "O cliente remarcou o agendamento para o horário abaixo.",
                 oldDate == null ? "" : "Horário anterior: " + br(oldDate) + " às " + oldStart + "\n"));
+        dispatchAfterCommit();
+    }
+
+    /**
+     * 24 h antes do horário: o pedido segue pendente e será cancelado sozinho se ninguém decidir. Avisa o dono (para
+     * aprovar ou recusar) e o cliente (para saber que ainda aguarda). Uma mensagem por reserva, uma vez só.
+     */
+    @Transactional
+    public void pendingExpiryWarning(List<Appointment> appointments) {
+        forEachGroup(appointments, g -> {
+            notifyOwner(g, Event.PENDING_WARNING_OWNER,
+                    "Pedido ainda pendente: " + g.client().getName(),
+                    "Este pedido ainda não foi aprovado nem recusado e falta cerca de 1 dia para o horário. "
+                            + "Se ninguém decidir, ele será cancelado automaticamente logo depois do horário marcado.", "", true);
+            notifyClient(g, Event.PENDING_WARNING_CLIENT,
+                    g.tenant().getName() + ": aguardando confirmação",
+                    "Olá, " + firstName(g.client().getName()) + "! Seu pedido em " + g.tenant().getName() + " (" + g.services()
+                            + ", " + br(g.date()) + " às " + g.start() + ") ainda aguarda a confirmação do estabelecimento. "
+                            + "Se não for confirmado até o horário, será cancelado automaticamente. "
+                            + "Para acompanhar ou cancelar: " + appUrl + "/" + g.tenant().getSlug() + "/meus-agendamentos");
+        });
+        dispatchAfterCommit();
+    }
+
+    /** O pedido ficou pendente até o horário passar e foi cancelado sozinho: avisa o dono e o cliente. */
+    @Transactional
+    public void pendingAutoCancelled(List<Appointment> appointments) {
+        forEachGroup(appointments, g -> {
+            notifyOwner(g, Event.AUTO_CANCELLED_OWNER,
+                    "Pedido cancelado automaticamente: " + g.client().getName(),
+                    "O pedido abaixo foi cancelado automaticamente: o horário passou sem que fosse aprovado ou recusado.", "", false);
+            notifyClient(g, Event.AUTO_CANCELLED_CLIENT,
+                    g.tenant().getName() + ": pedido cancelado",
+                    "Olá, " + firstName(g.client().getName()) + ". Seu pedido de " + br(g.date()) + " às " + g.start()
+                            + " em " + g.tenant().getName() + " não foi confirmado a tempo e foi cancelado automaticamente. "
+                            + "Para escolher outro horário: " + appUrl + "/" + g.tenant().getSlug());
+        });
         dispatchAfterCommit();
     }
 
@@ -198,6 +236,11 @@ public class NotificationService {
     }
 
     private void notifyOwner(Group g, Event event, String subject, String intro, String extraLine) {
+        notifyOwner(g, event, subject, intro, extraLine, true);
+    }
+
+    /** {@code withAction}: inclui o link para aprovar ou recusar (não faz sentido num aviso de pedido já cancelado). */
+    private void notifyOwner(Group g, Event event, String subject, String intro, String extraLine, boolean withAction) {
         String body = intro + "\n\n"
                 + "Cliente: " + g.client().getName() + "\n"
                 + "Celular: " + (blank(g.client().getPhone()) ? "não informado" : g.client().getPhone()) + "\n"
@@ -205,7 +248,7 @@ public class NotificationService {
                 + "Quando: " + br(g.date()) + " às " + g.start() + "\n"
                 + "Profissional: " + g.professional() + "\n"
                 + extraLine
-                + "\nAprovar ou recusar: " + appUrl + "/admin/appointments";
+                + (withAction ? "\nAprovar ou recusar: " + appUrl + "/admin/appointments" : "");
         String key = event == Event.CLIENT_RESCHEDULED
                 ? event + ":" + g.firstId() + ":" + g.date() + "T" + g.start()
                 : event + ":" + g.firstId();

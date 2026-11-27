@@ -66,6 +66,7 @@ public class PublicService {
     private final com.agendepro.blockedslot.BlockedSlotRepository blockedSlotRepository;
     private final PgAdvisoryLockService pgAdvisoryLockService;
     private final com.agendepro.notification.NotificationService notificationService;
+    private final ClientDeviceService devices;
 
     @org.springframework.beans.factory.annotation.Value("${app.app-url}")
     private String appUrl;
@@ -168,15 +169,24 @@ public class PublicService {
         if (services.size() != ids.size()) throw AppException.notFound("Um ou mais serviços não encontrados");
 
         int totalDuration = services.stream().mapToInt(ServiceOffering::getDuration).sum();
+        return freeSlots(t, professional, totalDuration, date, null);
+    }
 
+    /**
+     * Horários livres do profissional num dia (dia de trabalho, expediente, agendamentos e bloqueios). {@code
+     * excludeAppointmentId}: agendamento que está sendo remarcado, que não ocupa o próprio horário. Não aplica a
+     * antecedência mínima (ver {@link #applyMinAdvance}).
+     */
+    List<String> freeSlots(Tenant t, Professional professional, int totalDuration, String date, UUID excludeAppointmentId) {
         int dayOfWeek = LocalDate.parse(date).getDayOfWeek().getValue() % 7; // ISO Monday=1..Sunday=7 → JS-like 0=Sun..6=Sat
         if (Arrays.stream(professional.getWorkingDays()).noneMatch(d -> d == dayOfWeek)) {
             return List.of();
         }
 
-        List<Appointment> appointments = appointmentRepository.findActiveByProfessionalAndDate(t.getId(), professionalId, date);
+        List<Appointment> appointments = appointmentRepository.findActiveByProfessionalAndDate(t.getId(), professional.getId(), date).stream()
+                .filter(a -> !a.getId().equals(excludeAppointmentId)).toList();
         List<com.agendepro.blockedslot.BlockedSlot> blockedSlots =
-                blockedSlotRepository.findByTenantIdAndProfessionalIdAndDateOrderByStartTimeAsc(t.getId(), professionalId, date);
+                blockedSlotRepository.findByTenantIdAndProfessionalIdAndDateOrderByStartTimeAsc(t.getId(), professional.getId(), date);
 
         List<String> allSlots = scheduleService.generateTimeSlots(professional.getWorkingHoursStart(), professional.getWorkingHoursEnd(), totalDuration, 15);
 
@@ -189,6 +199,14 @@ public class PublicService {
             String slotEndStr = ScheduleService.fromMinutes(slotEnd);
             return occupied.stream().noneMatch(occ -> slot.compareTo(occ[1]) < 0 && slotEndStr.compareTo(occ[0]) > 0);
         }).toList();
+    }
+
+    /** Tira os horários de hoje que já passaram ou estão dentro da antecedência mínima do estabelecimento. */
+    static List<String> applyMinAdvance(Tenant t, LocalDate day, List<String> slots) {
+        if (!day.equals(LocalDate.now(SAO_PAULO))) return slots;
+        java.time.LocalTime now = java.time.LocalTime.now(SAO_PAULO);
+        int earliest = now.getHour() * 60 + now.getMinute() + (t.getMinAdvanceMinutes() == null ? 0 : t.getMinAdvanceMinutes());
+        return slots.stream().filter(s -> ScheduleService.toMinutes(s) > earliest).toList();
     }
 
     // ─── apoio ao agendamento por celular (PhoneBookingService) ──────────────────
@@ -209,7 +227,9 @@ public class PublicService {
             Appointment appt = appointmentRepository.save(Appointment.builder()
                     .tenantId(tenantId).clientId(clientId).professionalId(professionalId).serviceId(svc.getId())
                     .date(date).startTime(current).endTime(end).price(svc.getPrice()).notes(notes)
-                    .status(AppointmentStatus.PENDING).confirmBy(confirmBy).build());
+                    .status(AppointmentStatus.PENDING).confirmBy(confirmBy)
+                    .expiryWarnedAt(com.agendepro.appointment.PendingExpiryService.warnedStampFor(date, current, java.time.Instant.now()))
+                    .build());
             created.add(appt);
             current = end;
         }
@@ -218,7 +238,7 @@ public class PublicService {
 
     // ─── auth de cliente ────────────────────────────────────────────────────────
 
-    @Transactional(readOnly = true)
+    @Transactional
     public ClientAuthResponse loginPublicClient(String slug, ClientLoginRequest request) {
         Tenant t = resolveTenant(slug);
         Client client = clientRepository.findByTenantIdAndEmail(t.getId(), request.email())
@@ -234,7 +254,12 @@ public class PublicService {
             throw new AppException("Você precisa verificar seu e-mail antes de entrar. Verifique sua caixa de entrada.", 403, "EMAIL_NOT_VERIFIED");
         }
 
-        return new ClientAuthResponse(client.getId(), client.getName(), client.getEmail(), client.getPhone());
+        return authResponse(t, client);
+    }
+
+    /** Resposta de login do portal: dados do cliente + aparelho reconhecido (X-Device-Token) para listar/cancelar/remarcar. */
+    private ClientAuthResponse authResponse(Tenant t, Client client) {
+        return new ClientAuthResponse(client.getId(), client.getName(), client.getEmail(), client.getPhone(), devices.issue(t, client));
     }
 
     @Transactional
@@ -244,6 +269,7 @@ public class PublicService {
         clientRepository.findByTenantIdAndEmail(t.getId(), request.email()).ifPresent(c -> {
             throw new AppException("Este e-mail já está cadastrado neste estabelecimento. Faça login.", 409, "EMAIL_IN_USE");
         });
+        requireValidPhone(request.phone());
         checkDuplicatePhone(t.getId(), request.phone());
 
         Client client = clientRepository.save(Client.builder()
@@ -260,7 +286,7 @@ public class PublicService {
                 : "Cadastro iniciado. Verifique seu e-mail para ativar sua conta.");
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public ClientAuthResponse googleAuthPublicClient(String slug, GoogleAuthRequest request) {
         Tenant t = resolveTenant(slug);
 
@@ -286,21 +312,27 @@ public class PublicService {
                 })
                 .orElseGet(() -> clientRepository.save(Client.builder().tenantId(t.getId()).name(name).email(email).build()));
 
-        return new ClientAuthResponse(client.getId(), client.getName(), client.getEmail(), client.getPhone());
+        return authResponse(t, client);
     }
 
-    @Transactional(readOnly = true)
-    public List<AppointmentDtos.AppointmentResponse> getClientAppointments(String slug, UUID clientId) {
+    /**
+     * Agendamentos do cliente do aparelho. Exige X-Device-Token válido; {@code clientId} (opcional) tem de ser o dono do
+     * token. Sem token válido → 403 DEVICE_REQUIRED.
+     */
+    @Transactional
+    public List<AppointmentDtos.AppointmentResponse> getClientAppointments(String slug, UUID clientId, String deviceToken) {
         Tenant t = resolveTenant(slug);
-        clientRepository.findByIdAndTenantId(clientId, t.getId()).orElseThrow(() -> AppException.notFound("Cliente não encontrado"));
-        List<Appointment> appointments = appointmentRepository.findByTenantIdAndClientIdOrderByDateAscStartTimeAsc(t.getId(), clientId);
+        UUID ownerId = devices.requireClientId(t, deviceToken, clientId);
+        clientRepository.findByIdAndTenantId(ownerId, t.getId()).orElseThrow(() -> AppException.notFound("Cliente não encontrado"));
+        List<Appointment> appointments = appointmentRepository.findByTenantIdAndClientIdOrderByDateAscStartTimeAsc(t.getId(), ownerId);
         return appointmentService.toResponses(appointments);
     }
 
     @Transactional
-    public MessageResponse reschedulePublicAppointment(String slug, UUID id, RescheduleRequest request) {
+    public MessageResponse reschedulePublicAppointment(String slug, UUID id, RescheduleRequest request, String deviceToken) {
         Tenant t = resolveTenant(slug);
-        Appointment a = appointmentRepository.findByIdAndTenantIdAndClientId(id, t.getId(), request.clientId())
+        UUID ownerId = devices.requireClientId(t, deviceToken, request.clientId());
+        Appointment a = appointmentRepository.findByIdAndTenantIdAndClientId(id, t.getId(), ownerId)
                 .orElseThrow(() -> AppException.notFound("Agendamento não encontrado"));
 
         if (a.getStatus() == AppointmentStatus.CANCELLED) {
@@ -321,12 +353,41 @@ public class PublicService {
         ServiceOffering service = serviceOfferingRepository.findById(a.getServiceId())
                 .orElseThrow(() -> AppException.notFound("Serviço não encontrado"));
 
+        // A nova data tem de ser de hoje (Brasília) em diante, até o limite de antecedência, e o horário não pode ter passado.
         String newStart = request.startTimeHHmm();
+        LocalDate newDay;
+        try {
+            newDay = LocalDate.parse(request.date());
+            LocalDateTime.parse(request.date() + "T" + newStart);
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new AppException("Data ou horário inválido.", 400, "INVALID_DATE");
+        }
+        PhoneBookingService.requireBookableDate(newDay);
+        if (LocalDateTime.parse(request.date() + "T" + newStart).isBefore(LocalDateTime.now(SAO_PAULO).truncatedTo(ChronoUnit.MINUTES))) {
+            throw new AppException("Esse horário já passou. Escolha outro.", 400, "INVALID_DATE");
+        }
+        if (request.date().equals(a.getDate()) && newStart.equals(a.getStartTime())) {
+            throw new AppException("Escolha um horário diferente do atual.", 400, "SAME_SLOT");
+        }
+        // Remarcar é pedir um horário novo: vale tudo o que vale para agendar (estabelecimento aberto, dia e expediente do
+        // profissional, bloqueios, outros agendamentos e a antecedência mínima), refeito agora, na hora de remarcar.
+        if (!Boolean.TRUE.equals(t.getIsOpen())) {
+            throw new AppException("Este estabelecimento está fechado para novos agendamentos. Fale com ele para remarcar.", 403, "CLOSED");
+        }
+        Professional professional = professionalRepository.findByIdAndTenantId(a.getProfessionalId(), t.getId())
+                .orElseThrow(() -> AppException.notFound("Profissional não encontrado"));
         String newEnd = ScheduleService.addMinutes(newStart, service.getDuration());
 
         pgAdvisoryLockService.lockProfessionalSchedule(a.getProfessionalId(), request.date());
-        if (scheduleService.checkConflict(t.getId(), a.getProfessionalId(), request.date(), newStart, newEnd, a.getId())) {
+        List<String> free = freeSlots(t, professional, service.getDuration(), request.date(), a.getId());
+        if (!free.contains(newStart)) {
             throw new AppException("Horário não disponível. Por favor escolha outro horário.", 409, "SCHEDULE_CONFLICT");
+        }
+        if (!applyMinAdvance(t, newDay, free).contains(newStart)) {
+            int min = t.getMinAdvanceMinutes() == null ? 0 : t.getMinAdvanceMinutes();
+            throw new AppException(min > 0
+                    ? "Esse horário fica dentro da antecedência mínima de " + min + " minutos do estabelecimento. Escolha um horário mais à frente."
+                    : "Esse horário já passou. Escolha outro.", 400, "MIN_ADVANCE");
         }
 
         String oldDate = a.getDate();
@@ -338,6 +399,14 @@ public class PublicService {
         // Reset reminders so they fire again for the new time
         a.setReminder24hSentAt(null);
         a.setReminder2hSentAt(null);
+        // Remarcar um horário já confirmado cria um pedido novo: o dono precisa aprovar o novo horário (volta a pendente,
+        // sem prazo para o cliente, que já pediu). Pendente continua pendente.
+        if (a.getStatus() == AppointmentStatus.CONFIRMED) {
+            a.setStatus(AppointmentStatus.PENDING);
+            a.setConfirmBy(null);
+            a.setClientConfirmedAt(Instant.now());
+        }
+        a.setExpiryWarnedAt(com.agendepro.appointment.PendingExpiryService.warnedStampFor(request.date(), newStart, Instant.now()));
         appointmentRepository.save(a);
         if (ownerKnows) notificationService.ownerClientRescheduled(a, oldDate, oldStart);
 
@@ -345,9 +414,10 @@ public class PublicService {
     }
 
     @Transactional
-    public MessageResponse cancelPublicAppointment(String slug, UUID id, CancelBookingRequest request) {
+    public MessageResponse cancelPublicAppointment(String slug, UUID id, CancelBookingRequest request, String deviceToken) {
         Tenant t = resolveTenant(slug);
-        Appointment appointment = appointmentRepository.findByIdAndTenantIdAndClientId(id, t.getId(), request.clientId())
+        UUID ownerId = devices.requireClientId(t, deviceToken, request == null ? null : request.clientId());
+        Appointment appointment = appointmentRepository.findByIdAndTenantIdAndClientId(id, t.getId(), ownerId)
                 .orElseThrow(() -> AppException.notFound("Agendamento não encontrado"));
 
         if (appointment.getStatus() == AppointmentStatus.CANCELLED) {
@@ -424,7 +494,7 @@ public class PublicService {
         record.setUsedAt(Instant.now());
         clientEmailTokenRepository.save(record);
 
-        return new ClientAuthResponse(client.getId(), client.getName(), client.getEmail(), client.getPhone());
+        return authResponse(t, client);
     }
 
     @Transactional
@@ -443,6 +513,14 @@ public class PublicService {
     }
 
     private record BookingSummary(String date, String time, String professional, String services, String total) {
+    }
+
+    /** Celular (WhatsApp) obrigatório e com DDD: o aviso do agendamento sai por lá. */
+    public static void requireValidPhone(String phone) {
+        String normalized = com.agendepro.client.Client.normalizePhone(phone);
+        if (normalized == null || normalized.length() < 12 || normalized.length() > 13) {
+            throw new AppException("Informe um celular (WhatsApp) válido com DDD.", 400, "INVALID_PHONE");
+        }
     }
 
     private void checkDuplicatePhone(UUID tenantId, String phone) {

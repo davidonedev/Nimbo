@@ -16,7 +16,7 @@ public class RateLimitFilterConfig {
             @Value("${app.rate-limit.auth-refill-minutes}") int authRefillMinutes,
             @Value("${app.rate-limit.api-capacity}") int apiCapacity,
             @Value("${app.rate-limit.api-refill-minutes}") int apiRefillMinutes,
-            @Value("${app.rate-limit.login-capacity:10}") int loginCapacity,
+            @Value("${app.rate-limit.login-capacity:30}") int loginCapacity,
             @Value("${app.rate-limit.forgot-password-capacity:5}") int forgotCapacity,
             @Value("${app.rate-limit.reset-password-capacity:10}") int resetCapacity,
             @Value("${app.rate-limit.email-change-capacity:5}") int emailChangeCapacity,

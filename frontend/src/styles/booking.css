@@ -225,3 +225,26 @@ textarea.bk-input { padding: 12px 14px; min-height: 84px; resize: vertical; }
 /* ── Captcha e aguardando confirmação ───────────────────────────────────── */
 .bk-captcha { display: flex; justify-content: center; margin-top: 16px; min-height: 65px; }
 .bk-done-icon.pending { background: var(--bk-accent-soft); color: var(--bk-accent-text); }
+
+/* ── Meus agendamentos ──────────────────────────────────────────────────── */
+.bk-mine { display: flex; justify-content: center; margin: -12px 0 8px; }
+.bk-section-title { margin: 24px 0 0; font-size: 14px; font-weight: 600; color: var(--bk-muted); }
+.bk-appts { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 12px; }
+.bk-appt { padding: 14px 16px; border-radius: 14px; border: 1px solid var(--bk-line); background: var(--bk-raised); }
+.bk-appt.history { opacity: 0.85; }
+.bk-appt-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.bk-appt-top strong { min-width: 0; font-size: 15px; overflow-wrap: anywhere; }
+.bk-appt-when { margin: 6px 0 0; font-size: 14px; }
+.bk-appt-meta { margin: 4px 0 0; font-size: 13px; color: var(--bk-muted); }
+.bk-appt-meta:empty { display: none; }
+.bk-appt-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.bk-appt-actions .bk-btn { min-height: 48px; padding: 0 12px; }
+.bk-btn.danger { background: transparent; color: #ffb0b0; border-color: color-mix(in srgb, var(--bk-danger) 50%, transparent); }
+.bk-tag { flex: none; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--bk-card); color: var(--bk-muted); }
+.bk-tag.pending { background: var(--bk-accent-soft); color: var(--bk-accent-text); }
+.bk-tag.confirmed { background: color-mix(in srgb, var(--bk-ok) 18%, transparent); color: #4be39a; }
+.bk-tag.cancelled, .bk-tag.no_show { color: #ffb0b0; }
+.bk-confirm { margin-top: 12px; padding: 12px; border-radius: 12px; border: 1px solid var(--bk-line); background: var(--bk-card); font-size: 14px; line-height: 1.45; }
+.bk-confirm p { margin: 0; }
+.bk-confirm .bk-hint { margin-top: 6px; }
+.bk-notice { margin-top: 16px; padding: 12px 14px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--bk-ok) 45%, transparent); background: color-mix(in srgb, var(--bk-ok) 12%, transparent); color: #4be39a; font-size: 14px; line-height: 1.45; }

@@ -161,7 +161,10 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     if (role !== 'tenant_admin') return;
     const id = setInterval(async () => {
       try {
-        const apts = await listAppointmentsApi();
+        // Clientes junto com os agendamentos: um pedido de cliente NOVO traz um clientId que a lista antiga não tem,
+        // e o aviso (toast/sino) ficaria sem o nome. Os dois são aplicados no mesmo tick.
+        const [apts, cls] = await Promise.all([listAppointmentsApi(), listClientsApi()]);
+        setClients(cls);
         setAppointments(apts);
       } catch {
         // falha silenciosa — não interrompe o uso do app

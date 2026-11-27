@@ -54,6 +54,7 @@ const StepTime = lazy(() => import('./components/booking/StepTime'));
 const StepContact = lazy(() => import('./components/booking/StepContact'));
 const StepVerify = lazy(() => import('./components/booking/StepVerify'));
 const StepDone = lazy(() => import('./components/booking/StepDone'));
+const MyBookings = lazy(() => import('./components/booking/MyBookings'));
 const MyAppointments = lazy(() => import('./components/client/MyAppointments'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const ProfessionalRegisterPage = lazy(() => import('./pages/ProfessionalRegisterPage'));
@@ -190,6 +191,7 @@ function AppRoutes() {
           <Route path="dados"                    element={<StepContact />} />
           <Route path="codigo"                   element={<StepVerify />} />
           <Route path="confirmado"               element={<StepDone />} />
+          <Route path="meus-agendamentos"        element={<MyBookings />} />
         </Route>
         {/* Links antigos (/:slug/booking) caem no agendamento novo */}
         <Route path="booking"                  element={<BookingRedirect />} />

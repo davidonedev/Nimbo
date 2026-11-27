@@ -3,6 +3,8 @@ app:
     enabled: false
   booking:
     max-attempts-per-ip: 100000
+  pending:
+    expiry-enabled: false   # os testes chamam expire()/expirePastStart() direto; o agendador (que cancela pendentes de datas passadas) não pode competir
   owner-reminders:
     enabled: false   # os testes chamam run() direto; o agendador não pode competir
   notifications:

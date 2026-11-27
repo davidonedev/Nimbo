@@ -89,6 +89,7 @@ public class AppointmentService {
 
         String startTime = request.startTimeHHmm();
         String endTime = ScheduleService.addMinutes(startTime, service.getDuration());
+        requireNotInThePast(request.date(), startTime);
 
         pgAdvisoryLockService.lockProfessionalSchedule(request.professionalId(), request.date());
         boolean conflict = scheduleService.checkConflict(tenantId, request.professionalId(), request.date(), startTime, endTime, null);
@@ -128,6 +129,25 @@ public class AppointmentService {
                 .build());
 
         return toResponse(appointment);
+    }
+
+    private static final java.time.ZoneId SAO_PAULO = java.time.ZoneId.of("America/Sao_Paulo");
+
+    /**
+     * Rejeita data+hora de início que já passou (America/Sao_Paulo, com precisão de minuto: agendar para o minuto em
+     * curso ainda vale). Hoje num horário que ainda não chegou continua permitido.
+     */
+    static void requireNotInThePast(String date, String hhmm) {
+        java.time.LocalDateTime start;
+        try {
+            start = java.time.LocalDateTime.parse(date + "T" + hhmm);
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new AppException("Data ou horário inválido.", 400, "INVALID_DATE");
+        }
+        java.time.LocalDateTime now = java.time.LocalDateTime.now(SAO_PAULO).truncatedTo(java.time.temporal.ChronoUnit.MINUTES);
+        if (start.isBefore(now)) {
+            throw new AppException("Não é possível agendar em uma data ou horário que já passou.", 400, "INVALID_DATE");
+        }
     }
 
     @Transactional

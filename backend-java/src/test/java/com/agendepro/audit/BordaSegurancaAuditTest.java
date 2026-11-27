@@ -166,16 +166,16 @@ class BordaSegurancaAuditTest extends AuditBase {
     }
 
     @Test
-    void gap_c2_phoneBookingAcceptsPastDaysAndDatesBeyondTheAdvanceLimit() throws Exception {
-        // documenta lacuna: book() só valida a janela (hoje..+60 dias) em slots()/days(), não ao gravar
+    void c2_phoneBookingRejectsPastDaysAndDatesBeyondTheAdvanceLimit() throws Exception {
+        // book() valida a janela (hoje..+60 dias) ao gravar, não só em slots()/days(): 400 INVALID_DATE
         Ctx c = ctx();
         String yesterday = LocalDate.now(SP).minusDays(1).toString();
         String farFuture = LocalDate.now(SP).plusDays(200).toString();
 
-        bookOn(c, "Do Passado", uniquePhone(), yesterday, "10:00", null, 200);
-        bookOn(c, "Do Futuro", uniquePhone(), farFuture, "10:00", null, 200);
+        assertThat(bookOn(c, "Do Passado", uniquePhone(), yesterday, "10:00", null, 400).get("code").asText()).isEqualTo("INVALID_DATE");
+        assertThat(bookOn(c, "Do Futuro", uniquePhone(), farFuture, "10:00", null, 400).get("code").asText()).isEqualTo("INVALID_DATE");
 
-        assertThat(appointmentsOf(c.tenant)).extracting(Appointment::getDate).contains(yesterday, farFuture);
+        assertThat(appointmentsOf(c.tenant)).isEmpty();
     }
 
     @Test
@@ -193,14 +193,14 @@ class BordaSegurancaAuditTest extends AuditBase {
     }
 
     @Test
-    void gap_c2_adminCreateAcceptsPastAndOutsideHours_butStillRespectsBlocks() throws Exception {
-        // documenta lacuna: AppointmentService.create só valida conflito (agendamento e bloqueio)
+    void c2_adminCreateRejectsPast_acceptsOutsideHours_andStillRespectsBlocks() throws Exception {
+        // data/hora passada é rejeitada (INVALID_DATE); fora do expediente segue aceito (admin decide); bloqueio e conflito valem
         Ctx c = ctx();
         String token = adminToken(c.tenant);
         Client client = fixtures.client(c.tenant);
         String yesterday = LocalDate.now(SP).minusDays(1).toString();
 
-        adminCreate(token, c, client, yesterday, "10:00").andExpect(status().isCreated());
+        adminCreate(token, c, client, yesterday, "10:00").andExpect(status().isBadRequest());
         adminCreate(token, c, client, date, "03:00").andExpect(status().isCreated());
 
         fixtures.blockedSlot(c.tenant, c.professional, date, "14:00", "15:00");
@@ -359,29 +359,40 @@ class BordaSegurancaAuditTest extends AuditBase {
         Client owner = clientWithPhone(a.tenant, uniquePhone());
         Client stranger = clientWithPhone(a.tenant, uniquePhone());
         Appointment apptA = appt(a, owner, LocalDate.now(SP).plusDays(2).toString(), "10:00", "10:30", AppointmentStatus.CONFIRMED);
+        String ownerToken = fixtures.deviceToken(a.tenant, owner);
+        String strangerToken = fixtures.deviceToken(a.tenant, stranger);
 
-        // mesmo estabelecimento, outro cliente
+        // mesmo estabelecimento, outro cliente (token do outro cliente: o agendamento não é dele)
         mockMvc.perform(patch("/api/public/" + a.tenant.getSlug() + "/appointments/" + apptA.getId() + "/cancel")
-                .contentType(MediaType.APPLICATION_JSON).content("{\"clientId\":\"" + stranger.getId() + "\"}")).andExpect(status().isNotFound());
-        // slug de outro estabelecimento
+                .header("X-Device-Token", strangerToken)
+                .contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isNotFound());
+        // clientId do dono, mas token do outro cliente
+        mockMvc.perform(patch("/api/public/" + a.tenant.getSlug() + "/appointments/" + apptA.getId() + "/cancel")
+                .header("X-Device-Token", strangerToken)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"clientId\":\"" + owner.getId() + "\"}")).andExpect(status().isForbidden());
+        // slug de outro estabelecimento: o aparelho não vale lá
         mockMvc.perform(patch("/api/public/" + b.tenant.getSlug() + "/appointments/" + apptA.getId() + "/cancel")
-                .contentType(MediaType.APPLICATION_JSON).content("{\"clientId\":\"" + owner.getId() + "\"}")).andExpect(status().isNotFound());
-        mockMvc.perform(get("/api/public/" + b.tenant.getSlug() + "/my-appointments").param("clientId", owner.getId().toString()))
-                .andExpect(status().isNotFound());
+                .header("X-Device-Token", ownerToken)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"clientId\":\"" + owner.getId() + "\"}")).andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/public/" + b.tenant.getSlug() + "/my-appointments").param("clientId", owner.getId().toString())
+                .header("X-Device-Token", ownerToken)).andExpect(status().isForbidden());
         assertThat(reload(apptA).getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
     }
 
     // ── C7. Dados do cliente expostos sem autenticação ─────────────────────────────────────────────
 
     @Test
-    void gap_c7_myAppointmentsNeedsOnlyTheClientUuid_noAuthentication() throws Exception {
-        // documenta lacuna: o UUID ainda é a única credencial desses endpoints (endurecer com token — backlog).
-        // O id não vaza mais pelo /book (teste c7_pendingFlowDoesNotRevealAnExistingClient), então só o próprio cliente o conhece.
+    void c7_myAppointmentsNeedsTheDeviceToken_theClientUuidAloneIsNotEnough() throws Exception {
+        // o UUID deixou de ser credencial: sem X-Device-Token válido do mesmo cliente, 403 DEVICE_REQUIRED.
         Ctx c = ctx();
         Client client = clientWithPhone(c.tenant, uniquePhone());
         appt(c, client, date, "10:00", "10:30", AppointmentStatus.CONFIRMED);
 
-        JsonNode list = json.readTree(mockMvc.perform(get("/api/public/" + c.tenant.getSlug() + "/my-appointments").param("clientId", client.getId().toString()))
+        mockMvc.perform(get("/api/public/" + c.tenant.getSlug() + "/my-appointments").param("clientId", client.getId().toString()))
+                .andExpect(status().isForbidden());
+
+        JsonNode list = json.readTree(mockMvc.perform(get("/api/public/" + c.tenant.getSlug() + "/my-appointments").param("clientId", client.getId().toString())
+                        .header("X-Device-Token", fixtures.deviceToken(c.tenant, client)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).get("data");
 
         assertThat(list).hasSize(1);

@@ -24,14 +24,28 @@ class ClientRegistrationMessageIntegrationTest extends AbstractIntegrationTest {
     private TestFixtures fixtures;
 
     @Test
-    void withoutPhoneTheMessagePointsToEmail() throws Exception {
+    void phoneIsRequired_withoutItTheRegistrationIsRefused() throws Exception {
         Tenant tenant = fixtures.tenant(TenantPlan.BASIC);
 
         mockMvc.perform(post("/api/public/" + tenant.getSlug() + "/register/client")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body("sem-telefone", null)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.message").value("Cadastro iniciado. Verifique seu e-mail para ativar sua conta."));
+                .andExpect(status().is4xxClientError());
+        mockMvc.perform(post("/api/public/" + tenant.getSlug() + "/register/client")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("vazio", "")))
+                .andExpect(status().is4xxClientError());
+    }
+
+    @Test
+    void phoneWithoutAreaCodeOrTooShort_isRefusedAsInvalid() throws Exception {
+        Tenant tenant = fixtures.tenant(TenantPlan.BASIC);
+
+        mockMvc.perform(post("/api/public/" + tenant.getSlug() + "/register/client")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("curto", "99999-888")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_PHONE"));
     }
 
     @Test

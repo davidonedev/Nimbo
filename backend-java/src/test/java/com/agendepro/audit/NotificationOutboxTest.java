@@ -54,6 +54,7 @@ class NotificationOutboxTest extends AuditBase {
 
     private ResultActions clientCancel(Ctx c, Appointment a, Client who) throws Exception {
         return mockMvc.perform(patch("/api/public/" + c.tenant.getSlug() + "/appointments/" + a.getId() + "/cancel")
+                .header("X-Device-Token", fixtures.deviceToken(c.tenant, who))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"clientId\":\"" + who.getId() + "\"}"));
     }
 
