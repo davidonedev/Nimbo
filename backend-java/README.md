@@ -31,7 +31,7 @@ cp .env.example .env        # PowerShell: Copy-Item .env.example .env
 | `PORT` | Porta da API | `3333` |
 | `JWT_SECRET` | Segredo dos tokens (troque fora do ambiente local) | placeholder |
 | `CORS_ALLOWED_ORIGINS` | Origens do frontend permitidas, separadas por vírgula e sem barra no final. Aceita curinga para previews (`https://nimbo-*.vercel.app`). `CORS_ORIGIN` (nome antigo) ainda vale | `http://localhost:5173,http://localhost:3000` |
-| `SEED_ENABLED` | Cria dados de demonstração no primeiro start (banco vazio) | `true` |
+| `SEED_ENABLED` | Cria dados de demonstração no primeiro start (banco vazio). Nunca ligue em produção | `false` |
 
 `SMTP_*` e `APP_URL` são opcionais. Sem SMTP configurado, o link de verificação de e-mail aparece apenas no console.
 
@@ -115,7 +115,7 @@ cp .env.example .env        # PowerShell: Copy-Item .env.example .env
 | `PORT` | API port | `3333` |
 | `JWT_SECRET` | Token signing secret (change it outside local development) | placeholder |
 | `CORS_ALLOWED_ORIGINS` | Allowed frontend origins, comma-separated, no trailing slash. Wildcards allowed for previews (`https://nimbo-*.vercel.app`). The old `CORS_ORIGIN` still works | `http://localhost:5173,http://localhost:3000` |
-| `SEED_ENABLED` | Creates demo data on first start (empty database) | `true` |
+| `SEED_ENABLED` | Creates demo data on first start (empty database). Never enable in production | `false` |
 
 `SMTP_*` and `APP_URL` are optional. Without SMTP configured, the e-mail verification link is only printed to the console.
 

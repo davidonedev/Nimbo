@@ -155,6 +155,12 @@ public class ProfessionalService {
     public void delete(UUID tenantId, UUID id) {
         Professional professional = professionalRepository.findByIdAndTenantId(id, tenantId)
                 .orElseThrow(() -> AppException.notFound("Profissional não encontrado"));
+        // O login do profissional some junto: sem isso o usuário ficava órfão, com a senha ainda valendo
+        userRepository.findFirstByProfessionalIdAndTenantId(id, tenantId).ifPresent(user -> {
+            userRepository.delete(user);
+            auditService.record(AuditService.CREDENTIALS_CHANGED_BY_TENANT, currentUserIdOrNull(), user.getId(), tenantId,
+                    null, Map.of("professionalId", id.toString(), "action", "access_removed"));
+        });
         professionalRepository.delete(professional);
     }
 

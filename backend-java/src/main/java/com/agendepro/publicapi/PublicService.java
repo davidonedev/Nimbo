@@ -71,9 +71,6 @@ public class PublicService {
     @org.springframework.beans.factory.annotation.Value("${app.app-url}")
     private String appUrl;
 
-    @org.springframework.beans.factory.annotation.Value("${app.seed.enabled:false}")
-    private boolean seedEnabled;
-
     private final RestClient restClient = RestClient.create();
 
     // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -89,33 +86,6 @@ public class PublicService {
 
     private WhatsappService.TenantWhatsappConfig whatsappConfig(Tenant tenant) {
         return new WhatsappService.TenantWhatsappConfig(tenant.getWhatsappApiUrl(), tenant.getWhatsappApiKey(), tenant.getWhatsappInstance());
-    }
-
-    // ─── login-data ───────────────────────────────────────────────────────────────
-
-    @Transactional(readOnly = true)
-    public List<LoginDataTenant> getLoginData() {
-        if (!seedEnabled) return List.of();
-        List<Tenant> tenants = tenantRepository.findAll().stream()
-                .filter(t -> t.getStatus() != TenantStatus.SUSPENDED)
-                .sorted(Comparator.comparing(Tenant::getName))
-                .toList();
-
-        return tenants.stream().map(t -> {
-            List<User> users = userRepository.findAll().stream().filter(u -> t.getId().equals(u.getTenantId())).toList();
-            List<LoginDataUser> userDtos = users.stream()
-                    .map(u -> new LoginDataUser(u.getId(), u.getName(), u.getEmail(), u.getRole().getValue())).toList();
-
-            List<Professional> professionals = professionalRepository.findByTenantIdOrderByNameAsc(t.getId());
-            List<LoginDataProfessional> professionalDtos = professionals.stream().map(p -> {
-                List<LoginDataProfessionalUser> profUsers = users.stream()
-                        .filter(u -> p.getId().equals(u.getProfessionalId()))
-                        .map(u -> new LoginDataProfessionalUser(u.getEmail())).toList();
-                return new LoginDataProfessional(p.getId(), p.getName(), p.getSpecialty(), profUsers);
-            }).toList();
-
-            return new LoginDataTenant(t.getId(), t.getName(), t.getSlug(), t.getPlan(), t.getStatus(), userDtos, professionalDtos);
-        }).toList();
     }
 
     // ─── tenant / catálogo público ─────────────────────────────────────────────────
@@ -450,28 +420,6 @@ public class PublicService {
      */
     private static boolean ownerKnowsAbout(Appointment a) {
         return !(a.getStatus() == AppointmentStatus.PENDING && a.getConfirmBy() != null && a.getClientConfirmedAt() == null);
-    }
-
-    // ─── cadastro de profissional público ────────────────────────────────────────
-
-    @Transactional
-    public ProfessionalRegisterResponse registerPublicProfessional(String slug, ProfessionalRegisterRequest request) {
-        Tenant t = resolveTenant(slug);
-
-        if (userRepository.existsByEmail(request.email())) {
-            throw new AppException("Este e-mail já está em uso", 409, "EMAIL_IN_USE");
-        }
-
-        Professional professional = professionalRepository.save(Professional.builder()
-                .tenantId(t.getId()).name(request.name()).specialty(request.specialty()).bio(request.bio())
-                .workingHoursStart(request.workingHoursStart()).workingHoursEnd(request.workingHoursEnd())
-                .workingDays(request.workingDays().toArray(new Integer[0])).build());
-
-        User user = userRepository.save(User.builder()
-                .name(request.name()).email(request.email()).passwordHash(passwordEncoder.encode(request.password()))
-                .role(UserRole.PROFESSIONAL).tenantId(t.getId()).professionalId(professional.getId()).build());
-
-        return new ProfessionalRegisterResponse(professional.getName(), user.getEmail());
     }
 
     // ─── verificação de e-mail ─────────────────────────────────────────────────

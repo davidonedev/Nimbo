@@ -22,6 +22,7 @@ public class ClientDeviceCleanupService {
 
     @Scheduled(initialDelayString = "${app.devices.cleanup-initial-delay-ms:300000}",
             fixedDelayString = "${app.devices.cleanup-interval-ms:86400000}")
+    @Transactional // a auto-chamada abaixo não passa pelo proxy: sem isto o DELETE em lote falhava toda vez
     public void cleanOnSchedule() {
         if (enabled) deleteExpired(Instant.now());
     }

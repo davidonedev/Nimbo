@@ -32,17 +32,6 @@ public class PublicController {
     private final ProductService productService;
     private final TenantRepository tenantRepository;
 
-    @GetMapping("/login-data")
-    public ResponseEntity<ApiResponse<List<LoginDataTenant>>> loginData() {
-        return ResponseEntity.ok(ApiResponse.ok(publicService.getLoginData()));
-    }
-
-    @PostMapping("/register/business")
-    public ResponseEntity<ApiResponse<BusinessRegisterResponse>> registerBusiness(@Valid @RequestBody BusinessRegisterRequest request) {
-        var result = publicService.registerBusiness(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(result));
-    }
-
     @GetMapping("/{slug}")
     public ResponseEntity<ApiResponse<TenantPublicResponse>> getTenant(@PathVariable String slug) {
         return ResponseEntity.ok(ApiResponse.ok(publicService.getTenantBySlug(slug)));
@@ -142,13 +131,6 @@ public class PublicController {
     @PostMapping("/{slug}/register/client")
     public ResponseEntity<ApiResponse<MessageResponse>> registerClient(@PathVariable String slug, @Valid @RequestBody ClientRegisterRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(publicService.registerPublicClient(slug, request)));
-    }
-
-    @PostMapping("/{slug}/register/professional")
-    public ResponseEntity<ApiResponse<ProfessionalRegisterResponse>> registerProfessional(
-            @PathVariable String slug, @Valid @RequestBody ProfessionalRegisterRequest request) {
-        var result = publicService.registerPublicProfessional(slug, request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(result));
     }
 
     @PostMapping("/{slug}/auth/google")

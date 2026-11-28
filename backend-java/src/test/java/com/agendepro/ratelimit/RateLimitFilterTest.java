@@ -41,8 +41,8 @@ class RateLimitFilterTest {
             assertThat(callOn(strict, "OPTIONS", "/api/public/register/business", "10.0.2.1")).isEqualTo(200);
         }
         // a cota de 1 requisição real continua intacta
-        assertThat(callOn(strict, "GET", "/api/public/login-data", "10.0.2.1")).isEqualTo(200);
-        assertThat(callOn(strict, "GET", "/api/public/login-data", "10.0.2.1")).isEqualTo(429);
+        assertThat(callOn(strict, "GET", "/api/public/studio", "10.0.2.1")).isEqualTo(200);
+        assertThat(callOn(strict, "GET", "/api/public/studio", "10.0.2.1")).isEqualTo(429);
     }
 
     private int call(String method, String path, String ip) throws Exception {
