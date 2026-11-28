@@ -4,6 +4,7 @@
 // - Lança erros estruturados com mensagem vinda do backend
 
 import { resolveApiBaseUrl } from './apiUrl';
+import { trackSlowRequest } from './serverWaking';
 
 // Aceita VITE_API_URL com ou sem o sufixo /api (ver apiUrl.ts)
 const BASE_URL = resolveApiBaseUrl(import.meta.env.VITE_API_URL);
@@ -121,6 +122,7 @@ async function request<T>(
   const { timeoutMs = REQUEST_TIMEOUT_MS, retries = 0, retryDelayMs = 4000, onRetry, ...init } = options;
 
   const token = getToken();
+  const endSlowTracking = trackSlowRequest(); // acima de 6 s a tela avisa que o servidor está acordando
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -141,6 +143,7 @@ async function request<T>(
         await sleep(retryDelayMs * (attempt + 1));
         continue;
       }
+      endSlowTracking();
       throw err;
     }
     if (RETRY_STATUSES.has(res.status) && attempt < retries) {
@@ -150,6 +153,8 @@ async function request<T>(
     }
     break;
   }
+
+  endSlowTracking();
 
   // 204 No Content
   if (res.status === 204) return undefined as T;

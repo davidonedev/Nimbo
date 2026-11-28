@@ -79,6 +79,10 @@ app:
   # gratuito bloqueia as portas SMTP padrão).
   email:
     enabled: ${EMAIL_ENABLED:false}
+  # Quantos proxies da hospedagem acrescentam o IP ao X-Forwarded-For (0 = usa o primeiro valor, que o cliente forja).
+  # Descubra o valor certo em GET /api/super/diagnostics/client-ip e depois defina CLIENT_IP_PROXY_HOPS (normalmente 1).
+  client-ip:
+    proxy-hops: ${CLIENT_IP_PROXY_HOPS:0}
   seed:
     enabled: ${SEED_ENABLED:false}
   # WhatsApp padrão da plataforma (Evolution API): usado no código de confirmação do agendamento quando o

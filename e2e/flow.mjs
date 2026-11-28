@@ -424,6 +424,8 @@ async function bookVerified(name, { svc = 'Corte E2E', pro = null, day = 2 } = {
 const dev = token => ({ 'X-Device-Token': token });
 const statusOf = id => sql(`select status from appointments where id='${id}'`)[0]?.[0];
 const waitStatus = async (id, want, ms = 15_000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (statusOf(id) === want) return true; await sleep(500); } return false; };
+/** Concluir e marcar falta só valem depois do início: leva o agendamento para hoje às 00:00 (banco descartável). */
+const startedNow = ids => ids.filter(Boolean).forEach(id => sql(`update appointments set date='${dayBR(0)}', start_time='00:00', end_time='00:30' where id='${id}'`));
 const outboxOf = (id, event) => sql(`select channel, status, coalesce(last_error,''), attempts from notification_outbox where appointment_id='${id}' and event='${event}' order by channel`);
 const ownerSession = () => ({ token: S.token, user: S.user });
 const ownerPhoneDigits = '11988887001';
@@ -446,7 +448,7 @@ phase('C', async ({ browser }) => {
   const ownerMsg = await wa.waitFor(m => wa.to(ownerPhoneDigits)(m) && /pedido|agendamento/i.test(m.text), 30_000);
   check('C1', 'Novo pedido: o dono recebe aviso no WhatsApp do estabelecimento', !!ownerMsg, ownerMsg ? ownerMsg.text.replace(/\n/g, ' | ').slice(0, 150) : 'nenhuma mensagem ao dono');
   const bellRow = outboxOf(dani.id, 'NEW_REQUEST');
-  check('C1b', 'O aviso ao dono passou pela fila (WhatsApp enviado; e-mail ignorado por falta de SMTP)', bellRow.some(r => r[0] === 'WHATSAPP' && r[1] === 'SENT') && bellRow.some(r => r[0] === 'EMAIL' && r[1] === 'SKIPPED'), JSON.stringify(bellRow));
+  check('C1b', 'O aviso ao dono passou pela fila só por WhatsApp (enviado); nenhuma linha de e-mail', bellRow.some(r => r[0] === 'WHATSAPP' && r[1] === 'SENT') && !bellRow.some(r => r[0] === 'EMAIL'), JSON.stringify(bellRow));
 
   const edu = await bookVerified(`Edu ${RUN}`, { pro: S.ronaldId });
   const fabi = await bookVerified(`Fabi ${RUN}`, { pro: S.ronaldId });
@@ -667,6 +669,7 @@ phase('E', async ({ browser }) => {
   for (const c of [lara]) await api('PATCH', `/admin/appointments/${c.id}/status`, { status: 'confirmed' }, S.token);
   await wa.waitFor(m => wa.to(lara.ph.digits)(m) && /confirmado/.test(m.text), 20_000); // a aprovação sai sozinha; só depois limpa para medir o resto
   await wa.clear();
+  startedNow([lara.id, fabi?.id]); // o atendimento "já começou": a regra do servidor só deixa concluir ou marcar falta depois do horário
 
   const { ctx, page } = await loggedPage(browser, ownerSession(), 'dono-atendimento');
   try {
@@ -699,6 +702,7 @@ phase('E', async ({ browser }) => {
 
   // E4 profissional conclui (Ju foi confirmada na fase D)
   if (ju && statusOf(ju.id) === 'confirmed') {
+    startedNow([ju.id]);
     const { ctx: cp, page: pp } = await loggedPage(browser, { token: S.marcos.token, user: (await login(S.marcos.email, S.marcos.password)).user }, 'prof-atendimento');
     try {
       await pp.goto(`${URLS.front}/professional/agenda`, { waitUntil: 'networkidle' });
@@ -988,6 +992,61 @@ phase('H', async () => {
 });
 
 // ═══ M. "Meus agendamentos" (cliente com aparelho reconhecido: ver, remarcar, cancelar) ═══════════════
+phase('I', async () => {
+  section('I. Correções da auditoria (pedido recebido, remarcação do dono, almoço, acesso, balcão, exclusões, saúde)');
+  if (!S.token) { warn('I0', 'Fase A não rodou; pulando I'); return; }
+  await wa.clear();
+
+  // I1 cliente recebe "recebemos o seu pedido" depois do código
+  const rita = await bookVerified(`Rita ${RUN}`, { pro: S.ronaldId });
+  const got = await wa.waitFor(m => wa.to(rita.ph.digits)(m) && /Recebemos o seu pedido/.test(m.text), 25_000);
+  check('I1', 'Depois do código, o cliente recebe "Recebemos o seu pedido" (ainda precisa ser aprovado) com o link de Meus agendamentos',
+    !!got && /meus-agendamentos/.test(got.text) && /aprovado/.test(got.text), got ? got.text.replace(/\n/g, ' | ').slice(0, 160) : 'sem mensagem');
+
+  // I2 o dono muda o horário e o cliente é avisado
+  const day3 = dayBR(3);
+  const free = await api('GET', `/public/${S.slug}/book/slots?serviceIds=${S.services['Corte E2E']}&date=${day3}&professionalId=${S.ronaldId}`);
+  const newTime = (free.data ?? [])[2];
+  await wa.clear();
+  const moved = newTime ? await api('PATCH', `/admin/appointments/${rita.id}`, { date: day3, startTime: newTime }, S.token) : { status: 0 };
+  const movedMsg = await wa.waitFor(m => wa.to(rita.ph.digits)(m) && /foi alterado/.test(m.text) && m.text.includes(newTime ?? 'x'), 25_000);
+  check('I2', 'O dono muda o dia e o horário do agendamento (200) e o cliente recebe o aviso no WhatsApp', moved.status === 200 && !!movedMsg && sql(`select start_time from appointments where id='${rita.id}'`)[0]?.[0] === newTime,
+    `status=${moved.status}; novo=${newTime}; aviso=${movedMsg ? 'sim' : 'não'}`);
+  const same = newTime ? await api('PATCH', `/admin/appointments/${rita.id}`, { date: day3, startTime: newTime }, S.token) : { status: 0, raw: {} };
+  check('I2b', 'Mudar para o mesmo horário é recusado (400 SAME_SLOT)', same.status === 400 && same.raw?.code === 'SAME_SLOT', `status=${same.status}; code=${same.raw?.code}`);
+
+  // I3 almoço do profissional não aparece como horário livre
+  const setBreak = await api('PATCH', `/admin/professionals/${S.ronaldId}`, { breakStart: '12:00', breakEnd: '13:00' }, S.token);
+  const sl = await api('GET', `/public/${S.slug}/book/slots?serviceIds=${S.services['Corte E2E']}&date=${dayBR(4)}&professionalId=${S.ronaldId}`);
+  const lunchSlots = (sl.data ?? []).filter(t => t >= '11:45' && t < '13:00');
+  check('I3', 'Intervalo de almoço (12:00–13:00) do profissional some dos horários livres do cliente', setBreak.status === 200 && (sl.data ?? []).length > 0 && lunchSlots.length === 0, `salvo=${setBreak.status}; horários na janela do almoço=${JSON.stringify(lunchSlots)}`);
+  await api('PATCH', `/admin/professionals/${S.ronaldId}`, { breakStart: '', breakEnd: '' }, S.token);
+
+  // I4 ninguém cria login de profissional sozinho; a lista de contas demo não existe
+  const reg = await api('POST', `/public/${S.slug}/register/professional`, { name: 'Intruso', email: `intruso-${tag}@e2e.test`, password: 'senha123', specialty: 'Barbeiro' });
+  const ld = await api('GET', '/public/login-data');
+  const created = sql(`select count(*) from users where email='intruso-${tag}@e2e.test'`)[0]?.[0];
+  check('I4', 'Cadastro público de profissional não existe (4xx, nenhum usuário criado) e /public/login-data não existe (404)', reg.status >= 400 && reg.status < 500 && created === '0' && ld.status === 404, `cadastro=${reg.status}; usuários criados=${created}; login-data=${ld.status}`);
+
+  // I5 balcão: só nome e celular
+  const bal = await api('POST', '/admin/appointments', { clientName: `Balcão ${RUN}`, clientPhone: '(11) 95555-7777', professionalId: S.ronaldId, serviceId: S.services['Corte E2E'], date: dayBR(5), startTime: '16:00' }, S.token);
+  const semCel = await api('POST', '/admin/appointments', { clientName: 'Sem celular', clientEmail: `semcel2-${tag}@e2e.test`, professionalId: S.ronaldId, serviceId: S.services['Corte E2E'], date: dayBR(5), startTime: '17:00' }, S.token);
+  const balEmail = sql(`select coalesce(email,'(vazio)') from clients where tenant_id='${S.tenantId}' and phone_e164='5511955557777'`)[0]?.[0];
+  check('I5', 'Cliente de balcão com nome e celular (sem e-mail) é criado (201); sem celular é recusado (400)', bal.status === 201 && balEmail === '(vazio)' && semCel.status === 400, `com celular=${bal.status}; e-mail salvo=${balEmail}; sem celular=${semCel.status}`);
+
+  // I6 não exclui o que ainda tem agendamento futuro
+  const delSvc = await api('DELETE', `/admin/services/${S.services['Corte E2E']}`, undefined, S.token);
+  const delPro = await api('DELETE', `/admin/professionals/${S.ronaldId}`, undefined, S.token);
+  check('I6', 'Excluir serviço ou profissional com agendamentos futuros é recusado (409 HAS_UPCOMING_APPOINTMENTS)', delSvc.status === 409 && delPro.status === 409 && delSvc.raw?.code === 'HAS_UPCOMING_APPOINTMENTS', `serviço=${delSvc.status}; profissional=${delPro.status}`);
+
+  // I7 saúde: o /health/deep confere o banco; recuperação de senha sem e-mail não cria nada
+  const deep = await fetch(URLS.health + '/deep').then(r => r.status).catch(() => 0);
+  const forgot = await api('POST', '/auth/forgot-password', { email: S.owner.email });
+  const tokens = sql(`select count(*) from user_tokens where type='password_reset'`)[0]?.[0];
+  check('I7', '/health/deep responde 200 (banco ok) e "esqueci a senha" não cria token (sem e-mail)', deep === 200 && forgot.status === 200 && tokens === '0', `deep=${deep}; forgot=${forgot.status}; tokens=${tokens}`);
+  saveState();
+});
+
 phase('M', async ({ browser }) => {
   section('M. Meus agendamentos (aparelho reconhecido)');
   if (!S.token || !S.services) { warn('M0', 'Fase A não rodou; pulando M'); return; }

@@ -1,6 +1,8 @@
 app:
   seed:
     enabled: false
+  reminders:
+    quiet-hours-enabled: false   # os testes de lembrete rodam a qualquer hora; ReminderQuietHoursTest cobre a regra
   email:
     enabled: true    # o código de e-mail segue coberto; EmailDisabledIntegrationTest cobre o padrão (desligado)
   booking:

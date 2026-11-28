@@ -65,6 +65,7 @@ import { SERVICES_TABS, SETTINGS_TABS, REPORTS_TABS, SUPER_SETTINGS_TABS } from 
 import { canEnterArea } from './config/navigation';
 import { LEGACY_ADMIN_REDIRECTS } from './config/legacyRoutes';
 import { LoginSplashHost }       from './motion/LoginSplashHost';
+import { ServerWakingNotice }    from './components/ServerWakingNotice';
 import { RouteErrorBoundary }    from './components/RouteErrorBoundary';
 
 function BookingRedirect() {
@@ -217,6 +218,7 @@ export default function App() {
       <AuthProvider>
         <AppRoutes />
         <LoginSplashHost />
+        <ServerWakingNotice />
       </AuthProvider>
     </BrowserRouter>
     </GoogleOAuthProvider>

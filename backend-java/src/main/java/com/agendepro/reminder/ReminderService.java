@@ -57,6 +57,19 @@ public class ReminderService {
     @Value("${app.reminders.enabled:true}")
     private boolean remindersEnabled;
 
+    /** Sem mensagem de lembrete de 22h às 7h (Brasília): o lembrete sai na primeira varredura depois das 7h. */
+    @Value("${app.reminders.quiet-hours-enabled:true}")
+    private boolean quietHoursEnabled;
+
+    /** 22h–7h (hora cheia em Brasília). */
+    static boolean isQuietHour(int hour) {
+        return hour >= 22 || hour < 7;
+    }
+
+    private boolean isQuietNow() {
+        return quietHoursEnabled && isQuietHour(java.time.ZonedDateTime.now(SAO_PAULO).getHour());
+    }
+
     private static final ZoneId SAO_PAULO = ZoneId.of("America/Sao_Paulo");
     private static final DateTimeFormatter SHORT_DATE = DateTimeFormatter.ofPattern("dd/MM");
 
@@ -65,7 +78,7 @@ public class ReminderService {
     @Scheduled(fixedDelayString = "${app.reminders.check-interval-ms:300000}")
     @Transactional
     public void send24hReminders() {
-        if (!remindersEnabled) return;
+        if (!remindersEnabled || isQuietNow()) return;
         queueAll(appointmentRepository.findNeedingReminder24h(), NotificationService.Event.REMINDER_24H, WhatsappService.REMINDER_24H_TEMPLATE);
     }
 
@@ -74,7 +87,7 @@ public class ReminderService {
     @Scheduled(fixedDelayString = "${app.reminders.check-interval-ms:300000}")
     @Transactional
     public void send2hReminders() {
-        if (!remindersEnabled) return;
+        if (!remindersEnabled || isQuietNow()) return;
         queueAll(appointmentRepository.findNeedingReminder2h(), NotificationService.Event.REMINDER_2H, WhatsappService.REMINDER_2H_TEMPLATE);
     }
 
