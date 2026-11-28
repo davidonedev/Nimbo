@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
+import { usePublicTenant } from '@/context/PublicTenantContext';
 import { AlertTriangle, CalendarClock, ChevronLeft, CircleCheck, Lock, CalendarX, Tag } from 'lucide-react';
 import { maskPhone } from '@/lib/phone';
 import { ApiError } from '@/lib/api';
@@ -24,6 +25,7 @@ function ContactForm({ date, time }: { date: string; time: string }) {
   const [problem, setProblem] = useState<{ message: string; conflict: boolean } | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaKey, setCaptchaKey] = useState(0); // muda para refazer o captcha (token é de uso único)
+  const { data: { tenant } } = usePublicTenant();
 
   // Aparelho reconhecido: já vem preenchido (sem sobrescrever o que a pessoa digitou).
   useEffect(() => {
@@ -152,6 +154,11 @@ function ContactForm({ date, time }: { date: string; time: string }) {
             </span>
           </div>
         )}
+
+        <p className="bk-sub" style={{ fontSize: 12, marginTop: 4 }}>
+          Ao confirmar, você autoriza o {tenant.name} a usar seu nome e seu WhatsApp para este agendamento e para os avisos sobre ele.
+          Veja a <Link to="/privacidade" className="bk-inline">Política de Privacidade</Link>.
+        </p>
 
         <div className="bk-actions">
           <button type="button" className="bk-link" onClick={() => go('horario')}><ChevronLeft size={16} aria-hidden /> Voltar</button>

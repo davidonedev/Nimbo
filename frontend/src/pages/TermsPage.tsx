@@ -1,6 +1,7 @@
 import { ChevronLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { SupportContact } from '@/components/SupportContact';
 
 export default function TermsPage() {
   const navigate = useNavigate();
@@ -50,7 +51,7 @@ export default function TermsPage() {
 
       <section className="space-y-3 text-sm leading-relaxed">
         <h2 className="font-semibold text-base">8. Contato</h2>
-        <p>Dúvidas sobre os termos? Fale conosco pelo e-mail <a href="mailto:suporte@agendepro.com" className="underline">suporte@agendepro.com</a>.</p>
+        <p>Dúvidas sobre os termos? Fale com <SupportContact />.</p>
       </section>
     </div>
   );

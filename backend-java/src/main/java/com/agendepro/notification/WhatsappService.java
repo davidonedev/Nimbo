@@ -163,7 +163,12 @@ public class WhatsappService {
                 to, text.lines().map(l -> "    " + l).reduce("", (a, b) -> a + "\n" + b));
     }
 
+    /** Só para teste/desenvolvimento (WHATSAPP_ALLOW_PRIVATE_URLS): aceita API em localhost/rede interna. */
+    @Value("${app.whatsapp.allow-private-urls:false}")
+    private boolean allowPrivateUrls;
+
     private void post(TenantWhatsappConfig config, String to, String text) {
+        UrlSafety.requirePublicHttpUrl(config.apiUrl(), allowPrivateUrls); // o servidor nunca chama a rede interna
         String url = config.apiUrl().replaceAll("/$", "") + "/message/sendText/" + config.instance();
         restClient.post()
                 .uri(url)

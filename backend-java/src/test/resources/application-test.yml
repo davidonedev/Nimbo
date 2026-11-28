@@ -1,6 +1,8 @@
 app:
   seed:
     enabled: false
+  whatsapp:
+    allow-private-urls: true     # os testes usam um servidor falso em localhost; UrlSafetyTest cobre a regra
   reminders:
     quiet-hours-enabled: false   # os testes de lembrete rodam a qualquer hora; ReminderQuietHoursTest cobre a regra
   email:

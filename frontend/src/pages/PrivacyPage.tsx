@@ -1,6 +1,7 @@
 import { ChevronLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { SupportContact } from '@/components/SupportContact';
 
 export default function PrivacyPage() {
   const navigate = useNavigate();
@@ -35,7 +36,7 @@ export default function PrivacyPage() {
 
       <section className="space-y-3 text-sm leading-relaxed">
         <h2 className="font-semibold text-base">5. Seus direitos (LGPD — Lei 13.709/2018)</h2>
-        <p>Você tem direito a: confirmar a existência de tratamento; acessar seus dados; corrigir dados incompletos ou inexatos; solicitar anonimização ou exclusão; revogar consentimento. Para exercer esses direitos, envie e-mail para <a href="mailto:privacidade@agendepro.com" className="underline">privacidade@agendepro.com</a>.</p>
+        <p>Você tem direito a: confirmar a existência de tratamento; acessar seus dados; corrigir dados incompletos ou inexatos; solicitar anonimização ou exclusão; revogar consentimento. Para exercer esses direitos, fale com <SupportContact /> ou diretamente com o estabelecimento onde você agendou.</p>
       </section>
 
       <section className="space-y-3 text-sm leading-relaxed">
@@ -50,7 +51,7 @@ export default function PrivacyPage() {
 
       <section className="space-y-3 text-sm leading-relaxed">
         <h2 className="font-semibold text-base">8. Contato com o Encarregado (DPO)</h2>
-        <p>Questões sobre privacidade: <a href="mailto:privacidade@agendepro.com" className="underline">privacidade@agendepro.com</a>.</p>
+        <p>Questões sobre privacidade: <SupportContact />.</p>
       </section>
     </div>
   );

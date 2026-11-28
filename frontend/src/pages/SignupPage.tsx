@@ -55,6 +55,8 @@ function slugify(text: string): string {
     .slice(0, 60);
 }
 
+import { SITE_LINK_PREFIX } from '@/lib/siteUrl';
+
 /**
  * Extrai apenas o slug a partir de qualquer entrada do usuário:
  * - "barber-kings"                  → "barber-kings"
@@ -130,7 +132,7 @@ function ClientFindStep({ onBack }: { onBack: () => void }) {
 
       <form onSubmit={handleSubmit} noValidate className="space-y-6">
         <TextField
-          id="client-slug" label="Link do estabelecimento" prefixText="agendepro.com/" placeholder="barber-kings"
+          id="client-slug" label="Link do estabelecimento" prefixText={SITE_LINK_PREFIX} placeholder="barber-kings"
           value={slug} onChange={e => { setSlug(e.target.value); setError(''); }}
           error={error} required autoFocus
         />
@@ -302,9 +304,9 @@ function BusinessFormStep({
             value={form.address} onChange={set('address')} error={errors.address}
           />
           <TextField
-            id={`${uid}-slug`} label="URL do seu perfil" prefixText="agendepro.com/" placeholder="seu-negocio"
+            id={`${uid}-slug`} label="URL do seu perfil" prefixText={SITE_LINK_PREFIX} placeholder="seu-negocio"
             value={form.slug} onChange={handleSlugChange} error={errors.slug}
-            hint={form.slug ? <>Clientes acessarão: <span className="font-mono text-lp-black">agendepro.com/{form.slug}</span></> : undefined}
+            hint={form.slug ? <>Clientes acessarão: <span className="font-mono text-lp-black">{SITE_LINK_PREFIX}{form.slug}</span></> : undefined}
           />
         </fieldset>
 
@@ -357,7 +359,7 @@ function SuccessStep({ slug }: { slug: string }) {
         <p className="mb-2 text-sm text-lp-muted">
           Sua conta está no plano <strong className="text-lp-black">Trial</strong>. Faça login para configurar seu estabelecimento.
         </p>
-        <p className="mb-8 font-mono text-sm text-lp-black">agendepro.com/{slug}</p>
+        <p className="mb-8 font-mono text-sm text-lp-black">{SITE_LINK_PREFIX}{slug}</p>
 
         <LpButton onClick={() => navigate('/login')} size="lg" className="w-full">
           Ir para o login <ArrowRight className="h-4 w-4" aria-hidden />

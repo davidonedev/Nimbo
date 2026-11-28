@@ -312,7 +312,7 @@ public class AppointmentService {
 
         ProfessionalSummary professionalSummary = professional == null ? null : new ProfessionalSummary(
                 professional.getId(), professional.getTenantId(), professional.getName(), professional.getSpecialty(),
-                professional.getAvatar(), professional.getPhotoUrl(), professional.getBio(),
+                professional.getAvatar(), null /* a foto (base64) não viaja em cada agendamento: a lista de profissionais já a traz */, professional.getBio(),
                 professional.getWorkingHoursStart(), professional.getWorkingHoursEnd(),
                 java.util.Arrays.asList(professional.getWorkingDays()), professional.getCreatedAt(), professional.getUpdatedAt());
 

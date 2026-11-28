@@ -26,6 +26,9 @@ import static com.agendepro.tenant.TenantDtos.*;
 @Service
 @RequiredArgsConstructor
 public class TenantService {
+    @org.springframework.beans.factory.annotation.Value("${app.whatsapp.allow-private-urls:false}")
+    private boolean allowPrivateWhatsappUrls;
+
 
     private final TenantRepository tenantRepository;
     private final ProfessionalRepository professionalRepository;
@@ -85,7 +88,11 @@ public class TenantService {
         if (request.bannerUrl() != null) tenant.setBannerUrl(imageOrNull(request.bannerUrl(), "banner"));
         if (request.isOpen() != null) tenant.setIsOpen(request.isOpen());
         if (request.minAdvanceMinutes() != null) tenant.setMinAdvanceMinutes(request.minAdvanceMinutes());
-        if (request.whatsappApiUrl() != null) tenant.setWhatsappApiUrl(blankToNull(request.whatsappApiUrl()));
+        if (request.whatsappApiUrl() != null) {
+            String apiUrl = blankToNull(request.whatsappApiUrl());
+            if (apiUrl != null) com.agendepro.notification.UrlSafety.requirePublicHttpUrl(apiUrl, allowPrivateWhatsappUrls);
+            tenant.setWhatsappApiUrl(apiUrl);
+        }
         if (request.whatsappApiKey() != null) tenant.setWhatsappApiKey(blankToNull(request.whatsappApiKey()));
         if (request.whatsappInstance() != null) tenant.setWhatsappInstance(blankToNull(request.whatsappInstance()));
         if (request.whatsappTemplate() != null) tenant.setWhatsappTemplate(blankToNull(request.whatsappTemplate()));
