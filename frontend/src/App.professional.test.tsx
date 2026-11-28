@@ -8,7 +8,6 @@ vi.mock('./context/ProfessionalContext', () => ({
   ProfessionalProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   useProfessional: () => profContext(),
 }));
-vi.mock('./pwa/PwaHost', () => ({ PwaHost: () => null }));
 vi.mock('./motion/LoginSplashHost', () => ({ LoginSplashHost: () => null }));
 vi.mock('./pages/LoginPage', () => ({ default: () => <p>tela de login</p> }));
 vi.mock('./components/professional/ProfAgendaView', () => ({ default: () => <p>tela da agenda</p> }));

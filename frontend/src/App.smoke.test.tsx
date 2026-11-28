@@ -9,7 +9,6 @@ import App from './App';
  * falsa com o MESMO formato que o backend devolve ({ success, data } e DTOs reais). Assim pegamos
  * tela branca, "Carregando…" eterno e campos que o back devolve nulos.
  */
-vi.mock('./pwa/PwaHost', () => ({ PwaHost: () => null }));
 vi.mock('./motion/LoginSplashHost', () => ({ LoginSplashHost: () => null }));
 
 const TENANT_ID = 't1';

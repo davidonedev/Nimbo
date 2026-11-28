@@ -7,7 +7,6 @@ import App from '../App';
 import { installAdminBackend, signInAsTenantAdmin } from './fakeBackend';
 
 /** Agenda do dono: o botão do meio de "‹ Hoje ›" acompanha o dia em exibição e o título não repete a data. */
-vi.mock('../pwa/PwaHost', () => ({ PwaHost: () => null }));
 vi.mock('../motion/LoginSplashHost', () => ({ LoginSplashHost: () => null }));
 
 const T = { timeout: 25000 };

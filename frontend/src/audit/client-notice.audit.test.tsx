@@ -6,7 +6,6 @@ import { confirmInSafetyDialog } from '@/test/confirmDialog';
 import { appt, brDate, installAdminBackend, signInAsTenantAdmin, type Backend } from './fakeBackend';
 
 /** Depois de aprovar, recusar ou cancelar, o dono tem o botão que abre o WhatsApp com a mensagem pronta para o cliente. */
-vi.mock('../pwa/PwaHost', () => ({ PwaHost: () => null }));
 vi.mock('../motion/LoginSplashHost', () => ({ LoginSplashHost: () => null }));
 
 const T = { timeout: 25000 };
