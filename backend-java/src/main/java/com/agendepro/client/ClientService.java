@@ -91,24 +91,41 @@ public class ClientService {
     public void delete(UUID tenantId, UUID id) {
         Client client = clientRepository.findByIdAndTenantId(id, tenantId)
                 .orElseThrow(() -> AppException.notFound("Cliente não encontrado"));
+        long upcoming = appointmentRepository.countUpcomingByClient(tenantId, id, java.time.LocalDate.now(java.time.ZoneId.of("America/Sao_Paulo")).toString());
+        if (upcoming > 0) {
+            throw new AppException("Este cliente tem " + upcoming + (upcoming == 1 ? " agendamento futuro" : " agendamentos futuros")
+                    + ". Cancele ou remarque antes de excluir.", 409, "HAS_UPCOMING_APPOINTMENTS");
+        }
         clientRepository.delete(client);
     }
 
     /**
-     * Cria ou atualiza um cliente por (tenantId, email) — porta de prisma.client.upsert,
-     * usado ao criar agendamentos (admin/professional/público). Check-then-act protegido
-     * pela constraint única (tenant_id, email): sob concorrência extrema, o perdedor da
-     * corrida recebe 409 DUPLICATE_ENTRY em vez de silenciosamente mesclar os dados.
+     * Cliente do balcão: casa pelo celular (é a identidade do cliente no Nimbo) e, se não achar, pelo e-mail informado.
+     * Quem já existe é reaproveitado SEM trocar nome nem celular (o dono pode digitar de outro jeito); só completa o que
+     * faltava. Sem cadastro, cria um novo (e-mail é opcional).
      */
     @Transactional
-    public Client upsertByEmail(UUID tenantId, String name, String email, String phone) {
-        return clientRepository.findByTenantIdAndEmail(tenantId, email)
-                .map(existing -> {
-                    existing.setName(name);
-                    if (phone != null) existing.setPhone(phone);
-                    return clientRepository.save(existing);
-                })
-                .orElseGet(() -> clientRepository.save(Client.builder()
-                        .tenantId(tenantId).name(name).email(email).phone(phone).build()));
+    public Client findOrCreateByContact(UUID tenantId, String name, String phone, String email) {
+        String cleanEmail = email == null || email.isBlank() ? null : email.trim();
+        String e164 = Client.normalizePhone(phone);
+        Client existing = e164 == null ? null
+                : clientRepository.findFirstByTenantIdAndPhoneE164OrderByCreatedAtAsc(tenantId, e164).orElse(null);
+        Client byEmail = cleanEmail == null ? null : clientRepository.findByTenantIdAndEmail(tenantId, cleanEmail).orElse(null);
+        if (existing == null) existing = byEmail;
+
+        if (existing != null) {
+            boolean changed = false;
+            if ((existing.getEmail() == null || existing.getEmail().isBlank()) && cleanEmail != null && byEmail == null) {
+                existing.setEmail(cleanEmail);
+                changed = true;
+            }
+            if (existing.getPhone() == null || existing.getPhone().isBlank()) {
+                existing.setPhone(phone.trim());
+                changed = true;
+            }
+            return changed ? clientRepository.save(existing) : existing;
+        }
+        return clientRepository.save(Client.builder()
+                .tenantId(tenantId).name(name.trim()).email(cleanEmail).phone(phone.trim()).build());
     }
 }

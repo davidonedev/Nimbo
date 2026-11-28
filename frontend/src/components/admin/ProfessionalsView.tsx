@@ -27,6 +27,8 @@ interface ProfFormData {
   bio: string;
   services: string[];
   workingHours: { start: string; end: string };
+  breakStart: string;
+  breakEnd: string;
   workingDays: number[];
   email: string;
   password: string;
@@ -34,7 +36,7 @@ interface ProfFormData {
 
 const EMPTY_FORM: ProfFormData = {
   name: '', specialty: '', avatar: '', photoUrl: '', bio: '',
-  services: [], workingHours: { start: '09:00', end: '18:00' }, workingDays: [1, 2, 3, 4, 5, 6],
+  services: [], workingHours: { start: '09:00', end: '18:00' }, breakStart: '12:00', breakEnd: '13:00', workingDays: [1, 2, 3, 4, 5, 6],
   email: '', password: '',
 };
 
@@ -42,7 +44,7 @@ function formFromProf(p: Professional): ProfFormData {
   return {
     name: p.name, specialty: p.specialty, avatar: p.avatar,
     photoUrl: p.photoUrl ?? '', bio: p.bio, services: [...p.services],
-    workingHours: { ...p.workingHours }, workingDays: [...p.workingDays],
+    workingHours: { ...p.workingHours }, breakStart: p.breakStart ?? '', breakEnd: p.breakEnd ?? '', workingDays: [...p.workingDays],
     email: p.email ?? '', password: p.password ?? '',
   };
 }
@@ -183,6 +185,19 @@ function ProfFormFields({ form, setForm, services, isNew = false }: ProfFormFiel
           />
         </div>
       </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label>Início do almoço</Label>
+          <Input type="time" value={form.breakStart} onChange={e => setForm(f => ({ ...f, breakStart: e.target.value }))} />
+        </div>
+        <div className="space-y-1">
+          <Label>Fim do almoço</Label>
+          <Input type="time" value={form.breakEnd} onChange={e => setForm(f => ({ ...f, breakEnd: e.target.value }))} />
+        </div>
+        <p className="col-span-2 text-xs text-muted-foreground">
+          Nesse intervalo o cliente não consegue agendar, todos os dias. Deixe os dois vazios para não ter intervalo.
+        </p>
+      </div>
       <div className="space-y-2">
         <Label>Dias de trabalho</Label>
         <div className="flex gap-1.5 flex-wrap">
@@ -255,6 +270,8 @@ export default function ProfessionalsView() {
     workingHoursStart: form.workingHours.start,
     workingHoursEnd:   form.workingHours.end,
     workingDays:       form.workingDays,
+    breakStart:        form.breakStart,
+    breakEnd:          form.breakEnd,
     email:             form.email.trim()    || undefined,
     password:          form.password.trim() || undefined,
   });

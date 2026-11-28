@@ -9,7 +9,7 @@ import { useAuth } from './AuthContext';
 import { ApiError } from '../lib/api';
 
 import { getMyTenantApi, updateTenantSettingsApi } from '../services/tenant.service';
-import { listAppointmentsApi, createAppointmentApi, updateAppointmentStatusApi, bulkConfirmAppointmentsApi } from '../services/appointments.service';
+import { listAppointmentsApi, createAppointmentApi, updateAppointmentStatusApi, bulkConfirmAppointmentsApi, rescheduleAppointmentApi, type RescheduleAppointmentPayload } from '../services/appointments.service';
 import type { BulkConfirmResult } from '../services/appointments.service';
 import { listBlockedSlotsApi, createBlockedSlotApi, deleteBlockedSlotApi } from '../services/blockedSlots.service';
 import { listClientsApi, createClientApi, updateClientApi, deleteClientApi } from '../services/clients.service';
@@ -42,6 +42,7 @@ interface TenantContextType extends TenantData {
   // Appointments
   addAppointment:          (payload: CreateAppointmentPayload) => Promise<Appointment>;
   updateAppointmentStatus: (apptId: string, status: Appointment['status']) => Promise<void>;
+  rescheduleAppointment: (apptId: string, change: RescheduleAppointmentPayload) => Promise<void>;
   /** Confirma vários pendentes de uma vez (o servidor ignora os que já não estão pendentes). */
   confirmAppointments: (ids: string[]) => Promise<BulkConfirmResult>;
   cancelAppointment:       (apptId: string) => Promise<void>;
@@ -218,6 +219,11 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     setAppointments((prev) => prev.map((a) => (a.id === apptId ? { ...a, status, confirmBy: status === 'pending' ? a.confirmBy : null } : a)));
   };
 
+  const rescheduleAppointment = async (apptId: string, change: RescheduleAppointmentPayload) => {
+    const updated = await rescheduleAppointmentApi(apptId, change);
+    setAppointments((prev) => prev.map((a) => (a.id === apptId ? { ...a, ...updated } : a)));
+  };
+
   const confirmAppointments = async (ids: string[]) => {
     const result = await bulkConfirmAppointmentsApi(ids);
     const done = new Set(result.confirmedIds);
@@ -357,6 +363,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     canAddService: services.length < limits.services,
     addAppointment,
     updateAppointmentStatus,
+    rescheduleAppointment,
     confirmAppointments,
     cancelAppointment,
     addBlockedSlot,

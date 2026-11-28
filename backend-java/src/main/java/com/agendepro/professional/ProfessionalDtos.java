@@ -25,7 +25,7 @@ public final class ProfessionalDtos {
     public record ProfessionalResponse(
             UUID id, UUID tenantId, String name, String specialty, String avatar, String photoUrl, String bio,
             String workingHoursStart, String workingHoursEnd, List<Integer> workingDays,
-            List<ServiceLinkSummary> services, Long appointmentCount
+            List<ServiceLinkSummary> services, Long appointmentCount, String breakStart, String breakEnd
     ) {
     }
 
@@ -58,7 +58,9 @@ public final class ProfessionalDtos {
             List<Integer> workingDays,
             List<UUID> serviceIds,
             @Email String email,
-            @Size(min = 4) String password
+            @Size(min = 4) String password,
+            String breakStart,
+            String breakEnd
     ) {
         public ProfessionalCreateRequest {
             specialty = specialty == null ? "" : specialty;
@@ -82,7 +84,9 @@ public final class ProfessionalDtos {
             List<Integer> workingDays,
             List<UUID> serviceIds,
             @Email String email,
-            @Size(min = 4) String password
+            @Size(min = 4) String password,
+            String breakStart,
+            String breakEnd
     ) {
         public ProfessionalUpdateRequest {
             workingHoursStart = workingHoursStart == null ? null : normalizeTime(workingHoursStart, null);
@@ -98,7 +102,9 @@ public final class ProfessionalDtos {
             @Size(max = 500) String bio,
             @Size(max = 100) String specialty,
             String avatar,
-            @Size(max = MAX_IMAGE_CHARS, message = "A foto é grande demais (máx. ~1,5 MB)") String photoUrl
+            @Size(max = MAX_IMAGE_CHARS, message = "A foto é grande demais (máx. ~1,5 MB)") String photoUrl,
+            String breakStart,
+            String breakEnd
     ) {
     }
 

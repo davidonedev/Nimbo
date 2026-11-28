@@ -32,6 +32,12 @@ public class PublicController {
     private final ProductService productService;
     private final TenantRepository tenantRepository;
 
+    @PostMapping("/register/business")
+    public ResponseEntity<ApiResponse<BusinessRegisterResponse>> registerBusiness(@Valid @RequestBody BusinessRegisterRequest request) {
+        var result = publicService.registerBusiness(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(result));
+    }
+
     @GetMapping("/{slug}")
     public ResponseEntity<ApiResponse<TenantPublicResponse>> getTenant(@PathVariable String slug) {
         return ResponseEntity.ok(ApiResponse.ok(publicService.getTenantBySlug(slug)));

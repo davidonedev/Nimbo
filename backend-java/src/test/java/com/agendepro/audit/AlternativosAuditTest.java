@@ -84,8 +84,7 @@ class AlternativosAuditTest extends AuditBase {
     }
 
     @Test
-    void gap_b2_adminHasNoRescheduleOrSuggestAnotherTimeEndpoint() throws Exception {
-        // documenta lacuna: só o cliente reagenda (rota pública); o admin não remarca nem sugere outro horário
+    void b2_adminCanMoveAnAppointmentToAnotherTime() throws Exception {
         Ctx c = ctx();
         Client client = clientWithPhone(c.tenant, uniquePhone());
         Appointment a = confirmedIn(c, client, 2, "10:00", "10:30");
@@ -93,11 +92,8 @@ class AlternativosAuditTest extends AuditBase {
 
         mockMvc.perform(patch("/api/admin/appointments/" + a.getId()).header("Authorization", bearer(token))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"date\":\"" + date + "\",\"startTime\":\"15:00\"}"))
-                .andExpect(status().is4xxClientError());
-        mockMvc.perform(patch("/api/admin/appointments/" + a.getId() + "/reschedule").header("Authorization", bearer(token))
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"date\":\"" + date + "\",\"startTime\":\"15:00\"}"))
-                .andExpect(status().is4xxClientError());
-        assertThat(reload(a).getStartTime()).isEqualTo("10:00");
+                .andExpect(status().isOk());
+        assertThat(reload(a).getStartTime()).isEqualTo("15:00");
     }
 
     // ── B3. Cliente cancela ────────────────────────────────────────────────────────────────────────
@@ -247,7 +243,7 @@ class AlternativosAuditTest extends AuditBase {
     void b5_noShow_isRecordedAndCountedInTheDashboard() throws Exception {
         Ctx c = ctx();
         Client client = clientWithPhone(c.tenant, uniquePhone());
-        Appointment missed = confirmedIn(c, client, 0, "09:00", "09:30");
+        Appointment missed = alreadyStarted(confirmedIn(c, client, 0, "09:00", "09:30"));
         Appointment cancelled = confirmedIn(c, client, 0, "10:00", "10:30");
         String token = adminToken(c.tenant);
 

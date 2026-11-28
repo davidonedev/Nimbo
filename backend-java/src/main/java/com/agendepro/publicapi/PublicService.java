@@ -153,7 +153,7 @@ public class PublicService {
             return List.of();
         }
 
-        List<Appointment> appointments = appointmentRepository.findActiveByProfessionalAndDate(t.getId(), professional.getId(), date).stream()
+        var appointments = appointmentRepository.findOccupiedByProfessionalAndDate(t.getId(), professional.getId(), date).stream()
                 .filter(a -> !a.getId().equals(excludeAppointmentId)).toList();
         List<com.agendepro.blockedslot.BlockedSlot> blockedSlots =
                 blockedSlotRepository.findByTenantIdAndProfessionalIdAndDateOrderByStartTimeAsc(t.getId(), professional.getId(), date);
@@ -163,6 +163,9 @@ public class PublicService {
         var occupied = new ArrayList<String[]>();
         appointments.forEach(a -> occupied.add(new String[]{a.getStartTime(), a.getEndTime()}));
         blockedSlots.forEach(b -> occupied.add(new String[]{b.getStartTime(), b.getEndTime()}));
+        if (professional.getBreakStart() != null && professional.getBreakEnd() != null) {
+            occupied.add(new String[]{professional.getBreakStart(), professional.getBreakEnd()}); // almoço
+        }
 
         return allSlots.stream().filter(slot -> {
             int slotEnd = ScheduleService.toMinutes(slot) + totalDuration;

@@ -99,10 +99,12 @@ public class AppointmentService {
 
         UUID clientId;
         if (request.clientId() == null) {
-            if (request.clientName() == null || request.clientEmail() == null) {
-                throw new AppException("Informe clientId ou os dados do novo cliente (clientName, clientEmail)", 400);
+            if (request.clientName() == null || request.clientName().isBlank()
+                    || request.clientPhone() == null || request.clientPhone().isBlank()) {
+                throw new AppException("Informe o cliente já cadastrado ou o nome e o celular (WhatsApp) do novo cliente", 400, "CLIENT_DATA_REQUIRED");
             }
-            Client client = clientService.upsertByEmail(tenantId, request.clientName(), request.clientEmail(), request.clientPhone());
+            com.agendepro.publicapi.PublicService.requireValidPhone(request.clientPhone());
+            Client client = clientService.findOrCreateByContact(tenantId, request.clientName(), request.clientPhone(), request.clientEmail());
             clientId = client.getId();
         } else {
             clientRepository.findByIdAndTenantId(request.clientId(), tenantId)
@@ -169,6 +171,14 @@ public class AppointmentService {
                     + " e não pode passar para " + request.status().label() + ". Atualize a tela.", 409, "INVALID_STATUS_TRANSITION");
         }
 
+        // Concluir e marcar falta só fazem sentido depois do horário de início (senão entra faturamento e falta de um atendimento que não houve)
+        if ((request.status() == AppointmentStatus.COMPLETED || request.status() == AppointmentStatus.NO_SHOW)
+                && java.time.LocalDateTime.parse(appointment.getDate() + "T" + appointment.getStartTime())
+                .isAfter(java.time.LocalDateTime.now(SAO_PAULO))) {
+            throw new AppException("Só dá para marcar como " + request.status().label().toLowerCase()
+                    + " depois do horário do agendamento.", 400, "NOT_STARTED_YET");
+        }
+
         AppointmentStatus previous = appointment.getStatus();
         appointment.setStatus(request.status());
         appointment.setConfirmBy(null); // decidido: não expira mais
@@ -183,6 +193,64 @@ public class AppointmentService {
             }
             default -> { }
         }
+        return toResponse(saved);
+    }
+
+    /**
+     * Remarcação feita pelo estabelecimento. Vale o que vale para criar: horário que não passou, sem conflito com outro
+     * agendamento (o próprio não conta) nem bloqueio. Pendente continua pendente e confirmado continua confirmado (foi o dono
+     * quem decidiu); lembretes e o aviso de cancelamento automático recomeçam para o novo horário; o cliente é avisado.
+     */
+    @Transactional
+    public AppointmentResponse reschedule(UUID tenantId, AuthenticatedUser authUser, UUID id, AppointmentRescheduleRequest request) {
+        Appointment appointment = appointmentRepository.findByIdAndTenantId(id, tenantId)
+                .orElseThrow(() -> AppException.notFound("Agendamento não encontrado"));
+
+        if (authUser.role() == UserRole.PROFESSIONAL) {
+            if (authUser.professionalId() == null) {
+                throw new AppException("Profissional não identificado no token", 400, "MISSING_PROFESSIONAL");
+            }
+            if (!appointment.getProfessionalId().equals(authUser.professionalId())) {
+                throw AppException.forbidden("Acesso negado a este agendamento");
+            }
+        }
+        if (appointment.getStatus() != AppointmentStatus.PENDING && appointment.getStatus() != AppointmentStatus.CONFIRMED) {
+            throw new AppException("Só dá para mudar o horário de agendamentos pendentes ou confirmados.", 409, "INVALID_STATUS_TRANSITION");
+        }
+
+        UUID professionalId = request.professionalId() != null ? request.professionalId() : appointment.getProfessionalId();
+        if (authUser.role() == UserRole.PROFESSIONAL && !professionalId.equals(authUser.professionalId())) {
+            throw AppException.forbidden("Acesso negado a este agendamento");
+        }
+        professionalRepository.findByIdAndTenantId(professionalId, tenantId)
+                .orElseThrow(() -> AppException.notFound("Profissional não encontrado"));
+        ServiceOffering service = serviceOfferingRepository.findByIdAndTenantId(appointment.getServiceId(), tenantId)
+                .orElseThrow(() -> AppException.notFound("Serviço não encontrado"));
+
+        String startTime = request.startTimeHHmm();
+        String endTime = ScheduleService.addMinutes(startTime, service.getDuration());
+        if (professionalId.equals(appointment.getProfessionalId()) && request.date().equals(appointment.getDate())
+                && startTime.equals(appointment.getStartTime())) {
+            throw new AppException("Escolha um dia ou horário diferente do atual.", 400, "SAME_SLOT");
+        }
+        requireNotInThePast(request.date(), startTime);
+
+        pgAdvisoryLockService.lockProfessionalSchedule(professionalId, request.date());
+        if (scheduleService.checkConflict(tenantId, professionalId, request.date(), startTime, endTime, appointment.getId())) {
+            throw new AppException("Conflito de horário: já existe agendamento ou bloqueio neste período", 409, "SCHEDULE_CONFLICT");
+        }
+
+        appointment.setProfessionalId(professionalId);
+        appointment.setDate(request.date());
+        appointment.setStartTime(startTime);
+        appointment.setEndTime(endTime);
+        appointment.setConfirmBy(null);
+        appointment.setReminder24hSentAt(null);
+        appointment.setReminder2hSentAt(null);
+        appointment.setExpiryWarnedAt(PendingExpiryService.warnedStampFor(request.date(), startTime, java.time.Instant.now()));
+        Appointment saved = appointmentRepository.save(appointment);
+
+        notificationService.clientMovedByOwner(saved);
         return toResponse(saved);
     }
 

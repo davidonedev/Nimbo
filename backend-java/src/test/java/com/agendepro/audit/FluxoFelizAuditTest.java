@@ -319,7 +319,7 @@ class FluxoFelizAuditTest extends AuditBase {
         Ctx c = ctx();
         String phone = uniquePhone();
         book(c, "Cliente Concluido", phone, "10:00", null, 200);
-        Appointment a = appointmentsOf(c.tenant).get(0);
+        Appointment a = alreadyStarted(appointmentsOf(c.tenant).get(0));
         String token = adminToken(c.tenant);
 
         patchStatus(token, a.getId(), "confirmed").andExpect(status().isOk());
@@ -339,7 +339,7 @@ class FluxoFelizAuditTest extends AuditBase {
         // documenta lacuna: concluir não registra valor cobrado/forma de pagamento/comissão nem totais do cliente
         Ctx c = ctx();
         book(c, "Cliente Concluido", uniquePhone(), "10:00", null, 200);
-        Appointment a = appointmentsOf(c.tenant).get(0);
+        Appointment a = alreadyStarted(appointmentsOf(c.tenant).get(0));
         String token = adminToken(c.tenant);
 
         JsonNode done = body(patchStatus(token, a.getId(), "completed").andExpect(status().isOk())).get("data");

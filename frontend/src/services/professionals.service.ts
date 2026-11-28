@@ -20,6 +20,8 @@ function normalize(p: Record<string, unknown>): Professional {
       end: (p.workingHoursEnd as string) ?? '18:00',
     },
     workingDays: (p.workingDays as number[]) ?? [1, 2, 3, 4, 5],
+    breakStart: (p.breakStart as string | null) ?? undefined,
+    breakEnd: (p.breakEnd as string | null) ?? undefined,
   };
 }
 
@@ -37,6 +39,9 @@ export interface CreateProfessionalPayload {
   workingHoursStart: string;
   workingHoursEnd: string;
   workingDays: number[];
+  /** Intervalo diário; '' nos dois remove. */
+  breakStart?: string;
+  breakEnd?: string;
   serviceIds: string[];
   email?: string;
   password?: string;
@@ -64,6 +69,8 @@ export interface UpdateMePayload {
   workingDays?:       number[];
   workingHoursStart?: string;
   workingHoursEnd?:   string;
+  breakStart?:        string;
+  breakEnd?:          string;
   bio?:               string;
   specialty?:         string;
   avatar?:            string;

@@ -169,6 +169,15 @@ abstract class AuditBase extends AbstractIntegrationTest {
                 .serviceId(c.service.getId()).date(day).startTime(start).endTime(end).price(c.service.getPrice()).status(status).build());
     }
 
+    /** Concluir e marcar falta só valem depois do início: leva o agendamento para hoje às 00:00 (sempre já começou). */
+    protected Appointment alreadyStarted(Appointment a) {
+        Appointment x = appointmentRepository.findById(a.getId()).orElseThrow();
+        x.setDate(LocalDate.now(SP).toString());
+        x.setStartTime("00:00");
+        x.setEndTime("00:30");
+        return appointmentRepository.save(x);
+    }
+
     protected Appointment reload(Appointment a) {
         return appointmentRepository.findById(a.getId()).orElseThrow();
     }

@@ -267,7 +267,7 @@ describe('AppointmentsView (celular)', () => {
 
     fireEvent.keyDown(screen.getByRole('button', { name: /^Mais ações:.*Maria Souza/ }), { key: 'Enter' });
     const menu = await screen.findByRole('menu');
-    expect(within(menu).getAllByRole('menuitem').map(i => i.textContent)).toEqual(['Concluir', 'Marcar falta', 'Cancelar']);
+    expect(within(menu).getAllByRole('menuitem').map(i => i.textContent)).toEqual(['Alterar horário', 'Concluir', 'Marcar falta', 'Cancelar']);
 
     fireEvent.click(within(menu).getByRole('menuitem', { name: 'Cancelar' }));
     expect(updateAppointmentStatus).not.toHaveBeenCalled(); // cancelar continua pedindo confirmação

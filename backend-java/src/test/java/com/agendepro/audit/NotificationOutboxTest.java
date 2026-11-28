@@ -164,8 +164,8 @@ class NotificationOutboxTest extends AuditBase {
     void completingOrMarkingNoShow_notifiesNobody() throws Exception {
         Ctx c = ctx();
         Client client = clientWithPhone(c.tenant, uniquePhone());
-        Appointment a = appt(c, client, date, "10:00", "10:30", AppointmentStatus.CONFIRMED);
-        Appointment b = appt(c, client, date, "11:00", "11:30", AppointmentStatus.CONFIRMED);
+        Appointment a = alreadyStarted(appt(c, client, date, "10:00", "10:30", AppointmentStatus.CONFIRMED));
+        Appointment b = alreadyStarted(appt(c, client, date, "11:00", "11:30", AppointmentStatus.CONFIRMED));
         String token = adminToken(c.tenant);
 
         patchStatus(token, a.getId(), "completed").andExpect(status().isOk());

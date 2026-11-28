@@ -55,6 +55,18 @@ export async function updateAppointmentStatusApi(
   return normalize(data);
 }
 
+export interface RescheduleAppointmentPayload {
+  date: string;
+  startTime: string;
+  professionalId?: string;
+}
+
+/** O estabelecimento muda o dia/horário (e o profissional) de um agendamento pendente ou confirmado. */
+export async function rescheduleAppointmentApi(id: string, payload: RescheduleAppointmentPayload): Promise<Appointment> {
+  const data = await api.patch<Record<string, unknown>>(`/admin/appointments/${id}`, payload);
+  return normalize(data);
+}
+
 export interface BulkConfirmResult {
   confirmed: number;
   skipped: number;

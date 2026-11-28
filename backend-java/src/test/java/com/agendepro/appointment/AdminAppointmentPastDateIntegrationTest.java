@@ -52,7 +52,7 @@ class AdminAppointmentPastDateIntegrationTest extends AbstractIntegrationTest {
     private ResultActions create(LocalDateTime when) throws Exception {
         String body = """
                 {"professionalId":"%s","serviceId":"%s","date":"%s","startTime":"%s",
-                 "clientName":"Cliente Teste","clientEmail":"c-%s@example.com"}
+                 "clientName":"Cliente Teste","clientPhone":"(11) 98765-4321","clientEmail":"c-%s@example.com"}
                 """.formatted(professional.getId(), service.getId(), when.toLocalDate(), when.format(HHMM), UUID.randomUUID());
         return mockMvc.perform(post("/api/admin/appointments").header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON).content(body));

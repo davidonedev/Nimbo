@@ -50,6 +50,17 @@ public final class AppointmentDtos {
         }
     }
 
+    /** O dono (ou o próprio profissional) muda o dia/horário e, se quiser, o profissional de um agendamento. */
+    public record AppointmentRescheduleRequest(
+            UUID professionalId,
+            @NotBlank @Pattern(regexp = "^\\d{4}-\\d{2}-\\d{2}$", message = "Formato: YYYY-MM-DD") String date,
+            @NotBlank @Pattern(regexp = "^\\d{2}:\\d{2}(:\\d{2})?$", message = "Formato: HH:mm") String startTime
+    ) {
+        public String startTimeHHmm() {
+            return startTime.length() >= 5 ? startTime.substring(0, 5) : startTime;
+        }
+    }
+
     public record UpdateStatusRequest(@NotNull AppointmentStatus status) {
     }
 }

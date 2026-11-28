@@ -273,14 +273,14 @@ class BordaSegurancaAuditTest extends AuditBase {
         Client client = fixtures.client(c.tenant);
         String token = adminToken(c.tenant);
 
-        Appointment a = appt(c, client, date, "10:00", "10:30", AppointmentStatus.PENDING);
+        Appointment a = alreadyStarted(appt(c, client, date, "10:00", "10:30", AppointmentStatus.PENDING));
         patchStatus(token, a.getId(), "confirmed").andExpect(status().isOk());
         patchStatus(token, a.getId(), "completed").andExpect(status().isOk());
 
         Appointment b = appt(c, client, date, "11:00", "11:30", AppointmentStatus.PENDING);
         patchStatus(token, b.getId(), "cancelled").andExpect(status().isOk());
 
-        Appointment d = appt(c, client, date, "12:00", "12:30", AppointmentStatus.CONFIRMED);
+        Appointment d = alreadyStarted(appt(c, client, date, "12:00", "12:30", AppointmentStatus.CONFIRMED));
         patchStatus(token, d.getId(), "no_show").andExpect(status().isOk());
         patchStatus(token, d.getId(), "cancelled").andExpect(status().isOk());
         assertThat(reload(d).getStatus()).isEqualTo(AppointmentStatus.CANCELLED);

@@ -30,6 +30,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 class ConfirmacaoAutomaticaTest extends AuditBase {
 
+    /** O despachante trabalha em lotes: linhas pendentes de outros testes não podem disputar o lote deste. */
+    @org.junit.jupiter.api.BeforeEach
+    void emptyOutbox() {
+        outboxRepository.deleteAll();
+    }
+
     @Autowired private TenantRepository tenantRepository;
 
     private List<JsonNode> statusItems(String base, String token, Appointment... appointments) throws Exception {

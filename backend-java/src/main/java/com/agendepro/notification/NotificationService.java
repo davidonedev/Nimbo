@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class NotificationService {
 
-    public enum Event { NEW_REQUEST, CLIENT_REQUEST_RECEIVED, CLIENT_CANCELLED, CLIENT_RESCHEDULED, APPROVED, REFUSED, CANCELLED_BY_OWNER,
+    public enum Event { NEW_REQUEST, CLIENT_REQUEST_RECEIVED, CLIENT_MOVED_BY_OWNER, CLIENT_CANCELLED, CLIENT_RESCHEDULED, APPROVED, REFUSED, CANCELLED_BY_OWNER,
         REMINDER_24H, REMINDER_2H,
         PENDING_WARNING_OWNER, PENDING_WARNING_CLIENT, AUTO_CANCELLED_OWNER, AUTO_CANCELLED_CLIENT }
 
@@ -146,6 +146,17 @@ public class NotificationService {
                         + br(g.date()) + " às " + g.start() + "."
                         + (blank(g.tenant().getAddress()) ? "" : " Endereço: " + g.tenant().getAddress().trim() + ".")
                         + "\nPara ver, remarcar ou cancelar: " + appUrl + "/" + g.tenant().getSlug() + "/meus-agendamentos"));
+        dispatchAfterCommit();
+    }
+
+    /** O estabelecimento mudou o dia/horário (ou o profissional) de um agendamento do cliente. */
+    @Transactional
+    public void clientMovedByOwner(Appointment appointment) {
+        forEachGroup(List.of(appointment), g -> notifyClient(g, Event.CLIENT_MOVED_BY_OWNER,
+                g.tenant().getName() + ": horário alterado",
+                "Olá, " + firstName(g.client().getName()) + ". O seu horário em " + g.tenant().getName() + " foi alterado: "
+                        + g.services() + " com " + g.professional() + ", agora " + br(g.date()) + " às " + g.start() + ".\n"
+                        + "Se não puder nesse horário, remarque ou cancele em: " + appUrl + "/" + g.tenant().getSlug() + "/meus-agendamentos"));
         dispatchAfterCommit();
     }
 

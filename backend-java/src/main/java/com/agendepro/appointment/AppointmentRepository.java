@@ -100,13 +100,48 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
 
     long countByStatus(AppointmentStatus status);
 
-    /** Agendamentos (não cancelados) de um profissional num dia — usado na disponibilidade e no checkConflict. */
+    /** Agendamentos futuros (pendentes ou confirmados) que seriam apagados junto com o profissional, o serviço ou o cliente. */
     @Query("""
-            SELECT a FROM Appointment a
+            SELECT COUNT(a) FROM Appointment a
+            WHERE a.tenantId = :tenantId AND a.professionalId = :id AND a.date >= :today
+              AND a.status IN (com.agendepro.appointment.AppointmentStatus.PENDING, com.agendepro.appointment.AppointmentStatus.CONFIRMED)
+            """)
+    long countUpcomingByProfessional(@Param("tenantId") UUID tenantId, @Param("id") UUID id, @Param("today") String today);
+
+    @Query("""
+            SELECT COUNT(a) FROM Appointment a
+            WHERE a.tenantId = :tenantId AND a.serviceId = :id AND a.date >= :today
+              AND a.status IN (com.agendepro.appointment.AppointmentStatus.PENDING, com.agendepro.appointment.AppointmentStatus.CONFIRMED)
+            """)
+    long countUpcomingByService(@Param("tenantId") UUID tenantId, @Param("id") UUID id, @Param("today") String today);
+
+    @Query("""
+            SELECT COUNT(a) FROM Appointment a
+            WHERE a.tenantId = :tenantId AND a.clientId = :id AND a.date >= :today
+              AND a.status IN (com.agendepro.appointment.AppointmentStatus.PENDING, com.agendepro.appointment.AppointmentStatus.CONFIRMED)
+            """)
+    long countUpcomingByClient(@Param("tenantId") UUID tenantId, @Param("id") UUID id, @Param("today") String today);
+
+    /** Horário ocupado por um agendamento (só leitura, direto do banco). */
+    interface OccupiedSlot {
+        UUID getId();
+
+        String getStartTime();
+
+        String getEndTime();
+    }
+
+    /**
+     * Horários ocupados (agendamentos não cancelados) de um profissional num dia — usado na disponibilidade.
+     * Projeção de propósito: devolve o que está no banco AGORA, sem reaproveitar uma entidade carregada antes do lock
+     * (uma remarcação concorrente deixava o horário antigo na sessão e permitia reservar o mesmo horário duas vezes).
+     */
+    @Query("""
+            SELECT a.id AS id, a.startTime AS startTime, a.endTime AS endTime FROM Appointment a
             WHERE a.tenantId = :tenantId AND a.professionalId = :professionalId AND a.date = :date
               AND a.status <> com.agendepro.appointment.AppointmentStatus.CANCELLED
             """)
-    List<Appointment> findActiveByProfessionalAndDate(
+    List<OccupiedSlot> findOccupiedByProfessionalAndDate(
             @Param("tenantId") UUID tenantId, @Param("professionalId") UUID professionalId, @Param("date") String date);
 
     /** Porta de checkConflict() (schedule.service.ts): sobreposição de horário. */
