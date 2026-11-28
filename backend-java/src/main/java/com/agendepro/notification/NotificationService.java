@@ -42,6 +42,10 @@ public class NotificationService {
 
     private static final DateTimeFormatter BR_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
+    /** Só WhatsApp por enquanto: com e-mail desligado nenhuma linha de e-mail entra na fila. */
+    @org.springframework.beans.factory.annotation.Value("${app.email.enabled:false}")
+    private boolean emailEnabled;
+
     private final NotificationOutboxRepository outbox;
     private final TenantRepository tenantRepository;
     private final ClientRepository clientRepository;
@@ -159,10 +163,10 @@ public class NotificationService {
     @Transactional
     public boolean clientReminder(Appointment appointment, Tenant tenant, Client client, Event event, String text) {
         String phone = !blank(client.getPhoneE164()) ? client.getPhoneE164() : client.getPhone();
-        if (blank(phone) && blank(client.getEmail())) return false;
+        if (blank(phone) && (!emailEnabled || blank(client.getEmail()))) return false;
         String subject = tenant.getName() + ": lembrete do seu horário";
         String key = event + ":" + appointment.getId();
-        enqueue(tenant, appointment.getId(), event, key, Channel.EMAIL, client.getEmail(), subject, text);
+        if (emailEnabled) enqueue(tenant, appointment.getId(), event, key, Channel.EMAIL, client.getEmail(), subject, text);
         enqueue(tenant, appointment.getId(), event, key, Channel.WHATSAPP, phone, subject, text);
         return true;
     }
@@ -253,14 +257,14 @@ public class NotificationService {
                 ? event + ":" + g.firstId() + ":" + g.date() + "T" + g.start()
                 : event + ":" + g.firstId();
         Tenant t = g.tenant();
-        enqueue(t, g.firstId(), event, key, Channel.EMAIL, t.getEmail(), subject, body);
+        if (emailEnabled) enqueue(t, g.firstId(), event, key, Channel.EMAIL, t.getEmail(), subject, body);
         enqueue(t, g.firstId(), event, key, Channel.WHATSAPP, ownerPhone(t), subject, body);
     }
 
     private void notifyClient(Group g, Event event, String subject, String text) {
         String key = event + ":" + g.firstId();
         Tenant t = g.tenant();
-        enqueue(t, g.firstId(), event, key, Channel.EMAIL, g.client().getEmail(), subject, text);
+        if (emailEnabled) enqueue(t, g.firstId(), event, key, Channel.EMAIL, g.client().getEmail(), subject, text);
         String phone = !blank(g.client().getPhoneE164()) ? g.client().getPhoneE164() : g.client().getPhone();
         enqueue(t, g.firstId(), event, key, Channel.WHATSAPP, phone, subject, text);
     }

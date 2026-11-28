@@ -91,7 +91,7 @@ export default function LoginPage() {
 
               <p className="mt-6 text-center text-sm">
                 <Link to="/access-help" className="font-bold text-lp-primary underline-offset-4 hover:underline">
-                  Não consigo acessar meu e-mail
+                  Preciso de ajuda para entrar
                 </Link>
               </p>
 

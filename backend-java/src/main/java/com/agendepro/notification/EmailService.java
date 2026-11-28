@@ -30,8 +30,13 @@ public class EmailService {
     @Value("${app.mail-from}")
     private String mailFrom;
 
+    /** Desligado por padrão: o Nimbo avisa só por WhatsApp (app.email.enabled / EMAIL_ENABLED). */
+    @Value("${app.email.enabled:false}")
+    private boolean enabled;
+
     @Async
     public void sendVerificationEmail(String to, String clientName, String tenantName, String verifyUrl) {
+        if (!enabled) return;
         if (smtpUser == null || smtpUser.isBlank()) {
             log.info("\n─────────────────────────────────────────────\n" +
                             "[EMAIL] Verificação de e-mail (sem SMTP configurado)\n" +
@@ -125,6 +130,7 @@ public class EmailService {
      * Diferente dos métodos {@code @Async}, devolve o resultado em vez de engolir a falha.
      */
     public SendResult sendNow(String to, String subject, String textBody) {
+        if (!enabled) return SendResult.NOT_CONFIGURED;
         if (smtpUser == null || smtpUser.isBlank()) {
             log.info("[email] Sem SMTP configurado: mensagem para {} não enviada ({})", to, subject);
             return SendResult.NOT_CONFIGURED;
@@ -145,6 +151,7 @@ public class EmailService {
     }
 
     private void send(String to, String subject, String template, Context context, String devLabel, String devLink) {
+        if (!enabled) return;
         if (smtpUser == null || smtpUser.isBlank()) {
             log.warn("\n─────────────────────────────────────────────\n" +
                             "[EMAIL][DEV] {} (sem SMTP configurado — NÃO use em produção)\n" +

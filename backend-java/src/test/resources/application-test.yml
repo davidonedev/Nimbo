@@ -1,6 +1,8 @@
 app:
   seed:
     enabled: false
+  email:
+    enabled: true    # o código de e-mail segue coberto; EmailDisabledIntegrationTest cobre o padrão (desligado)
   booking:
     max-attempts-per-ip: 100000
   pending:

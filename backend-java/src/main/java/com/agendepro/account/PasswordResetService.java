@@ -37,6 +37,10 @@ public class PasswordResetService {
     private final EmailService emailService;
     private final AuditService auditService;
 
+    /** Só WhatsApp por enquanto (app.email.enabled / EMAIL_ENABLED). */
+    @Value("${app.email.enabled:false}")
+    private boolean emailEnabled;
+
     @Value("${app.app-url}")
     private String appUrl;
 
@@ -48,6 +52,7 @@ public class PasswordResetService {
 
     @Transactional
     public void request(String email, String ip) {
+        if (!emailEnabled) return; // sem e-mail não há como entregar o link: não cria token à toa
         User user = userRepository.findByEmail(email.trim()).orElse(null);
         if (user == null) {
             auditService.record(AuditService.PASSWORD_RESET_REQUESTED, null, null, null, ip, Map.of("known", false));

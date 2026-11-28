@@ -52,12 +52,16 @@ public class OwnerPendingReminderService {
     @Value("${app.owner-reminders.enabled:true}")
     private boolean enabled;
 
+    /** O aviso ao dono é por e-mail: sem e-mail ligado (padrão) não há o que enviar. */
+    @Value("${app.email.enabled:false}")
+    private boolean emailEnabled;
+
     @Value("${app.app-url}")
     private String appUrl;
 
     @Scheduled(fixedDelayString = "${app.owner-reminders.check-interval-ms:60000}")
     public void runOnSchedule() {
-        if (enabled) run(Instant.now());
+        if (enabled && emailEnabled) run(Instant.now());
     }
 
     /** Envia os avisos devidos em {@code now}; devolve quantos agendamentos foram avisados. */
