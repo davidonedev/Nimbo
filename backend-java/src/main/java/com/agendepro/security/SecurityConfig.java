@@ -49,6 +49,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/health",
+                                "/health/deep",
                                 "/actuator/health",
                                 "/api/auth/login",
                                 "/api/auth/forgot-password",

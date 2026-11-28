@@ -32,6 +32,17 @@ public class SuperAdminController {
         return ResponseEntity.ok(ApiResponse.ok(superAdminService.impersonate(id, ClientIp.of(http))));
     }
 
+    /** Mostra o que a hospedagem entrega no X-Forwarded-For, para configurar CLIENT_IP_PROXY_HOPS com segurança. */
+    @GetMapping("/diagnostics/client-ip")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> clientIpDiagnostics(HttpServletRequest http) {
+        var data = new java.util.LinkedHashMap<String, Object>();
+        data.put("xForwardedFor", http.getHeader("X-Forwarded-For"));
+        data.put("remoteAddr", http.getRemoteAddr());
+        data.put("proxyHops", ClientIp.hops());
+        data.put("ipUsedForLimits", ClientIp.of(http));
+        return ResponseEntity.ok(ApiResponse.ok(data));
+    }
+
     @GetMapping("/metrics")
     public ResponseEntity<ApiResponse<PlatformMetricsResponse>> metrics() {
         return ResponseEntity.ok(ApiResponse.ok(superAdminService.getPlatformMetrics()));

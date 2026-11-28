@@ -526,7 +526,10 @@ export default function SettingsView({ section = 'account' }: Props) {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Status do Estabelecimento</CardTitle>
-          <CardDescription>Controla se o portal exibe agendamento disponível ou fechado</CardDescription>
+          <CardDescription>
+            Liga e desliga os agendamentos pelo portal. Com ele ligado, o selo Aberto/Fechado do topo segue sozinho o expediente
+            dos profissionais: abre na hora de começar e fecha depois do horário de encerrar.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between p-4 rounded-lg border">

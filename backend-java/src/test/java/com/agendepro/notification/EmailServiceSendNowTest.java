@@ -18,7 +18,29 @@ class EmailServiceSendNowTest {
         EmailService service = new EmailService(sender, Mockito.mock(TemplateEngine.class));
         ReflectionTestUtils.setField(service, "smtpUser", smtpUser);
         ReflectionTestUtils.setField(service, "mailFrom", "Nimbo <noreply@example.com>");
+        ReflectionTestUtils.setField(service, "enabled", true);
         return service;
+    }
+
+    @Test
+    void whenEmailIsTurnedOff_nothingIsSentEvenWithSmtpConfigured() {
+        JavaMailSender sender = Mockito.mock(JavaMailSender.class);
+        EmailService off = service("user", sender);
+        ReflectionTestUtils.setField(off, "enabled", false);
+
+        assertThat(off.sendNow("dono@example.com", "Assunto", "Texto")).isEqualTo(EmailService.SendResult.NOT_CONFIGURED);
+        off.sendVerificationEmail("cliente@example.com", "Ana", "Barbearia", "https://exemplo/verificar");
+
+        Mockito.verifyNoInteractions(sender);
+    }
+
+    @Test
+    void inProductionTheRecoveryLinkNeverGoesToTheLog() {
+        EmailService s = service("", Mockito.mock(JavaMailSender.class));
+        ReflectionTestUtils.setField(s, "activeProfiles", "prod");
+        assertThat((String) ReflectionTestUtils.invokeMethod(s, "linkForLog", "https://site/reset?token=segredo")).doesNotContain("segredo");
+        ReflectionTestUtils.setField(s, "activeProfiles", "");
+        assertThat((String) ReflectionTestUtils.invokeMethod(s, "linkForLog", "https://site/reset?token=segredo")).contains("segredo");
     }
 
     @Test

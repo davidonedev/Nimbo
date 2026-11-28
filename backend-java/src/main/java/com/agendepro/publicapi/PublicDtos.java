@@ -15,21 +15,6 @@ public final class PublicDtos {
     private PublicDtos() {
     }
 
-    // ─── login-data ───────────────────────────────────────────────────────────────
-
-    public record LoginDataUser(UUID id, String name, String email, String role) {
-    }
-
-    public record LoginDataProfessionalUser(String email) {
-    }
-
-    public record LoginDataProfessional(UUID id, String name, String specialty, List<LoginDataProfessionalUser> users) {
-    }
-
-    public record LoginDataTenant(UUID id, String name, String slug, TenantPlan plan, TenantStatus status,
-                                   List<LoginDataUser> users, List<LoginDataProfessional> professionals) {
-    }
-
     // ─── tenant público ───────────────────────────────────────────────────────────
 
     public record TenantPublicResponse(UUID id, String slug, String name, String primaryColor, String logoUrl,
@@ -62,26 +47,6 @@ public final class PublicDtos {
     }
 
     public record GoogleAuthRequest(@NotBlank String accessToken) {
-    }
-
-    public record ProfessionalRegisterRequest(
-            @NotBlank @Size(min = 2, max = 100) String name,
-            @NotBlank @Email String email,
-            @NotBlank @Size(min = 6) String password,
-            @NotBlank @Size(min = 2, max = 100) String specialty,
-            @Size(max = 500) String bio,
-            String workingHoursStart,
-            String workingHoursEnd,
-            List<Integer> workingDays
-    ) {
-        public ProfessionalRegisterRequest {
-            workingHoursStart = (workingHoursStart == null || workingHoursStart.isBlank()) ? "08:00" : workingHoursStart;
-            workingHoursEnd = (workingHoursEnd == null || workingHoursEnd.isBlank()) ? "18:00" : workingHoursEnd;
-            workingDays = workingDays == null ? List.of(1, 2, 3, 4, 5) : workingDays;
-        }
-    }
-
-    public record ProfessionalRegisterResponse(String name, String email) {
     }
 
     /** {@code clientId} é opcional: o cliente vem do X-Device-Token; se informado, tem de ser o dono do token. */

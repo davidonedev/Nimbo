@@ -53,6 +53,13 @@ public class Professional {
     @Builder.Default
     private String workingHoursEnd = "18:00";
 
+    /** Intervalo diário (almoço), HH:mm; nulos = sem intervalo. */
+    @Column(name = "break_start", length = 5)
+    private String breakStart;
+
+    @Column(name = "break_end", length = 5)
+    private String breakEnd;
+
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(name = "working_days", nullable = false, columnDefinition = "integer[]")
     @Builder.Default

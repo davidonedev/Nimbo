@@ -100,6 +100,8 @@ public class ProfessionalService {
                 .workingHoursEnd(request.workingHoursEnd())
                 .workingDays(request.workingDays().toArray(new Integer[0]))
                 .build());
+        applyBreak(professional, request.breakStart(), request.breakEnd());
+        professionalRepository.save(professional);
 
         // Profissional sem serviço nunca aparece para o cliente: sem escolha explícita, ele atende todos os serviços
         // (o dono ajusta ao editar). Na edição, uma lista vazia continua valendo.
@@ -132,6 +134,7 @@ public class ProfessionalService {
         if (request.workingHoursStart() != null) professional.setWorkingHoursStart(request.workingHoursStart());
         if (request.workingHoursEnd() != null) professional.setWorkingHoursEnd(request.workingHoursEnd());
         if (request.workingDays() != null) professional.setWorkingDays(request.workingDays().toArray(new Integer[0]));
+        applyBreak(professional, request.breakStart(), request.breakEnd());
         professionalRepository.save(professional);
 
         if (request.serviceIds() != null) {
@@ -155,6 +158,17 @@ public class ProfessionalService {
     public void delete(UUID tenantId, UUID id) {
         Professional professional = professionalRepository.findByIdAndTenantId(id, tenantId)
                 .orElseThrow(() -> AppException.notFound("Profissional não encontrado"));
+        long upcoming = appointmentRepository.countUpcomingByProfessional(tenantId, id, java.time.LocalDate.now(java.time.ZoneId.of("America/Sao_Paulo")).toString());
+        if (upcoming > 0) {
+            throw new AppException("Este profissional tem " + upcoming + (upcoming == 1 ? " agendamento futuro" : " agendamentos futuros")
+                    + ". Cancele ou remarque antes de excluir.", 409, "HAS_UPCOMING_APPOINTMENTS");
+        }
+        // O login do profissional some junto: sem isso o usuário ficava órfão, com a senha ainda valendo
+        userRepository.findFirstByProfessionalIdAndTenantId(id, tenantId).ifPresent(user -> {
+            userRepository.delete(user);
+            auditService.record(AuditService.CREDENTIALS_CHANGED_BY_TENANT, currentUserIdOrNull(), user.getId(), tenantId,
+                    null, Map.of("professionalId", id.toString(), "action", "access_removed"));
+        });
         professionalRepository.delete(professional);
     }
 
@@ -184,6 +198,7 @@ public class ProfessionalService {
         if (request.specialty() != null) professional.setSpecialty(request.specialty());
         if (request.avatar() != null) professional.setAvatar(request.avatar());
         if (request.photoUrl() != null) professional.setPhotoUrl(request.photoUrl());
+        applyBreak(professional, request.breakStart(), request.breakEnd());
         professionalRepository.save(professional);
 
         return toResponse(professional, null);
@@ -256,6 +271,34 @@ public class ProfessionalService {
         return new ProfessionalResponse(
                 p.getId(), p.getTenantId(), p.getName(), p.getSpecialty(), p.getAvatar(), p.getPhotoUrl(), p.getBio(),
                 p.getWorkingHoursStart(), p.getWorkingHoursEnd(), Arrays.asList(p.getWorkingDays()),
-                buildServiceLinks(p.getId()), appointmentCount);
+                buildServiceLinks(p.getId()), appointmentCount, p.getBreakStart(), p.getBreakEnd());
+    }
+
+    /**
+     * Intervalo diário (almoço). Não enviado (null nos dois) = não mexe; vazio nos dois = remove; senão precisa ser
+     * HH:mm, começar antes de terminar e ficar dentro do expediente.
+     */
+    private static void applyBreak(Professional p, String rawStart, String rawEnd) {
+        if (rawStart == null && rawEnd == null) return;
+        String start = rawStart == null ? "" : rawStart.trim();
+        String end = rawEnd == null ? "" : rawEnd.trim();
+        if (start.isEmpty() && end.isEmpty()) {
+            p.setBreakStart(null);
+            p.setBreakEnd(null);
+            return;
+        }
+        if (start.isEmpty() || end.isEmpty()) {
+            throw new AppException("Informe o início e o fim do intervalo.", 400, "INVALID_BREAK");
+        }
+        start = start.length() >= 5 ? start.substring(0, 5) : start;
+        end = end.length() >= 5 ? end.substring(0, 5) : end;
+        if (!start.matches("\\d{2}:\\d{2}") || !end.matches("\\d{2}:\\d{2}") || start.compareTo(end) >= 0) {
+            throw new AppException("O intervalo precisa começar antes de terminar (HH:mm).", 400, "INVALID_BREAK");
+        }
+        if (start.compareTo(p.getWorkingHoursStart()) < 0 || end.compareTo(p.getWorkingHoursEnd()) > 0) {
+            throw new AppException("O intervalo precisa ficar dentro do expediente do profissional.", 400, "INVALID_BREAK");
+        }
+        p.setBreakStart(start);
+        p.setBreakEnd(end);
     }
 }

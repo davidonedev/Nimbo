@@ -19,7 +19,6 @@ interface ApptForm {
   // novo cliente
   newClientMode: boolean;
   newName: string;
-  newEmail: string;
   newPhone: string;
   // agendamento
   professionalId: string; serviceId: string;
@@ -29,7 +28,7 @@ interface ApptForm {
 const emptyForm = (init: { date?: string; professionalId?: string } = {}): ApptForm => ({
   clientId: '', clientSearch: '',
   newClientMode: false,
-  newName: '', newEmail: '', newPhone: '',
+  newName: '', newPhone: '',
   professionalId: init.professionalId ?? '', serviceId: '',
   date: init.date ?? format(new Date(), 'yyyy-MM-dd'), startTime: '09:00',
   notes: '', status: 'confirmed',
@@ -68,8 +67,8 @@ export function NewAppointmentDialog({ open, onOpenChange, initialDate, initialP
       setError('Preencha todos os campos obrigatórios.'); return;
     }
     if (form.newClientMode) {
-      if (!form.newName.trim() || !form.newEmail.trim() || !form.newPhone.trim()) {
-        setError('Preencha nome, e-mail e telefone do novo cliente.'); return;
+      if (!form.newName.trim() || form.newPhone.replace(/\D/g, '').length < 10) {
+        setError('Informe o nome e o celular (WhatsApp) com DDD do novo cliente.'); return;
       }
     } else if (!form.clientId) {
       setError('Selecione um cliente.'); return;
@@ -93,7 +92,7 @@ export function NewAppointmentDialog({ open, onOpenChange, initialDate, initialP
         notes:          form.notes.trim() || undefined,
       };
       const created = await addAppointment(form.newClientMode
-        ? { ...base, clientName: form.newName.trim(), clientEmail: form.newEmail.trim(), clientPhone: form.newPhone.trim() || undefined }
+        ? { ...base, clientName: form.newName.trim(), clientPhone: form.newPhone.trim() }
         : { ...base, clientId: form.clientId });
 
       // A API cria como "Agendado"; se o admin escolheu "Confirmado", aplica em seguida.
@@ -156,7 +155,7 @@ export function NewAppointmentDialog({ open, onOpenChange, initialDate, initialP
                   ...f,
                   newClientMode: !f.newClientMode,
                   clientId: '', clientSearch: '',
-                  newName: '', newEmail: '', newPhone: '',
+                  newName: '', newPhone: '',
                 }))}
               >
                 {form.newClientMode ? '← Buscar cliente existente' : '+ Novo cliente'}
@@ -215,16 +214,7 @@ export function NewAppointmentDialog({ open, onOpenChange, initialDate, initialP
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">E-mail *</Label>
-                  <Input
-                    type="email"
-                    placeholder="joao@email.com"
-                    value={form.newEmail}
-                    onChange={e => setForm(f => ({ ...f, newEmail: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Telefone *</Label>
+                  <Label className="text-xs">Celular (WhatsApp) *</Label>
                   <Input
                     placeholder="(00) 00000-0000"
                     value={form.newPhone}
@@ -302,7 +292,7 @@ export function NewAppointmentDialog({ open, onOpenChange, initialDate, initialP
               !form.date ||
               !form.startTime ||
               (form.newClientMode
-                ? !form.newName.trim() || !form.newEmail.trim() || !form.newPhone.trim()
+                ? !form.newName.trim() || !form.newPhone.trim()
                 : !form.clientId)
             }
           >

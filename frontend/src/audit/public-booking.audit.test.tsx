@@ -92,7 +92,7 @@ describe('fluxo público /:slug (390px)', { timeout: 90000 }, () => {
     expect(await screen.findByText('Confirme seu número', undefined, T)).toBeTruthy();
     typeInto(screen.getByLabelText('Código'), '123456');
     tap(screen.getByRole('button', { name: 'Confirmar' }));
-    expect(await screen.findByText('Agendamento confirmado!', undefined, T)).toBeTruthy();
+    expect(await screen.findByText('Pedido enviado!', undefined, T)).toBeTruthy();
 
     const book = calls.find(c => c.path === '/public/studio/book')!;
     expect(book.body).toMatchObject({ name: 'Ana Lima', serviceIds: ['s1'], startTime: '09:00', date: brDate(1) });
@@ -129,7 +129,7 @@ describe('fluxo público /:slug (390px)', { timeout: 90000 }, () => {
     const nome = screen.getByLabelText(/Nome completo/) as HTMLInputElement;
     expect(nome.value).toBe('Ana Lima'); // dados preenchidos a partir do aparelho
     tap(screen.getByRole('button', { name: 'Confirmar agendamento' }));
-    expect(await screen.findByText('Agendamento confirmado!', undefined, T)).toBeTruthy();
+    expect(await screen.findByText('Pedido enviado!', undefined, T)).toBeTruthy();
     const book = calls.find(c => c.path === '/public/studio/book')!;
     expect(book.headers['x-device-token']).toBe('tok-conhecido');
     expect(calls.some(c => c.path.endsWith('/book/verify'))).toBe(false);
@@ -144,7 +144,7 @@ describe('fluxo público /:slug (390px)', { timeout: 90000 }, () => {
     typeInto(screen.getByLabelText(/Celular/), '11911111111');
     tap(screen.getByRole('button', { name: 'Confirmar agendamento' }));
     expect(await screen.findByText(/acabou de ser reservado/, undefined, T)).toBeTruthy();
-    expect(screen.queryByText('Agendamento confirmado!')).toBeNull();
+    expect(screen.queryByText('Pedido enviado!')).toBeNull();
   });
 
   it('a URL guarda o passo (?s=&d=&t=): recarregar a página no passo "dados" não perde a escolha', async () => {

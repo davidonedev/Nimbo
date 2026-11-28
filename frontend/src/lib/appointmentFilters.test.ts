@@ -95,6 +95,10 @@ describe('statusErrorMessage', () => {
     const msg = 'Este agendamento está cancelado e não pode passar para confirmado. Atualize a tela.';
     expect(statusErrorMessage(new ApiError(msg, 409, 'INVALID_STATUS_TRANSITION'))).toBe(msg);
   });
+  it('400 também mostra a explicação (ex.: só dá para concluir depois do horário)', () => {
+    const msg = 'Só dá para marcar como concluído depois do horário do agendamento.';
+    expect(statusErrorMessage(new ApiError(msg, 400, 'NOT_STARTED_YET'))).toBe(msg);
+  });
   it('outros erros usam a mensagem genérica', () => {
     const generic = 'Não foi possível atualizar o agendamento. Tente novamente.';
     expect(statusErrorMessage(new ApiError('Erro interno', 500))).toBe(generic);

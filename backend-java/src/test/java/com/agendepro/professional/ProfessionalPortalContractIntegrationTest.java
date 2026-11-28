@@ -127,7 +127,7 @@ class ProfessionalPortalContractIntegrationTest extends AbstractIntegrationTest 
 
         // Nova reserva com cliente novo (formulário da Agenda): o profissional informado é o próprio.
         String body = "{\"professionalId\":\"" + me.getId() + "\",\"serviceId\":\"" + svc.getId() + "\",\"date\":\"" + date
-                + "\",\"startTime\":\"11:00\",\"clientName\":\"Cliente Novo\",\"clientEmail\":\"novo-" + UUID.randomUUID()
+                + "\",\"startTime\":\"11:00\",\"clientName\":\"Cliente Novo\",\"clientPhone\":\"(11) 98765-4321\",\"clientEmail\":\"novo-" + UUID.randomUUID()
                 + "@example.com\",\"clientPhone\":\"11999990000\"}";
         mockMvc.perform(post("/api/professional/appointments").header("Authorization", auth)
                         .contentType(MediaType.APPLICATION_JSON).content(body))

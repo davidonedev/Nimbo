@@ -21,6 +21,9 @@ export interface Professional {
   bio: string;
   services: string[]; // service ids
   workingHours: { start: string; end: string };
+  /** Intervalo diário (almoço) HH:mm; vazio/ausente = sem intervalo. */
+  breakStart?: string;
+  breakEnd?: string;
   workingDays: number[]; // 0=Sun … 6=Sat
   email?: string;    // platform login
   password?: string; // platform login

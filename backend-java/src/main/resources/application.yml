@@ -74,6 +74,15 @@ app:
   app-url: ${APP_URL:http://localhost:5173}
   bcrypt-rounds: ${BCRYPT_ROUNDS:10}
   mail-from: ${SMTP_FROM:Nimbo <noreply@agendepro.com>}
+  # E-mail do sistema: recuperação de senha, troca de e-mail e avisos. Precisa de SMTP_USER/SMTP_PASS (e de um SMTP que o
+  # Render gratuito deixe passar: ele bloqueia as portas 25, 465 e 587; use um provedor com a porta 2525). Sem SMTP o
+  # e-mail simplesmente não sai (em produção o link nunca vai para o log). EMAIL_ENABLED=false desliga tudo.
+  email:
+    enabled: ${EMAIL_ENABLED:true}
+  # Quantos proxies da hospedagem acrescentam o IP ao X-Forwarded-For (0 = usa o primeiro valor, que o cliente forja).
+  # Descubra o valor certo em GET /api/super/diagnostics/client-ip e depois defina CLIENT_IP_PROXY_HOPS (normalmente 1).
+  client-ip:
+    proxy-hops: ${CLIENT_IP_PROXY_HOPS:0}
   seed:
     enabled: ${SEED_ENABLED:false}
   # WhatsApp padrão da plataforma (Evolution API): usado no código de confirmação do agendamento quando o
@@ -82,6 +91,8 @@ app:
     default-api-url: ${WHATSAPP_DEFAULT_API_URL:}
     default-api-key: ${WHATSAPP_DEFAULT_API_KEY:}
     default-instance: ${WHATSAPP_DEFAULT_INSTANCE:}
+    # Aceita API de WhatsApp em localhost/rede interna: SÓ desenvolvimento e testes. Em produção deixe false (anti-SSRF).
+    allow-private-urls: ${WHATSAPP_ALLOW_PRIVATE_URLS:false}
   # Agendamento por celular. Com WhatsApp configurado (do estabelecimento ou o padrão acima) o cliente confirma com um
   # código. Sem WhatsApp, o horário fica PENDENTE e o cliente confirma mandando uma mensagem ao WhatsApp do
   # estabelecimento. O cliente tem confirm-minutes para isso; se não tocar, o horário é liberado. Depois que ele toca, o
@@ -91,7 +102,7 @@ app:
     expiry-enabled: true
     expiry-check-ms: 60000
     past-grace-minutes: 15                            # pendente cujo horário já passou há mais que isto é cancelado
-  # Aviso ao dono (e-mail) de agendamento que o cliente já confirmou e ele ainda não: 2 h e 1 h antes do horário.
+  # Aviso ao dono (só com e-mail ligado) de agendamento que o cliente já confirmou e ele ainda não: 2 h e 1 h antes do horário.
   owner-reminders:
     enabled: ${OWNER_REMINDERS_ENABLED:true}
     check-interval-ms: 60000

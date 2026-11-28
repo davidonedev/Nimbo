@@ -17,6 +17,8 @@ export default function ProfSettingsView() {
   const [workingDays, setWorkingDays] = useState<number[]>([...professional.workingDays]);
   const [hoursStart,  setHoursStart]  = useState(professional.workingHours.start);
   const [hoursEnd,    setHoursEnd]    = useState(professional.workingHours.end);
+  const [breakStart,  setBreakStart]  = useState(professional.breakStart ?? '');
+  const [breakEnd,    setBreakEnd]    = useState(professional.breakEnd ?? '');
   const [saving,      setSaving]      = useState(false);
   const [saved,       setSaved]       = useState(false);
   const [error,       setError]       = useState('');
@@ -36,6 +38,10 @@ export default function ProfSettingsView() {
       setError('Selecione ao menos um dia de trabalho.');
       return;
     }
+    if ((breakStart && !breakEnd) || (!breakStart && breakEnd) || (breakStart && breakEnd && breakStart >= breakEnd)) {
+      setError('Informe o início e o fim do intervalo, com o início antes do fim (ou deixe os dois vazios).');
+      return;
+    }
     setError('');
     setSaving(true);
     try {
@@ -43,6 +49,8 @@ export default function ProfSettingsView() {
         workingDays,
         workingHoursStart: hoursStart,
         workingHoursEnd:   hoursEnd,
+        breakStart,
+        breakEnd,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
@@ -128,6 +136,18 @@ export default function ProfSettingsView() {
                 onChange={e => setHoursEnd(e.target.value)}
               />
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label>Início do almoço</Label>
+              <Input type="time" value={breakStart} onChange={e => setBreakStart(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Fim do almoço</Label>
+              <Input type="time" value={breakEnd} onChange={e => setBreakEnd(e.target.value)} />
+            </div>
+            <p className="col-span-2 text-xs text-muted-foreground">O cliente não agenda nesse intervalo. Deixe vazio para não ter.</p>
           </div>
 
           {hoursStart && hoursEnd && hoursStart < hoursEnd && (

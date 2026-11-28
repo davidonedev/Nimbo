@@ -5,7 +5,7 @@ import { ApiError } from '@/lib/api';
 
 /** Mensagem para uma troca de status que falhou. O 409 traz a explicação do servidor (ex.: "já está cancelado"). */
 export function statusErrorMessage(err: unknown): string {
-  if (err instanceof ApiError && err.status === 409) return err.message;
+  if (err instanceof ApiError && (err.status === 409 || err.status === 400)) return err.message;
   return 'Não foi possível atualizar o agendamento. Tente novamente.';
 }
 

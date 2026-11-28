@@ -57,7 +57,6 @@ const StepDone = lazy(() => import('./components/booking/StepDone'));
 const MyBookings = lazy(() => import('./components/booking/MyBookings'));
 const MyAppointments = lazy(() => import('./components/client/MyAppointments'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
-const ProfessionalRegisterPage = lazy(() => import('./pages/ProfessionalRegisterPage'));
 const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
@@ -66,6 +65,7 @@ import { SERVICES_TABS, SETTINGS_TABS, REPORTS_TABS, SUPER_SETTINGS_TABS } from 
 import { canEnterArea } from './config/navigation';
 import { LEGACY_ADMIN_REDIRECTS } from './config/legacyRoutes';
 import { LoginSplashHost }       from './motion/LoginSplashHost';
+import { ServerWakingNotice }    from './components/ServerWakingNotice';
 import { RouteErrorBoundary }    from './components/RouteErrorBoundary';
 
 function BookingRedirect() {
@@ -197,7 +197,6 @@ function AppRoutes() {
         {/* Telas antigas do portal: fora do caminho principal, seguem acessíveis por URL */}
         <Route element={<ClientLayout />}>
           <Route path="register"                 element={<RegisterPage />} />
-          <Route path="professional-register"    element={<ProfessionalRegisterPage />} />
           <Route path="my-appointments"          element={<MyAppointments />} />
           <Route path="verify-email"             element={<VerifyEmailPage />} />
         </Route>
@@ -219,6 +218,7 @@ export default function App() {
       <AuthProvider>
         <AppRoutes />
         <LoginSplashHost />
+        <ServerWakingNotice />
       </AuthProvider>
     </BrowserRouter>
     </GoogleOAuthProvider>

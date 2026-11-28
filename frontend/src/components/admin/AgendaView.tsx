@@ -22,6 +22,7 @@ import { statusErrorMessage } from '@/lib/appointmentFilters';
 import { useClientNotice } from '@/hooks/useClientNotice';
 import ClientNoticeBar from '@/components/admin/ClientNoticeBar';
 import { ConfirmAppointmentDialog } from '@/components/appointments/ConfirmAppointmentDialog';
+import { RescheduleDialog } from '@/components/appointments/RescheduleDialog';
 import { NewAppointmentDialog } from './NewAppointmentDialog';
 import { AppointmentCardList, type ApptCardData } from '@/components/ui/AppointmentCards';
 import type { Appointment, AppointmentStatus } from '@/types';
@@ -168,7 +169,7 @@ export default function AgendaView({ only }: AgendaViewProps = {}) {
   const {
     appointments, professionals, clients, services,
     blockedSlots, addBlockedSlot, removeBlockedSlot,
-    updateAppointmentStatus,
+    updateAppointmentStatus, rescheduleAppointment,
   } = useTenant();
   const clientNotice = useClientNotice();
 
@@ -198,6 +199,7 @@ export default function AgendaView({ only }: AgendaViewProps = {}) {
   const [detailAppt, setDetailAppt] = useState<Appointment | null>(null);
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [confirmAppt, setConfirmAppt] = useState<Appointment | null>(null);
+  const [moveAppt, setMoveAppt] = useState<Appointment | null>(null);
   const [actionError, setActionError] = useState('');
 
   // Toda troca de status passa por aqui: se o servidor recusar, o dono vê o motivo em vez de um clique que não faz nada.
@@ -658,6 +660,10 @@ export default function AgendaView({ only }: AgendaViewProps = {}) {
         </DialogContent>
       </Dialog>
 
+      <RescheduleDialog
+        target={moveAppt ? { id: moveAppt.id, clientName: clients.find(c => c.id === moveAppt.clientId)?.name ?? 'Cliente', date: moveAppt.date, startTime: moveAppt.startTime, professionalId: moveAppt.professionalId } : null}
+        professionals={professionals} onClose={() => setMoveAppt(null)} onSave={(id, change) => rescheduleAppointment(id, change)} />
+
       <Dialog open={!!detailAppt} onOpenChange={o => !o && setDetailAppt(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Detalhes do Agendamento</DialogTitle></DialogHeader>
@@ -693,6 +699,9 @@ export default function AgendaView({ only }: AgendaViewProps = {}) {
                 <div className="flex gap-2 flex-wrap pt-2 border-t">
                   {detailAppt.status === 'pending' && (
                     <Button size="sm" onClick={() => { setConfirmAppt(detailAppt); setDetailAppt(null); }}>Confirmar</Button>
+                  )}
+                  {(detailAppt.status === 'confirmed' || detailAppt.status === 'pending') && (
+                    <Button size="sm" variant="outline" onClick={() => { setMoveAppt(detailAppt); setDetailAppt(null); }}>Alterar horário</Button>
                   )}
                   {(detailAppt.status === 'confirmed' || detailAppt.status === 'pending') && (
                     <Button size="sm" variant="outline" onClick={() => { void changeStatus(detailAppt, 'completed'); setDetailAppt(null); }}>Marcar Concluído</Button>

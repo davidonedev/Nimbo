@@ -27,19 +27,22 @@ interface Props {
   data: AppointmentCardData;
   busy?: boolean;
   onAction: (data: AppointmentCardData, action: StatusAction) => void;
+  /** Muda o dia/horário (só pendente ou confirmado). Sem a prop, o item não aparece. */
+  onReschedule?: (data: AppointmentCardData) => void;
 }
 
 /**
  * Cartão de agendamento do celular. Mostra horário, cliente, serviço, status e valor; embaixo, a ação principal
  * (Confirmar ou Concluir) em largura total ao alcance do polegar, ligar, WhatsApp e o menu "Mais" (Marcar falta, Cancelar).
  */
-export function AppointmentCard({ data, busy = false, onAction }: Props) {
+export function AppointmentCard({ data, busy = false, onAction, onReschedule }: Props) {
   const actions = statusActionsFor(data.status);
   const primary = actions.find(a => a.status === 'confirmed') ?? actions.find(a => a.status === 'completed');
   const more = actions.filter(a => a !== primary);
+  const canMove = !!onReschedule && (data.status === 'pending' || data.status === 'confirmed');
   const tel = (data.clientPhone ?? '').replace(/[^\d+]/g, '');
   const wa = normalizeWaNumber(data.clientPhone);
-  const hasFooter = !!primary || more.length > 0 || !!tel;
+  const hasFooter = !!primary || more.length > 0 || canMove || !!tel;
   const iconLink = 'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-input bg-background text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
   const who = data.professionalName ? `${data.serviceName} · ${data.professionalName}` : data.serviceName;
 
@@ -75,7 +78,7 @@ export function AppointmentCard({ data, busy = false, onAction }: Props) {
           )}
           {tel && <a href={`tel:${tel}`} className={iconLink} aria-label={`Ligar para ${data.clientName}`}><Phone className="h-4 w-4" aria-hidden /></a>}
           {wa && <a href={`https://wa.me/${wa}`} target="_blank" rel="noopener noreferrer" className={iconLink} aria-label={`Chamar ${data.clientName} no WhatsApp`}><MessageCircle className="h-4 w-4" aria-hidden /></a>}
-          {more.length > 0 && (
+          {(more.length > 0 || canMove) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button type="button" size="sm" variant="outline" disabled={busy}
@@ -85,6 +88,9 @@ export function AppointmentCard({ data, busy = false, onAction }: Props) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                {canMove && (
+                  <DropdownMenuItem className="min-h-11" onSelect={() => onReschedule?.(data)}>Alterar horário</DropdownMenuItem>
+                )}
                 {more.map(a => (
                   <DropdownMenuItem key={a.status} destructive={a.status === 'cancelled'} className="min-h-11" onSelect={() => onAction(data, a)}>
                     {a.label}

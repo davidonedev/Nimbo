@@ -178,6 +178,7 @@ public class PhoneBookingService {
             touch(device.get());
             BookedSummary summary = bookNow(t, slug, existing.get(), serviceIds, professionalId, req.date(), start, req.notes());
             notifyOwnerOfNewRequest(t, summary);
+            notifyClientRequestReceived(t, summary);
             return BookResponse.booked(summary, toClient(existing.get()), null);
         }
 
@@ -306,6 +307,7 @@ public class PhoneBookingService {
         List<UUID> serviceIds = Arrays.stream(ch.getServiceIds().split(",")).map(UUID::fromString).toList();
         BookedSummary summary = bookNow(t, slug, client, serviceIds, ch.getProfessionalId(), ch.getDate(), ch.getStartTime(), ch.getNotes());
         notifyOwnerOfNewRequest(t, summary);
+        notifyClientRequestReceived(t, summary);
 
         ch.setConsumedAt(Instant.now());
         challengeRepository.save(ch);
@@ -376,6 +378,12 @@ public class PhoneBookingService {
     private void notifyOwnerOfNewRequest(Tenant t, BookedSummary summary) {
         List<UUID> ids = summary.items().stream().map(BookedItem::id).toList();
         notificationService.ownerNewRequest(appointmentRepository.findByTenantIdAndIdIn(t.getId(), ids));
+    }
+
+    /** Confirma ao cliente (WhatsApp) que o pedido foi recebido e que falta o estabelecimento aprovar. */
+    private void notifyClientRequestReceived(Tenant t, BookedSummary summary) {
+        List<UUID> ids = summary.items().stream().map(BookedItem::id).toList();
+        notificationService.clientRequestReceived(appointmentRepository.findByTenantIdAndIdIn(t.getId(), ids));
     }
 
     // ─── disponibilidade (helpers) ──────────────────────────────────────────────

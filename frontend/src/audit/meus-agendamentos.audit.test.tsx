@@ -186,14 +186,14 @@ describe('Meus agendamentos (/:slug/meus-agendamentos, 390px)', { timeout: 90000
     expect(link.getAttribute('href')).toBe('/studio/meus-agendamentos');
   });
 
-  it('a tela "Agendamento confirmado!" oferece "Ver meus agendamentos"', async () => {
+  it('a tela "Pedido enviado!" oferece "Ver meus agendamentos"', async () => {
     open('/studio');
     fireEvent.click(await screen.findByText('Corte feminino', undefined, T));
     fireEvent.click(await screen.findByRole('button', { name: '09:00' }, T));
     await screen.findByText('Seus dados', undefined, T);
     await waitFor(() => expect((screen.getByLabelText(/Nome completo/) as HTMLInputElement).value).toBe('Ana Lima'), T);
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar agendamento' }));
-    expect(await screen.findByText('Agendamento confirmado!', undefined, T)).toBeTruthy();
+    expect(await screen.findByText('Pedido enviado!', undefined, T)).toBeTruthy();
     const link = screen.getByRole('link', { name: /Ver meus agendamentos/ });
     expect(link.getAttribute('href')).toBe('/studio/meus-agendamentos');
     fireEvent.click(link);

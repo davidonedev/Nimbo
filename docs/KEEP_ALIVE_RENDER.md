@@ -8,13 +8,13 @@ Medição em 2026-11-24, com o serviço dormindo: a 1ª chamada ao `/health` lev
 
 ## Solução: um "toque" externo a cada 5 minutos
 
-O serviço não consegue se acordar sozinho, então o toque vem de fora. O `/health` não usa o banco, é público e fica fora do limite de requisições (`HealthController.java`), então é seguro bater nele toda hora.
+O serviço não consegue se acordar sozinho, então o toque vem de fora. Os endereços de saúde são públicos e ficam fora do limite de requisições (`HealthController.java`), então é seguro bater neles toda hora. O `/health` não usa o banco. O **`/health/deep`** também consulta o banco: devolve `200` quando está tudo bem e `503` quando o banco não responde. Por isso ele é o endereço certo para o monitor: passa a **avisar quando o banco cair ou pausar** e ainda mantém o banco do Supabase ativo.
 
 ### Opção recomendada: UptimeRobot (grátis, e ainda avisa se cair)
 
 1. Criar conta em uptimerobot.com (plano gratuito).
 2. **Add New Monitor** → tipo **HTTP(s)**.
-3. URL: `https://nimbo-api-duyl.onrender.com/health` (a URL do backend em produção, a mesma de `VITE_API_URL` sem o `/api`).
+3. URL: `https://nimbo-api-duyl.onrender.com/health/deep` (a URL do backend em produção, a mesma de `VITE_API_URL` sem o `/api`).
 4. Intervalo: **5 minutos** (mínimo do plano gratuito).
 5. Em **Alert Contacts**, marcar o seu e-mail: você passa a ser avisado se o backend cair (isso também cobre o item de monitoramento).
 
@@ -37,4 +37,4 @@ Funcionaria (`schedule` com `curl`), mas o agendamento do GitHub atrasa e pode s
 
 ## Rede de segurança no frontend
 
-Se mesmo assim o serviço dormir, o frontend espera até **150 s** pela resposta (`REQUEST_TIMEOUT_MS`, `frontend/src/lib/api.ts`) e repete em 502/503/504, para a primeira visita não falhar antes de a subida terminar.
+Se mesmo assim o serviço dormir, depois de 6 s sem resposta a tela mostra "Estamos acordando o servidor" e o frontend espera até **150 s** pela resposta (`REQUEST_TIMEOUT_MS`, `frontend/src/lib/api.ts`) e repete em 502/503/504, para a primeira visita não falhar antes de a subida terminar.

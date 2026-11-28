@@ -69,6 +69,8 @@ export function ProfessionalProvider({ children }: { children: React.ReactNode }
         end: (p.workingHoursEnd as string) ?? '18:00',
       },
       workingDays: (p.workingDays as number[]) ?? [1, 2, 3, 4, 5],
+      breakStart: (p.breakStart as string | null) ?? undefined,
+      breakEnd: (p.breakEnd as string | null) ?? undefined,
     };
   };
 

@@ -177,7 +177,7 @@ class ProfessionalAccessScopeIntegrationTest extends AbstractIntegrationTest {
 
         String forColleague = """
                 {"professionalId":"%s","serviceId":"%s","date":"%s","startTime":"14:00",
-                 "clientName":"Novo Cliente","clientEmail":"novo-%s@example.com"}
+                 "clientName":"Novo Cliente","clientPhone":"(11) 98765-4321","clientEmail":"novo-%s@example.com"}
                 """.formatted(colleague.getId(), svc.getId(), date, UUID.randomUUID());
         mockMvc.perform(post("/api/professional/appointments").contentType(MediaType.APPLICATION_JSON)
                         .content(forColleague).header("Authorization", bearer(token)))
@@ -193,7 +193,7 @@ class ProfessionalAccessScopeIntegrationTest extends AbstractIntegrationTest {
 
         String own = """
                 {"professionalId":"%s","serviceId":"%s","date":"%s","startTime":"14:00",
-                 "clientName":"Cliente Proprio","clientEmail":"proprio-%s@example.com"}
+                 "clientName":"Cliente Proprio","clientPhone":"(11) 98765-4321","clientEmail":"proprio-%s@example.com"}
                 """.formatted(mine.getId(), svc.getId(), date, UUID.randomUUID());
         mockMvc.perform(post("/api/professional/appointments").contentType(MediaType.APPLICATION_JSON)
                         .content(own).header("Authorization", bearer(token)))
@@ -212,7 +212,7 @@ class ProfessionalAccessScopeIntegrationTest extends AbstractIntegrationTest {
 
         String otherProfBody = """
                 {"professionalId":"%s","serviceId":"%s","date":"%s","startTime":"15:00",
-                 "clientName":"Fulano","clientEmail":"fulano-%s@example.com"}
+                 "clientName":"Fulano","clientPhone":"(11) 98765-4321","clientEmail":"fulano-%s@example.com"}
                 """.formatted(otherProf.getId(), mySvc.getId(), date, UUID.randomUUID());
         mockMvc.perform(post("/api/professional/appointments").contentType(MediaType.APPLICATION_JSON)
                         .content(otherProfBody).header("Authorization", bearer(token)))
@@ -220,7 +220,7 @@ class ProfessionalAccessScopeIntegrationTest extends AbstractIntegrationTest {
 
         String otherSvcBody = """
                 {"professionalId":"%s","serviceId":"%s","date":"%s","startTime":"15:00",
-                 "clientName":"Fulano","clientEmail":"fulano-%s@example.com"}
+                 "clientName":"Fulano","clientPhone":"(11) 98765-4321","clientEmail":"fulano-%s@example.com"}
                 """.formatted(mine.getId(), otherSvc.getId(), date, UUID.randomUUID());
         mockMvc.perform(post("/api/professional/appointments").contentType(MediaType.APPLICATION_JSON)
                         .content(otherSvcBody).header("Authorization", bearer(token)))

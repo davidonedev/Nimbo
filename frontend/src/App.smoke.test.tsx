@@ -65,7 +65,6 @@ function respond(method: string, path: string): { status: number; body: unknown 
     if (path === '/api/professional/appointments') {
       return ok([apptDto('a1', 'c1', day(0), '09:00'), apptDto('a2', 'c2', day(0), '14:00', 'pending'), apptDto('a3', 'c1', day(2), '10:00')]);
     }
-    if (path === '/api/public/login-data') return ok([]);
     if (path === '/api/public/studio') return ok(publicTenantDto);
     if (path === '/api/public/studio/services') return ok([service]);
     if (path === '/api/public/studio/professionals') {
@@ -236,7 +235,7 @@ describe('portal público do cliente', { timeout: 60000 }, () => {
     fireEvent.change(screen.getByLabelText('Código'), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
 
-    expect(await screen.findByText('Agendamento confirmado!', undefined, T)).toBeTruthy();
+    expect(await screen.findByText('Pedido enviado!', undefined, T)).toBeTruthy();
     expect(localStorage.getItem('nimbo_device_studio')).toBe('tok'); // aparelho reconhecido para a próxima vez
     expect(unexpected).toEqual([]);
   });
@@ -263,12 +262,6 @@ describe('portal público do cliente', { timeout: 60000 }, () => {
     open('/studio/register');
     await waitFor(() => expect(screen.queryByText('Carregando...')).toBeNull(), T);
     expect(screen.queryByText('Barbearia não encontrada')).toBeNull();
-    expect(document.body.textContent?.length).toBeGreaterThan(50);
-  });
-
-  it('/:slug/professional-register abre', async () => {
-    open('/studio/professional-register');
-    await waitFor(() => expect(screen.queryByText('Carregando...')).toBeNull(), T);
     expect(document.body.textContent?.length).toBeGreaterThan(50);
   });
 

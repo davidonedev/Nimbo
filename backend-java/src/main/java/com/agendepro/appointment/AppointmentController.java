@@ -46,6 +46,13 @@ public class AppointmentController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(created));
     }
 
+    /** Muda o dia, o horário e/ou o profissional de um agendamento pendente ou confirmado. O cliente é avisado. */
+    @PatchMapping("/{id}")
+    public ResponseEntity<ApiResponse<AppointmentResponse>> reschedule(@PathVariable UUID id, @Valid @RequestBody AppointmentRescheduleRequest request) {
+        var updated = appointmentService.reschedule(SecurityUtils.requireTenantId(), SecurityUtils.currentUser(), id, request);
+        return ResponseEntity.ok(ApiResponse.ok(updated));
+    }
+
     @PatchMapping("/{id}/status")
     public ResponseEntity<ApiResponse<AppointmentResponse>> updateStatus(@PathVariable UUID id, @Valid @RequestBody UpdateStatusRequest request) {
         var updated = appointmentService.updateStatus(SecurityUtils.requireTenantId(), SecurityUtils.currentUser(), id, request);

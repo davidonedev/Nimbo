@@ -43,7 +43,7 @@ class AppointmentConflictIntegrationTest extends AbstractIntegrationTest {
 
         String bookingJson = """
                 {"professionalId":"%s","serviceId":"%s","date":"%s","startTime":"10:00",
-                 "clientName":"Cliente Um","clientEmail":"cliente1@example.com"}
+                 "clientName":"Cliente Um","clientPhone":"(11) 98765-4321","clientEmail":"cliente1@example.com"}
                 """.formatted(professional.getId(), service.getId(), date);
 
         mockMvc.perform(post("/api/admin/appointments")
@@ -53,7 +53,7 @@ class AppointmentConflictIntegrationTest extends AbstractIntegrationTest {
 
         String overlappingJson = """
                 {"professionalId":"%s","serviceId":"%s","date":"%s","startTime":"10:15",
-                 "clientName":"Cliente Dois","clientEmail":"cliente2@example.com"}
+                 "clientName":"Cliente Dois","clientPhone":"(11) 98765-4321","clientEmail":"cliente2@example.com"}
                 """.formatted(professional.getId(), service.getId(), date);
 
         mockMvc.perform(post("/api/admin/appointments")
@@ -75,7 +75,7 @@ class AppointmentConflictIntegrationTest extends AbstractIntegrationTest {
 
         String bookingJson = """
                 {"professionalId":"%s","serviceId":"%s","date":"%s","startTime":"09:30",
-                 "clientName":"Cliente Bloqueado","clientEmail":"bloqueado@example.com"}
+                 "clientName":"Cliente Bloqueado","clientPhone":"(11) 98765-4321","clientEmail":"bloqueado@example.com"}
                 """.formatted(professional.getId(), service.getId(), date);
 
         mockMvc.perform(post("/api/admin/appointments")
@@ -96,7 +96,7 @@ class AppointmentConflictIntegrationTest extends AbstractIntegrationTest {
 
         String first = """
                 {"professionalId":"%s","serviceId":"%s","date":"%s","startTime":"10:00",
-                 "clientName":"Cliente Um","clientEmail":"c1@example.com"}
+                 "clientName":"Cliente Um","clientPhone":"(11) 98765-4321","clientEmail":"c1@example.com"}
                 """.formatted(professional.getId(), service.getId(), date);
         mockMvc.perform(post("/api/admin/appointments").header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON).content(first))
@@ -105,7 +105,7 @@ class AppointmentConflictIntegrationTest extends AbstractIntegrationTest {
         // Começa exatamente quando o primeiro termina (10:30) — não deve haver conflito.
         String second = """
                 {"professionalId":"%s","serviceId":"%s","date":"%s","startTime":"10:30",
-                 "clientName":"Cliente Dois","clientEmail":"c2@example.com"}
+                 "clientName":"Cliente Dois","clientPhone":"(11) 98765-4321","clientEmail":"c2@example.com"}
                 """.formatted(professional.getId(), service.getId(), date);
         mockMvc.perform(post("/api/admin/appointments").header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON).content(second))

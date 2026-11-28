@@ -22,6 +22,7 @@ import static com.agendepro.catalog.ServiceOfferingDtos.*;
 public class ServiceOfferingService {
 
     private final ServiceOfferingRepository serviceOfferingRepository;
+    private final com.agendepro.appointment.AppointmentRepository appointmentRepository;
     private final TenantRepository tenantRepository;
     private final ProfessionalRepository professionalRepository;
     private final ProfessionalServiceLinkRepository linkRepository;
@@ -83,6 +84,11 @@ public class ServiceOfferingService {
     public void delete(UUID tenantId, UUID id) {
         ServiceOffering existing = serviceOfferingRepository.findByIdAndTenantId(id, tenantId)
                 .orElseThrow(() -> AppException.notFound("Serviço não encontrado"));
+        long upcoming = appointmentRepository.countUpcomingByService(tenantId, id, java.time.LocalDate.now(java.time.ZoneId.of("America/Sao_Paulo")).toString());
+        if (upcoming > 0) {
+            throw new AppException("Este serviço tem " + upcoming + (upcoming == 1 ? " agendamento futuro" : " agendamentos futuros")
+                    + ". Cancele ou remarque antes de excluir.", 409, "HAS_UPCOMING_APPOINTMENTS");
+        }
         serviceOfferingRepository.delete(existing);
     }
 }

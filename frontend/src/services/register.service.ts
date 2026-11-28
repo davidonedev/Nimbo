@@ -48,26 +48,6 @@ export async function googleAuthClientApi(
   return storeDeviceTokenFrom(slug, await api.post<ClientSessionData>(`/public/${slug}/auth/google`, { accessToken }));
 }
 
-// ─── Professional register ────────────────────────────────────────────────────
-
-export interface ProfessionalRegisterPayload {
-  name: string;
-  email: string;
-  password: string;
-  specialty: string;
-  bio?: string;
-  workingHoursStart: string;
-  workingHoursEnd: string;
-  workingDays: number[];
-}
-
-export async function registerProfessionalApi(
-  slug: string,
-  payload: ProfessionalRegisterPayload,
-): Promise<{ name: string; email: string }> {
-  return api.post(`/public/${slug}/register/professional`, payload);
-}
-
 // ─── Registro público de negócio (cria tenant + tenant_admin) ─────────────────
 
 export interface BusinessRegisterPayload {

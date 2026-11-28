@@ -30,6 +30,10 @@ public class EmailChangeService {
     private final UserTokenRepository userTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
+
+    /** app.email.enabled / EMAIL_ENABLED (padrão true). */
+    @Value("${app.email.enabled:true}")
+    private boolean emailEnabled;
     private final AuditService auditService;
 
     @Value("${app.app-url}")
@@ -40,6 +44,9 @@ public class EmailChangeService {
 
     @Transactional
     public void request(UUID userId, String newEmailRaw, String currentPassword, String ip) {
+        if (!emailEnabled) {
+            throw AppException.badRequest("A troca de e-mail está indisponível por enquanto. Fale com o suporte.", "EMAIL_DISABLED");
+        }
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> AppException.notFound("Usuário não encontrado"));
 

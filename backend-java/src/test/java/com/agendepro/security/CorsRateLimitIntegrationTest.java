@@ -39,17 +39,17 @@ class CorsRateLimitIntegrationTest extends AbstractIntegrationTest {
 
         // As 5 chamadas reais ainda cabem na cota inteira...
         for (int i = 0; i < 5; i++) {
-            mockMvc.perform(get("/api/public/login-data").header("Origin", VERCEL)).andExpect(status().isOk());
+            mockMvc.perform(get("/api/public/slug-inexistente").header("Origin", VERCEL)).andExpect(status().isNotFound());
         }
 
         // ...e a 6ª é barrada, com a mensagem de limite E os cabeçalhos CORS (sem eles o navegador só mostra "falha de rede")
-        mockMvc.perform(get("/api/public/login-data").header("Origin", VERCEL))
+        mockMvc.perform(get("/api/public/slug-inexistente").header("Origin", VERCEL))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(header().string("Access-Control-Allow-Origin", VERCEL))
                 .andExpect(jsonPath("$.error").value("Limite de requisições atingido."));
 
         // Origem não permitida não ganha cabeçalho CORS nem no 429
-        mockMvc.perform(get("/api/public/login-data").header("Origin", "https://evil.example.com"))
+        mockMvc.perform(get("/api/public/slug-inexistente").header("Origin", "https://evil.example.com"))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
 

@@ -82,6 +82,8 @@ async function startBackend(jar, { realLimits }) {
       LOGGING_FILE_NAME: path.join(run, 'backend-app.log'),
       BOOKING_MAX_ATTEMPTS_PER_IP: '1000',
       ...(realLimits ? {} : { SPRING_APPLICATION_JSON: JSON.stringify(relaxed) }),
+      APP_REMINDERS_QUIET_HOURS_ENABLED: 'false', // o teste roda a qualquer hora; a regra de 22h–7h tem teste próprio
+      WHATSAPP_ALLOW_PRIVATE_URLS: 'true', // o WhatsApp falso fica em 127.0.0.1; em produção essa chave nunca é ligada (anti-SSRF)
       SMTP_USER: '', SMTP_PASS: '', WHATSAPP_DEFAULT_API_URL: '', WHATSAPP_DEFAULT_API_KEY: '', WHATSAPP_DEFAULT_INSTANCE: '',
     },
   });

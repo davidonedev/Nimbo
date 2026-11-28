@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AppointmentCard, type AppointmentCardData } from '@/components/appointments/AppointmentCard';
 import { ConfirmAppointmentDialog } from '@/components/appointments/ConfirmAppointmentDialog';
+import { RescheduleDialog } from '@/components/appointments/RescheduleDialog';
 import { StatusBadge } from '@/components/appointments/StatusBadge';
 import { SummaryStrip } from '@/components/appointments/SummaryStrip';
 import { actionLabel, dayHeading, fmtDate } from '@/components/appointments/appointmentUi';
@@ -51,11 +52,18 @@ interface RowData extends AppointmentCardData {
 }
 
 /** Desktop: todas as ações como botões na linha da tabela. */
-function ActionButtons({ row, onAction, busy }: { row: RowData; onAction: (r: RowData, a: StatusAction) => void; busy: boolean }) {
+function ActionButtons({ row, onAction, onReschedule, busy }: { row: RowData; onAction: (r: RowData, a: StatusAction) => void; onReschedule: (r: RowData) => void; busy: boolean }) {
   const actions = statusActionsFor(row.status);
   if (actions.length === 0) return <span className="text-xs text-muted-foreground">Sem ações</span>;
   return (
     <div className="flex flex-wrap gap-2" role="group" aria-label={`Ações do agendamento de ${row.clientName}`}>
+      {(row.status === 'pending' || row.status === 'confirmed') && (
+        <Button type="button" size="sm" variant="outline" disabled={busy} className="min-h-9"
+          aria-label={actionLabel('Alterar horário', row.clientName, row.date, row.startTime)}
+          onClick={() => onReschedule(row)}>
+          Alterar horário
+        </Button>
+      )}
       {actions.map(a => (
         <Button
           key={a.status} type="button" size="sm" disabled={busy}
@@ -77,7 +85,8 @@ function ActionButtons({ row, onAction, busy }: { row: RowData; onAction: (r: Ro
  * lista: tabela no desktop, cartões agrupados por dia no celular. A Agenda (calendário) fica em `AgendaView only="calendar"`.
  */
 export default function AppointmentsView() {
-  const { appointments, clients, professionals, services, updateAppointmentStatus } = useTenant();
+  const { appointments, clients, professionals, services, updateAppointmentStatus, rescheduleAppointment } = useTenant();
+  const [moving, setMoving] = useState<RowData | null>(null);
   const { isMobile } = useBreakpoint();
   const clientNotice = useClientNotice();
   const uid = useId();
@@ -282,7 +291,7 @@ export default function AppointmentsView() {
               <ul className="space-y-3">
                 {items.map(row => (
                   <li key={row.id}>
-                    <AppointmentCard data={row} busy={busyId === row.id} onAction={(d, a) => onAction(d as RowData, a)} />
+                    <AppointmentCard data={row} busy={busyId === row.id} onAction={(d, a) => onAction(d as RowData, a)} onReschedule={d => setMoving(d as RowData)} />
                   </li>
                 ))}
               </ul>
@@ -314,7 +323,7 @@ export default function AppointmentsView() {
                     <td className="px-4 py-3 text-sm"><div className="max-w-[120px] truncate">{row.professionalName}</div></td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold">{formatCurrency(row.price)}</td>
                     <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
-                    <td className="px-4 py-3"><ActionButtons row={row} onAction={onAction} busy={busyId === row.id} /></td>
+                    <td className="px-4 py-3"><ActionButtons row={row} onAction={onAction} onReschedule={setMoving} busy={busyId === row.id} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -322,6 +331,10 @@ export default function AppointmentsView() {
           </div>
         </Card>
       )}
+
+      <RescheduleDialog
+        target={moving ? { id: moving.id, clientName: moving.clientName, date: moving.date, startTime: moving.startTime, professionalId: moving.appt.professionalId } : null}
+        professionals={professionals} onClose={() => setMoving(null)} onSave={(id, change) => rescheduleAppointment(id, change)} />
 
       <ConfirmAppointmentDialog scope="admin"
         target={pendingConfirm ? { clientName: pendingConfirm.clientName, date: pendingConfirm.date, startTime: pendingConfirm.startTime, serviceName: pendingConfirm.serviceName } : null}

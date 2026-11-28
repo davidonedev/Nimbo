@@ -326,7 +326,8 @@ export default function ServicesView() {
           <DialogHeader><DialogTitle>Excluir Serviço</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">
             Tem certeza que deseja excluir <strong className="text-foreground">{deleteTarget?.name}</strong>?
-            Agendamentos existentes não serão afetados.
+            O histórico de atendimentos deste serviço também é apagado. Se ainda houver agendamentos futuros, a exclusão é recusada:
+            cancele ou remarque antes.
           </p>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
