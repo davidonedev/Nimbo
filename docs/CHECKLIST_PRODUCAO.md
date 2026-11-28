@@ -23,7 +23,8 @@ Marque cada item antes de colocar um barbeiro real. Nenhum valor secreto aparece
 | `WHATSAPP_DEFAULT_API_URL`, `WHATSAPP_DEFAULT_API_KEY`, `WHATSAPP_DEFAULT_INSTANCE` | sim | número **dedicado** ao Nimbo, não o pessoal |
 | `TURNSTILE_SECRET_KEY` | **sim** | sem ela o agendamento fica aberto a robôs que gastam o seu WhatsApp (par: `VITE_TURNSTILE_SITE_KEY` na Vercel) |
 | `SEED_ENABLED` | não | deixe **sem definir** ou `false` |
-| `EMAIL_ENABLED` | não | deixe **sem definir** (só WhatsApp por enquanto) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | **sim, para o e-mail funcionar** | recuperação de senha e troca de e-mail dependem disso. O Render gratuito **bloqueia as portas 25, 465 e 587**: use um provedor de SMTP que ofereça a porta **2525** (ex.: Brevo, Mailgun, Mailjet [CONFIRMAR no provedor]) e `SMTP_PORT=2525`. `SMTP_FROM` precisa ser um remetente verificado no provedor |
+| `EMAIL_ENABLED` | não | padrão `true`; `false` desliga todo e-mail |
 | `CLIENT_IP_PROXY_HOPS` | depois de testar | veja a seção 4 |
 
 ## 3. Variáveis na Vercel
@@ -50,4 +51,5 @@ Enquanto `CLIENT_IP_PROXY_HOPS` for 0, quem forja o cabeçalho escapa dos limite
 - [ ] Plano do estabelecimento ajustado (o padrão BASIC limita a 3 serviços e 2 profissionais): Super Admin → estabelecimento → plano.
 - [ ] WhatsApp do estabelecimento (telefone) cadastrado: é para ele que vai o aviso de pedido novo.
 - [ ] Horário de funcionamento, almoço, serviços e profissionais cadastrados e um agendamento de teste feito do início ao fim no celular.
-- [ ] O barbeiro sabe: o pedido fica **pendente até ele aprovar**, o aviso chega no WhatsApp dele, e a senha esquecida se resolve pelo "Preciso de ajuda para entrar".
+- [ ] O barbeiro sabe: o pedido fica **pendente até ele aprovar**, o aviso chega no WhatsApp dele, e a senha esquecida se resolve por "Esqueci minha senha" (link por e-mail) ou, se perdeu o e-mail, por "Não consigo acessar meu e-mail".
+- [ ] Teste do e-mail: peça "Esqueci minha senha" com uma conta de teste e confira se o e-mail chega (olhe a caixa de spam). Em produção o link **não** aparece no log: se o e-mail não chegar, veja o log do Render por "Falha ao enviar".

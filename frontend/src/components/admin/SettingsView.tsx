@@ -14,6 +14,7 @@ import { useAuth } from '@/context/AuthContext';
 import { prepareImage } from '@/lib/imageResize';
 import { onlyChanged } from '@/lib/settingsPayload';
 import { useSaveState } from './useSaveState';
+import { ChangeEmailCard } from '@/components/account/ChangeEmailCard';
 import type { Professional } from '@/types';
 
 const DAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -441,6 +442,7 @@ export default function SettingsView({ section = 'account' }: Props) {
       </Card>
 
       {/* Troca de e-mail (senha atual + confirmação pelo novo e-mail) */}
+      <ChangeEmailCard />
 
       {/* Troca de senha */}
       <Card>
@@ -524,7 +526,10 @@ export default function SettingsView({ section = 'account' }: Props) {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Status do Estabelecimento</CardTitle>
-          <CardDescription>Controla se o portal exibe agendamento disponível ou fechado</CardDescription>
+          <CardDescription>
+            Liga e desliga os agendamentos pelo portal. Com ele ligado, o selo Aberto/Fechado do topo segue sozinho o expediente
+            dos profissionais: abre na hora de começar e fecha depois do horário de encerrar.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between p-4 rounded-lg border">

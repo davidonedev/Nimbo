@@ -42,8 +42,8 @@ public class NotificationService {
 
     private static final DateTimeFormatter BR_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
-    /** Só WhatsApp por enquanto: com e-mail desligado nenhuma linha de e-mail entra na fila. */
-    @org.springframework.beans.factory.annotation.Value("${app.email.enabled:false}")
+    /** Com e-mail desligado (EMAIL_ENABLED=false) nenhuma linha de e-mail entra na fila. */
+    @org.springframework.beans.factory.annotation.Value("${app.email.enabled:true}")
     private boolean emailEnabled;
 
     private final NotificationOutboxRepository outbox;

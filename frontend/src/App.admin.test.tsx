@@ -266,8 +266,11 @@ describe('navbar do admin', { timeout: 60000 }, () => {
     setViewportWidth(1280);
     vi.stubGlobal('fetch', fakeFetch);
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    // Quarta-feira, 12:00 em Brasília: dentro do expediente do profissional de teste (seg–sex, 8h–18h)
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-12-02T15:00:00Z'));
   });
-  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
   const statusBadge = () => screen.getAllByRole('status').find(el => /^(Aberto|Fechado)/.test((el.textContent ?? '').trim()))!;
 
@@ -285,12 +288,27 @@ describe('navbar do admin', { timeout: 60000 }, () => {
     await waitFor(() => expect(statusBadge().textContent).toContain('Aberto'), { timeout: 5000 });
   });
 
-  it('o status do navbar não depende do expediente dos profissionais (só do interruptor)', async () => {
+  it('dentro do expediente do profissional (8h–18h) o status é "Aberto"', async () => {
     signIn('tenant_admin');
     open('/admin/dashboard');
     await expectMounted('Painel');
-    // Painel aberto + interruptor ligado = "Aberto", mesmo fora do horário do profissional
     expect(statusBadge().textContent).toContain('Aberto');
+  });
+
+  it('passou das 18h o status muda sozinho para "Fechado", mesmo com o interruptor ligado', async () => {
+    vi.setSystemTime(new Date('2026-12-03T00:30:00Z')); // quarta 21:30 em Brasília
+    signIn('tenant_admin');
+    open('/admin/dashboard');
+    await expectMounted('Painel');
+    expect(statusBadge().textContent).toContain('Fechado');
+  });
+
+  it('em dia sem expediente (sábado) o status é "Fechado"', async () => {
+    vi.setSystemTime(new Date('2026-11-28T15:00:00Z')); // sábado 12:00 em Brasília
+    signIn('tenant_admin');
+    open('/admin/dashboard');
+    await expectMounted('Painel');
+    expect(statusBadge().textContent).toContain('Fechado');
   });
 
   it('"+ Novo" da navbar abre o diálogo de novo agendamento', async () => {

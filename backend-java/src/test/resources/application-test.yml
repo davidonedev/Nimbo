@@ -6,7 +6,7 @@ app:
   reminders:
     quiet-hours-enabled: false   # os testes de lembrete rodam a qualquer hora; ReminderQuietHoursTest cobre a regra
   email:
-    enabled: true    # o código de e-mail segue coberto; EmailDisabledIntegrationTest cobre o padrão (desligado)
+    enabled: true    # padrão em produção também; EmailDisabledIntegrationTest cobre EMAIL_ENABLED=false
   booking:
     max-attempts-per-ip: 100000
   pending:

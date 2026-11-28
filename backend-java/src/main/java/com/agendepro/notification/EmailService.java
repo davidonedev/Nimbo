@@ -30,8 +30,17 @@ public class EmailService {
     @Value("${app.mail-from}")
     private String mailFrom;
 
-    /** Desligado por padrão: o Nimbo avisa só por WhatsApp (app.email.enabled / EMAIL_ENABLED). */
-    @Value("${app.email.enabled:false}")
+    /** Perfis ativos: em produção o link de recuperação (contém o token) nunca é escrito no log. */
+    @Value("${spring.profiles.active:}")
+    private String activeProfiles;
+
+    private String linkForLog(String link) {
+        if (link == null) return "(sem link)";
+        return activeProfiles != null && activeProfiles.contains("prod") ? "(omitido em produção)" : link;
+    }
+
+    /** Ligado por padrão (app.email.enabled / EMAIL_ENABLED); false desliga todo envio de e-mail. */
+    @Value("${app.email.enabled:true}")
     private boolean enabled;
 
     @Async
@@ -42,7 +51,7 @@ public class EmailService {
                             "[EMAIL] Verificação de e-mail (sem SMTP configurado)\n" +
                             "  Para:    {}\n  Link:    {}\n" +
                             "─────────────────────────────────────────────",
-                    to, verifyUrl);
+                    to, linkForLog(verifyUrl));
             return;
         }
 
@@ -157,7 +166,7 @@ public class EmailService {
                             "[EMAIL][DEV] {} (sem SMTP configurado — NÃO use em produção)\n" +
                             "  Para:    {}\n  Link:    {}\n" +
                             "─────────────────────────────────────────────",
-                    devLabel, to, devLink == null ? "(sem link)" : devLink);
+                    devLabel, to, linkForLog(devLink));
             return;
         }
 

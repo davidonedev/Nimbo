@@ -1,13 +1,15 @@
 import { useTenant } from '@/context/TenantContext';
 import { computeOpenStatus } from '@/lib/businessStatus';
+import { useBrasiliaNow } from '@/hooks/useBrasiliaNow';
 
 /**
  * "Aberto" com bolinha verde pulsando; "Fechado" com bolinha vermelha estática (um vermelho piscando
- * lê como alarme). O texto aparece também no celular: a cor sozinha não diz o estado. O pulso respeita prefers-reduced-motion (motion-reduce). Segue o interruptor do portal do cliente.
+ * lê como alarme). O texto aparece também no celular: a cor sozinha não diz o estado. O pulso respeita prefers-reduced-motion (motion-reduce). Segue o expediente dos profissionais (abre e fecha sozinho) e o interruptor do portal do cliente.
  */
 export function OpenStatus() {
-  const { tenant } = useTenant();
-  const open = computeOpenStatus(tenant);
+  const { tenant, professionals } = useTenant();
+  const now = useBrasiliaNow();
+  const open = computeOpenStatus(tenant, professionals, now);
 
   return (
     <div role="status" className="flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-1 text-xs font-medium sm:gap-2 sm:px-3 sm:text-sm">

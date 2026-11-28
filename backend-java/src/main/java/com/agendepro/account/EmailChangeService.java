@@ -31,8 +31,8 @@ public class EmailChangeService {
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
 
-    /** Só WhatsApp por enquanto (app.email.enabled / EMAIL_ENABLED). */
-    @Value("${app.email.enabled:false}")
+    /** app.email.enabled / EMAIL_ENABLED (padrão true). */
+    @Value("${app.email.enabled:true}")
     private boolean emailEnabled;
     private final AuditService auditService;
 

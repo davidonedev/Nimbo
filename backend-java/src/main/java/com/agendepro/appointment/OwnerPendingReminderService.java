@@ -52,8 +52,8 @@ public class OwnerPendingReminderService {
     @Value("${app.owner-reminders.enabled:true}")
     private boolean enabled;
 
-    /** O aviso ao dono é por e-mail: sem e-mail ligado (padrão) não há o que enviar. */
-    @Value("${app.email.enabled:false}")
+    /** O aviso ao dono é por e-mail: com e-mail desligado não há o que enviar. */
+    @Value("${app.email.enabled:true}")
     private boolean emailEnabled;
 
     @Value("${app.app-url}")

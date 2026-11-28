@@ -12,6 +12,7 @@ import {
   type PlatformUser,
 } from '@/services/super.service';
 import { getSuperColor } from './SuperSettingsView';
+import { ChangeEmailCard } from '@/components/account/ChangeEmailCard';
 
 // ─── Color picker (reaproveitado da SuperSettingsView) ────────────────────────
 const PRESET_COLORS = [
@@ -121,6 +122,7 @@ function AccountTab() {
   const { changePassword } = useAuth();
 
   // ── Credenciais próprias ──────────────────────────────────────────────────
+  // (troca do próprio e-mail fica no ChangeEmailCard — senha atual + confirmação)
   const [pwdForm, setPwdForm] = useState({ current: '', next: '', confirm: '' });
   const [pwdSaving, setPwdSaving] = useState(false);
   const [pwdError, setPwdError] = useState('');
@@ -240,6 +242,7 @@ function AccountTab() {
   return (
     <div className="space-y-6">
       {/* ── Meu e-mail ─────────────────────────────────────────────────────── */}
+      <ChangeEmailCard />
 
       {/* ── Minha senha ────────────────────────────────────────────────────── */}
       <Card>

@@ -1,31 +1,66 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MessageCircle } from 'lucide-react';
-import { AuthShell, authButtonClass } from '@/components/account/AuthShell';
+import { ArrowRight } from 'lucide-react';
+import { forgotPasswordApi } from '@/services/account.service';
+import { ApiError } from '@/lib/api';
+import { AuthShell, AuthAlert, authInputClass, authButtonClass, authLabelClass } from '@/components/account/AuthShell';
 
-/**
- * O Nimbo avisa só por WhatsApp (sem e-mail), então a senha não é recuperada por link: o pedido de ajuda chega ao
- * dono (funcionário) ou à equipe Nimbo (dono), que atualiza o acesso e avisa pelo contato informado.
- */
 export default function ForgotPasswordPage() {
-  return (
-    <AuthShell title="Esqueci minha senha" subtitle="Vamos te ajudar a entrar de novo.">
-      <div className="space-y-5">
-        <div className="space-y-2 rounded-2xl border border-lp-line bg-lp-alt p-4 text-sm text-lp-black/70">
-          <p className="font-bold text-lp-black">Como recuperar o acesso</p>
-          <ol className="list-decimal space-y-1 pl-5">
-            <li>Toque em <strong className="text-lp-black">Pedir ajuda</strong> e informe seu nome, seu WhatsApp e o nome da barbearia.</li>
-            <li><strong className="text-lp-black">Funcionário:</strong> o dono da barbearia recebe o pedido e troca a sua senha. <strong className="text-lp-black">Dono:</strong> a equipe Nimbo confirma seus dados e troca a senha.</li>
-            <li>Você recebe a nova senha pelo WhatsApp informado. Nunca pedimos a sua senha.</li>
-          </ol>
-        </div>
+  const [email,   setEmail]   = useState('');
+  const [loading, setLoading] = useState(false);
+  const [sent,    setSent]    = useState('');
+  const [error,   setError]   = useState('');
 
-        <Link to="/access-help" className={authButtonClass}>
-          <MessageCircle className="h-4 w-4" aria-hidden /> Pedir ajuda
-        </Link>
-        <p className="text-center text-sm text-lp-muted">
-          <Link to="/login" className="font-bold text-lp-primary underline-offset-4 hover:underline">Voltar ao login</Link>
-        </p>
-      </div>
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError(''); setLoading(true);
+    try {
+      setSent(await forgotPasswordApi(email.trim()));
+    } catch (err) {
+      // A API só falha por limite de tentativas (429) ou formato inválido (422) — nunca por conta inexistente
+      setError(err instanceof ApiError
+        ? (err.status === 422 ? 'E-mail inválido.' : err.message)
+        : 'Erro ao conectar com o servidor. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <AuthShell title="Esqueci minha senha" subtitle="Informe o e-mail que você usa para entrar.">
+      {sent ? (
+        <div className="space-y-5">
+          <AuthAlert kind="success">{sent}</AuthAlert>
+          <p className="text-sm text-lp-muted">
+            O link vale por 30 minutos e só pode ser usado uma vez. Confira também a caixa de spam.
+          </p>
+          <Link to="/login" className={authButtonClass}>Voltar ao login</Link>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <label htmlFor="email" className={authLabelClass}>E-mail</label>
+            <input
+              id="email" type="email" placeholder="voce@email.com" autoComplete="email"
+              value={email} onChange={e => setEmail(e.target.value)} required
+              className={authInputClass}
+            />
+          </div>
+
+          {error && <AuthAlert kind="error">{error}</AuthAlert>}
+
+          <button type="submit" disabled={loading} className={authButtonClass}>
+            {loading ? 'Enviando…' : <>Enviar instruções <ArrowRight className="h-4 w-4" /></>}
+          </button>
+
+          <p className="pt-2 text-center text-sm text-lp-muted">
+            Não tem mais acesso a esse e-mail?{' '}
+            <Link to="/access-help" className="font-bold text-lp-primary underline-offset-4 hover:underline">
+              Pedir ajuda
+            </Link>
+          </p>
+        </form>
+      )}
     </AuthShell>
   );
 }

@@ -37,8 +37,8 @@ public class PasswordResetService {
     private final EmailService emailService;
     private final AuditService auditService;
 
-    /** Só WhatsApp por enquanto (app.email.enabled / EMAIL_ENABLED). */
-    @Value("${app.email.enabled:false}")
+    /** app.email.enabled / EMAIL_ENABLED (padrão true). */
+    @Value("${app.email.enabled:true}")
     private boolean emailEnabled;
 
     @Value("${app.app-url}")

@@ -74,11 +74,11 @@ app:
   app-url: ${APP_URL:http://localhost:5173}
   bcrypt-rounds: ${BCRYPT_ROUNDS:10}
   mail-from: ${SMTP_FROM:Nimbo <noreply@agendepro.com>}
-  # Por enquanto o Nimbo avisa só por WhatsApp. Com false nenhum e-mail é montado, enfileirado nem enviado (e o link de
-  # recuperação não vai mais para o log). Para voltar a usar e-mail: EMAIL_ENABLED=true e um SMTP que funcione (o Render
-  # gratuito bloqueia as portas SMTP padrão).
+  # E-mail do sistema: recuperação de senha, troca de e-mail e avisos. Precisa de SMTP_USER/SMTP_PASS (e de um SMTP que o
+  # Render gratuito deixe passar: ele bloqueia as portas 25, 465 e 587; use um provedor com a porta 2525). Sem SMTP o
+  # e-mail simplesmente não sai (em produção o link nunca vai para o log). EMAIL_ENABLED=false desliga tudo.
   email:
-    enabled: ${EMAIL_ENABLED:false}
+    enabled: ${EMAIL_ENABLED:true}
   # Quantos proxies da hospedagem acrescentam o IP ao X-Forwarded-For (0 = usa o primeiro valor, que o cliente forja).
   # Descubra o valor certo em GET /api/super/diagnostics/client-ip e depois defina CLIENT_IP_PROXY_HOPS (normalmente 1).
   client-ip:

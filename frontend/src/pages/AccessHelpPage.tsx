@@ -45,8 +45,8 @@ export default function AccessHelpPage() {
   };
 
   return (
-    <AuthShell title="Preciso de ajuda para entrar" wide
-      subtitle="Esqueceu a senha ou perdeu o acesso ao e-mail de login? Conte para nós e a gente atualiza o seu acesso.">
+    <AuthShell title="Não consigo acessar meu e-mail" wide
+      subtitle="Seu e-mail é a sua identificação de login, por isso não dá para recuperá-lo automaticamente.">
       {sent ? (
         <div className="space-y-5">
           <AuthAlert kind="success">{sent}</AuthAlert>
@@ -57,13 +57,13 @@ export default function AccessHelpPage() {
           <div className="mb-6 space-y-2 rounded-2xl border border-lp-line bg-lp-alt p-4 text-sm text-lp-black/70">
             <p className="font-bold text-lp-black">Como funciona</p>
             <ol className="list-decimal space-y-1 pl-5">
-              <li>Preencha o formulário abaixo com o seu nome, o seu WhatsApp e o nome da barbearia.</li>
-              <li>Isso vale para quem esqueceu a senha e para quem perdeu o acesso ao e-mail de login.</li>
+              <li>Se você só esqueceu a senha, use <Link to="/forgot-password" className="font-bold text-lp-primary underline underline-offset-4">Esqueci minha senha</Link>.</li>
+              <li>Se perdeu o acesso ao e-mail ou não lembra qual usou, preencha o formulário abaixo.</li>
               <li>
                 <strong className="text-lp-black">Funcionário:</strong> o dono da sua barbearia recebe o pedido e atualiza seu acesso.{' '}
                 <strong className="text-lp-black">Dono:</strong> a equipe Nimbo confirma seus dados e atualiza o acesso.
               </li>
-              <li>Você será contatado pelo WhatsApp informado. Nunca pedimos sua senha.</li>
+              <li>Você será contatado pelo telefone ou contato informado. Nunca pedimos sua senha.</li>
             </ol>
           </div>
 

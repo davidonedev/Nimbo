@@ -35,6 +35,15 @@ class EmailServiceSendNowTest {
     }
 
     @Test
+    void inProductionTheRecoveryLinkNeverGoesToTheLog() {
+        EmailService s = service("", Mockito.mock(JavaMailSender.class));
+        ReflectionTestUtils.setField(s, "activeProfiles", "prod");
+        assertThat((String) ReflectionTestUtils.invokeMethod(s, "linkForLog", "https://site/reset?token=segredo")).doesNotContain("segredo");
+        ReflectionTestUtils.setField(s, "activeProfiles", "");
+        assertThat((String) ReflectionTestUtils.invokeMethod(s, "linkForLog", "https://site/reset?token=segredo")).contains("segredo");
+    }
+
+    @Test
     void withoutSmtpUser_isNotConfigured_andNothingIsSent() {
         JavaMailSender sender = Mockito.mock(JavaMailSender.class);
 

@@ -448,7 +448,7 @@ phase('C', async ({ browser }) => {
   const ownerMsg = await wa.waitFor(m => wa.to(ownerPhoneDigits)(m) && /pedido|agendamento/i.test(m.text), 30_000);
   check('C1', 'Novo pedido: o dono recebe aviso no WhatsApp do estabelecimento', !!ownerMsg, ownerMsg ? ownerMsg.text.replace(/\n/g, ' | ').slice(0, 150) : 'nenhuma mensagem ao dono');
   const bellRow = outboxOf(dani.id, 'NEW_REQUEST');
-  check('C1b', 'O aviso ao dono passou pela fila só por WhatsApp (enviado); nenhuma linha de e-mail', bellRow.some(r => r[0] === 'WHATSAPP' && r[1] === 'SENT') && !bellRow.some(r => r[0] === 'EMAIL'), JSON.stringify(bellRow));
+  check('C1b', 'O aviso ao dono passou pela fila (WhatsApp enviado; e-mail ignorado por falta de SMTP)', bellRow.some(r => r[0] === 'WHATSAPP' && r[1] === 'SENT') && bellRow.some(r => r[0] === 'EMAIL' && r[1] === 'SKIPPED'), JSON.stringify(bellRow));
 
   const edu = await bookVerified(`Edu ${RUN}`, { pro: S.ronaldId });
   const fabi = await bookVerified(`Fabi ${RUN}`, { pro: S.ronaldId });
@@ -1039,11 +1039,11 @@ phase('I', async () => {
   const delPro = await api('DELETE', `/admin/professionals/${S.ronaldId}`, undefined, S.token);
   check('I6', 'Excluir serviço ou profissional com agendamentos futuros é recusado (409 HAS_UPCOMING_APPOINTMENTS)', delSvc.status === 409 && delPro.status === 409 && delSvc.raw?.code === 'HAS_UPCOMING_APPOINTMENTS', `serviço=${delSvc.status}; profissional=${delPro.status}`);
 
-  // I7 saúde: o /health/deep confere o banco; recuperação de senha sem e-mail não cria nada
+  // I7 saúde: o /health/deep confere o banco; "esqueci a senha" responde igual para conta que existe (sem revelar nada)
   const deep = await fetch(URLS.health + '/deep').then(r => r.status).catch(() => 0);
   const forgot = await api('POST', '/auth/forgot-password', { email: S.owner.email });
-  const tokens = sql(`select count(*) from user_tokens where type='password_reset'`)[0]?.[0];
-  check('I7', '/health/deep responde 200 (banco ok) e "esqueci a senha" não cria token (sem e-mail)', deep === 200 && forgot.status === 200 && tokens === '0', `deep=${deep}; forgot=${forgot.status}; tokens=${tokens}`);
+  const forgotUnknown = await api('POST', '/auth/forgot-password', { email: `ninguem-${tag}@e2e.test` });
+  check('I7', '/health/deep responde 200 (banco ok) e "esqueci a senha" responde 200 igual para e-mail existente e inexistente', deep === 200 && forgot.status === 200 && forgotUnknown.status === 200 && forgot.raw?.data?.message === forgotUnknown.raw?.data?.message, `deep=${deep}; existente=${forgot.status}; inexistente=${forgotUnknown.status}`);
   saveState();
 });
 
