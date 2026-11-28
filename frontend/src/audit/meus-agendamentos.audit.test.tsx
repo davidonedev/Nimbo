@@ -8,7 +8,6 @@ import { brDate } from './fakeBackend';
  * F4: "Meus agendamentos" no fluxo novo (/:slug). API falsa por fetch: confere o que é enviado (X-Device-Token, corpo)
  * e as mensagens para o cliente (prazo, horário ocupado, aparelho não confirmado, estado vazio).
  */
-vi.mock('../pwa/PwaHost', () => ({ PwaHost: () => null }));
 vi.mock('../motion/LoginSplashHost', () => ({ LoginSplashHost: () => null }));
 
 const T = { timeout: 25000 };

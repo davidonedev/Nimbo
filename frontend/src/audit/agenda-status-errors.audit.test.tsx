@@ -6,7 +6,6 @@ import App from '../App';
 import { appt, brDate, installAdminBackend, signInAsTenantAdmin, type Backend } from './fakeBackend';
 
 /** Agenda do dono: quando o servidor recusa uma troca de status, a tela mostra o aviso (antes o clique parecia não fazer nada). */
-vi.mock('../pwa/PwaHost', () => ({ PwaHost: () => null }));
 vi.mock('../motion/LoginSplashHost', () => ({ LoginSplashHost: () => null }));
 
 const T = { timeout: 25000 };

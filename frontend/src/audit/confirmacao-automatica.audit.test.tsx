@@ -10,7 +10,6 @@ import { appt, brDate, installAdminBackend, signInAsTenantAdmin, type Backend } 
  * Confirmar um agendamento: pede uma segunda confirmação (segurança contra toque sem querer) e o aviso ao cliente sai
  * sozinho pelo WhatsApp quando o envio automático está ligado; senão a tela oferece o link como reserva.
  */
-vi.mock('../pwa/PwaHost', () => ({ PwaHost: () => null }));
 vi.mock('../motion/LoginSplashHost', () => ({ LoginSplashHost: () => null }));
 
 const T = { timeout: 25000 };

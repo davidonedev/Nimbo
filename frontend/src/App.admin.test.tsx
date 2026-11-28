@@ -10,7 +10,6 @@ import App from './App';
  * Pega tela branca, "Carregando…" eterno, rota sem Outlet/index, redirecionamento em loop e item de menu sem rota.
  */
 
-vi.mock('./pwa/PwaHost', () => ({ PwaHost: () => null }));
 vi.mock('./motion/LoginSplashHost', () => ({ LoginSplashHost: () => null }));
 vi.mock('./pages/LoginPage', () => ({ default: () => <p>tela de login</p> }));
 

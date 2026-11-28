@@ -8,7 +8,6 @@ import { brDate } from './fakeBackend';
  * AUDITORIA (Fase 2 · A1/B6): fluxo público do cliente (/:slug) com a API falsa. Mede quantos toques/campos até concluir
  * e confere o que é enviado ao backend. Nenhum WhatsApp é enviado: o link wa.me só é aberto pelo navegador do cliente.
  */
-vi.mock('../pwa/PwaHost', () => ({ PwaHost: () => null }));
 vi.mock('../motion/LoginSplashHost', () => ({ LoginSplashHost: () => null }));
 
 const T = { timeout: 25000 };

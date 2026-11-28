@@ -3,7 +3,6 @@
 // - Lê o token JWT do sessionStorage automaticamente
 // - Lança erros estruturados com mensagem vinda do backend
 
-import { OFFLINE_WRITE_MESSAGE, clearOfflineCaches, isOfflineWrite } from '../pwa/offline';
 import { resolveApiBaseUrl } from './apiUrl';
 
 // Aceita VITE_API_URL com ou sem o sufixo /api (ver apiUrl.ts)
@@ -43,12 +42,10 @@ function getToken(): string | null {
 
 export function saveSession(token: string, user: unknown) {
   sessionStorage.setItem(SESSION_KEY, JSON.stringify({ token, user }));
-  void clearOfflineCaches(); // novo login: não herdar a agenda em cache de outra conta
 }
 
 export function clearSession() {
   sessionStorage.removeItem(SESSION_KEY);
-  void clearOfflineCaches(); // logout: apaga as leituras guardadas para uso offline
 }
 
 // ─── Erro tipado da API ───────────────────────────────────────────────────────
@@ -122,9 +119,6 @@ async function request<T>(
   options: RequestInit & RequestExtra = {}
 ): Promise<T> {
   const { timeoutMs = REQUEST_TIMEOUT_MS, retries = 0, retryDelayMs = 4000, onRetry, ...init } = options;
-
-  // Mudar agendamentos offline arriscaria conflito de horário: bloqueia antes de tentar
-  if (isOfflineWrite(init.method, navigator.onLine)) throw new ApiError(OFFLINE_WRITE_MESSAGE, 0, 'OFFLINE');
 
   const token = getToken();
 

@@ -9,7 +9,6 @@ import { appt, brDate, installAdminBackend, signInAsTenantAdmin, type Backend } 
  * AUDITORIA (Fase 2 · A6/B): as telas do dono refletem cada mudança de status e chamam o endpoint certo.
  * App inteiro (rotas, contextos, lazy), só a rede é falsa e tem estado. Nada de WhatsApp/e-mail real: o front não envia nenhum.
  */
-vi.mock('../pwa/PwaHost', () => ({ PwaHost: () => null }));
 vi.mock('../motion/LoginSplashHost', () => ({ LoginSplashHost: () => null }));
 
 const T = { timeout: 25000 };
