@@ -117,7 +117,7 @@ public class ReminderService {
                 "time",         a.getStartTime(),
                 "professional", professionalName,
                 "services",     serviceName,
-                "portalLink",   appUrl + "/" + tenant.getSlug() + "/my-appointments"
+                "portalLink",   appUrl + "/" + tenant.getSlug() + "/meus-agendamentos"
         );
 
         String message = whatsappService.interpolateTemplate(template, vars);

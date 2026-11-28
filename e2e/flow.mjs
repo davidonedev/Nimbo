@@ -236,7 +236,7 @@ phase('B', async ({ browser }) => {
       check('B3b', 'Código errado é recusado com aviso', stillCode && wrongMsg, `na tela de código=${stillCode}; aviso=${wrongMsg}`);
       await page.locator('#bk-code').fill(code);
       await page.getByRole('button', { name: /Confirmar|Verificar/ }).last().click();
-      const done = await page.getByText('Agendamento confirmado!').waitFor({ timeout: 20_000 }).then(() => true).catch(() => false);
+      const done = await page.getByText('Pedido enviado!').waitFor({ timeout: 20_000 }).then(() => true).catch(() => false);
       await shot(page, `B3c-confirmado-${tag}`);
       const rows = apptsOf(`c.name='${ANA}'`);
       check('B3c', 'Código certo conclui a reserva; agendamento nasce PENDENTE no banco', done && rows.length === 1 && rows[0][1] === 'pending', `linhas=${JSON.stringify(rows[0] ?? null)}`);
@@ -250,7 +250,7 @@ phase('B', async ({ browser }) => {
     let prefilled = '';
     for (let i = 0; i < 12 && !prefilled; i++) { prefilled = await page.getByLabel(/Nome completo/).inputValue().catch(() => ''); if (!prefilled) await sleep(500); }
     await page.getByRole('button', { name: 'Confirmar agendamento' }).click();
-    const doneDirect = await page.getByText('Agendamento confirmado!').waitFor({ timeout: 20_000 }).then(() => true).catch(() => false);
+    const doneDirect = await page.getByText('Pedido enviado!').waitFor({ timeout: 20_000 }).then(() => true).catch(() => false);
     const codeAsked = (await wa.all()).some(m => /\d{6}/.test(m.text) && wa.to(S.clienteAna.digits)(m));
     let diag = '';
     if (!doneDirect) {
@@ -274,7 +274,7 @@ phase('B', async ({ browser }) => {
       const m2 = await wa.waitFor(wa.to(bia.digits), 20_000);
       await page2.locator('#bk-code').fill(waCode(m2) ?? '');
       await page2.getByRole('button', { name: /Confirmar|Verificar/ }).last().click();
-      await page2.getByText('Agendamento confirmado!').waitFor({ timeout: 20_000 });
+      await page2.getByText('Pedido enviado!').waitFor({ timeout: 20_000 });
       const rows = apptsOf(`c.name='${BIA}'`);
       const chained = rows.length === 2 && rows[0][4] === rows[1][3] && rows[0][7] === rows[1][7];
       check('B5', 'Dois serviços viram 2 agendamentos seguidos com o mesmo profissional', chained, JSON.stringify(rows.map(r => [r[6], r[3], r[4], r[7]])));
@@ -1015,7 +1015,7 @@ phase('M', async ({ browser }) => {
     const code = waCode(await wa.waitFor(wa.to(ph.digits), 20_000));
     await page.locator('#bk-code').fill(code ?? '');
     await page.getByRole('button', { name: /Confirmar|Verificar/ }).last().click();
-    const done = await page.getByText('Agendamento confirmado!').waitFor({ timeout: 20_000 }).then(() => true).catch(() => false);
+    const done = await page.getByText('Pedido enviado!').waitFor({ timeout: 20_000 }).then(() => true).catch(() => false);
     const row = apptsOf(`c.name='${NAME}'`)[0] ?? [];
     const apptId = row[0];
     check('M0', 'Preparação: cliente agenda pelo navegador com código e o aparelho fica reconhecido', done && !!apptId && row[1] === 'pending', `agendamento=${JSON.stringify(row.slice(0, 5))}`);
@@ -1119,7 +1119,7 @@ phase('M', async ({ browser }) => {
     let pre = '';
     for (let i = 0; i < 12 && !pre; i++) { pre = await page.getByLabel(/Nome completo/).inputValue().catch(() => ''); if (!pre) await sleep(500); }
     await page.getByRole('button', { name: 'Confirmar agendamento' }).click();
-    const done2 = await page.getByText('Agendamento confirmado!').waitFor({ timeout: 20_000 }).then(() => true).catch(() => false);
+    const done2 = await page.getByText('Pedido enviado!').waitFor({ timeout: 20_000 }).then(() => true).catch(() => false);
     const id2 = (apptsOf(`c.name='${NAME}' and a.status<>'cancelled'`)[0] ?? [])[0];
     check('M5a', 'Aparelho reconhecido agenda de novo sem pedir código (preparação do cenário "menos de 1 h")', done2 && !!id2, `agendamento=${id2}`);
     if (id2) {

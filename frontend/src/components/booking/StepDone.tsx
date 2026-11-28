@@ -1,5 +1,5 @@
 import { Link, Navigate } from 'react-router-dom';
-import { CalendarCheck, CalendarPlus, Check, Clock, MessageCircle } from 'lucide-react';
+import { CalendarCheck, Check, Clock, MessageCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { usePublicTenant } from '@/context/PublicTenantContext';
 import { formatCurrency } from '@/lib/utils';
@@ -25,7 +25,6 @@ export default function StepDone() {
 
   const { booking, client, pending, confirmBy, clientConfirmed } = booked;
   const first = booking.items[0];
-  const last = booking.items[booking.items.length - 1];
   const names = booking.items.map(i => i.serviceName).join(' + ');
   // Sem prova do celular (pedido pendente de um aparelho novo) o servidor não mostra a lista: só oferece se houver token.
   const canManage = !pending || !!getDeviceToken(slug);
@@ -35,17 +34,6 @@ export default function StepDone() {
     </Link>
   );
   const again = () => { setBooked(null); setChallenge(null); go('servico', { s: [] }); };
-
-  // Link do Google Agenda (abre o app de calendário no celular). Horário de Brasília, UTC-3 fixo.
-  const stamp = (time: string) => `${booking.date.replace(/-/g, '')}T${time.replace(':', '')}00`;
-  const calendarUrl = `https://calendar.google.com/calendar/render?${new URLSearchParams({
-    action: 'TEMPLATE',
-    text: `${names} — ${tenant.name}`,
-    dates: `${stamp(first.startTime)}/${stamp(last.endTime)}`,
-    ctz: 'America/Sao_Paulo',
-    details: `Profissional: ${booking.professionalName}`,
-    location: tenant.address ?? '',
-  })}`;
 
   const summary = (
     <div className="bk-summary" style={{ textAlign: 'left' }}>
@@ -114,17 +102,15 @@ export default function StepDone() {
   return (
     <section style={{ textAlign: 'center' }}>
       <div className="bk-done-icon"><Check size={36} aria-hidden /></div>
-      <h1 className="bk-title bk-display" style={{ marginTop: 0 }}>Agendamento confirmado!</h1>
+      <h1 className="bk-title bk-display" style={{ marginTop: 0 }}>Pedido enviado!</h1>
       <p className="bk-sub">
-        {client.name.split(' ')[0]}, esperamos você. Lembretes podem chegar no seu WhatsApp.
+        {client.name.split(' ')[0]}, seu horário está reservado e vai para a aprovação do {tenant.name}.
+        Assim que ele aprovar, você recebe a confirmação no WhatsApp.
       </p>
 
       {summary}
 
       <div style={{ display: 'grid', gap: 10, marginTop: 20 }}>
-        <a className="bk-btn ghost" href={calendarUrl} target="_blank" rel="noopener noreferrer">
-          <CalendarPlus size={18} aria-hidden /> Adicionar ao calendário
-        </a>
         {mine}
         <button type="button" className="bk-btn block" onClick={again}>Fazer outro agendamento</button>
       </div>

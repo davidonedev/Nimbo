@@ -235,7 +235,7 @@ describe('portal público do cliente', { timeout: 60000 }, () => {
     fireEvent.change(screen.getByLabelText('Código'), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
 
-    expect(await screen.findByText('Agendamento confirmado!', undefined, T)).toBeTruthy();
+    expect(await screen.findByText('Pedido enviado!', undefined, T)).toBeTruthy();
     expect(localStorage.getItem('nimbo_device_studio')).toBe('tok'); // aparelho reconhecido para a próxima vez
     expect(unexpected).toEqual([]);
   });

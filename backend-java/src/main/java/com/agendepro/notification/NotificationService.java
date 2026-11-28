@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class NotificationService {
 
-    public enum Event { NEW_REQUEST, CLIENT_CANCELLED, CLIENT_RESCHEDULED, APPROVED, REFUSED, CANCELLED_BY_OWNER,
+    public enum Event { NEW_REQUEST, CLIENT_REQUEST_RECEIVED, CLIENT_CANCELLED, CLIENT_RESCHEDULED, APPROVED, REFUSED, CANCELLED_BY_OWNER,
         REMINDER_24H, REMINDER_2H,
         PENDING_WARNING_OWNER, PENDING_WARNING_CLIENT, AUTO_CANCELLED_OWNER, AUTO_CANCELLED_CLIENT }
 
@@ -124,6 +124,18 @@ public class NotificationService {
 
     // ─── avisos ao cliente ──────────────────────────────────────────────────────
 
+    /** O cliente fez o pedido (código do WhatsApp validado): confirma o recebimento e avisa que falta o estabelecimento aprovar. */
+    @Transactional
+    public void clientRequestReceived(List<Appointment> appointments) {
+        forEachGroup(appointments, g -> notifyClient(g, Event.CLIENT_REQUEST_RECEIVED,
+                g.tenant().getName() + ": recebemos o seu pedido",
+                "Olá, " + firstName(g.client().getName()) + "! Recebemos o seu pedido em " + g.tenant().getName() + ": "
+                        + g.services() + " com " + g.professional() + ", " + br(g.date()) + " às " + g.start() + ".\n"
+                        + "Ele ainda precisa ser aprovado pelo estabelecimento. Assim que for, você recebe a confirmação aqui no WhatsApp.\n"
+                        + "Para acompanhar ou cancelar: " + appUrl + "/" + g.tenant().getSlug() + "/meus-agendamentos"));
+        dispatchAfterCommit();
+    }
+
     /** Aprovação pelo dono. Recebe vários (confirmação em massa) e agrupa por cliente, dia e profissional. */
     @Transactional
     public void clientApproved(List<Appointment> appointments) {
@@ -132,7 +144,8 @@ public class NotificationService {
                 "Olá, " + firstName(g.client().getName()) + "! Seu horário em " + g.tenant().getName()
                         + " está confirmado: " + g.services() + " com " + g.professional() + ", "
                         + br(g.date()) + " às " + g.start() + "."
-                        + (blank(g.tenant().getAddress()) ? "" : " Endereço: " + g.tenant().getAddress().trim() + ".")));
+                        + (blank(g.tenant().getAddress()) ? "" : " Endereço: " + g.tenant().getAddress().trim() + ".")
+                        + "\nPara ver, remarcar ou cancelar: " + appUrl + "/" + g.tenant().getSlug() + "/meus-agendamentos"));
         dispatchAfterCommit();
     }
 
@@ -165,7 +178,7 @@ public class NotificationService {
         String phone = !blank(client.getPhoneE164()) ? client.getPhoneE164() : client.getPhone();
         if (blank(phone) && (!emailEnabled || blank(client.getEmail()))) return false;
         String subject = tenant.getName() + ": lembrete do seu horário";
-        String key = event + ":" + appointment.getId();
+        String key = event + ":" + appointment.getId() + ":" + appointment.getDate() + "T" + appointment.getStartTime();
         if (emailEnabled) enqueue(tenant, appointment.getId(), event, key, Channel.EMAIL, client.getEmail(), subject, text);
         enqueue(tenant, appointment.getId(), event, key, Channel.WHATSAPP, phone, subject, text);
         return true;
@@ -262,7 +275,8 @@ public class NotificationService {
     }
 
     private void notifyClient(Group g, Event event, String subject, String text) {
-        String key = event + ":" + g.firstId();
+        // Data e hora entram na chave: depois de remarcar, a nova aprovação é outra mensagem (não repetida)
+        String key = event + ":" + g.firstId() + ":" + g.date() + "T" + g.start();
         Tenant t = g.tenant();
         if (emailEnabled) enqueue(t, g.firstId(), event, key, Channel.EMAIL, g.client().getEmail(), subject, text);
         String phone = !blank(g.client().getPhoneE164()) ? g.client().getPhoneE164() : g.client().getPhone();

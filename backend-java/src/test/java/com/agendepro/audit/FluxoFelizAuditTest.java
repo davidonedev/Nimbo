@@ -180,7 +180,7 @@ class FluxoFelizAuditTest extends AuditBase {
         var queued = outboxOf(c.tenant, "REMINDER_24H", NotificationOutbox.Channel.WHATSAPP);
         assertThat(queued).hasSize(1);
         assertThat(queued.get(0).getRecipient()).isEqualTo(e164(phone));
-        assertThat(queued.get(0).getBody()).contains(a.getStartTime()).contains(c.tenant.getName()).contains("/my-appointments");
+        assertThat(queued.get(0).getBody()).contains(a.getStartTime()).contains(c.tenant.getName()).contains("/meus-agendamentos");
         assertThat(reload(a).getReminder24hSentAt()).isNotNull();
     }
 
