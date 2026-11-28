@@ -91,6 +91,8 @@ app:
     default-api-url: ${WHATSAPP_DEFAULT_API_URL:}
     default-api-key: ${WHATSAPP_DEFAULT_API_KEY:}
     default-instance: ${WHATSAPP_DEFAULT_INSTANCE:}
+    # Aceita API de WhatsApp em localhost/rede interna: SÓ desenvolvimento e testes. Em produção deixe false (anti-SSRF).
+    allow-private-urls: ${WHATSAPP_ALLOW_PRIVATE_URLS:false}
   # Agendamento por celular. Com WhatsApp configurado (do estabelecimento ou o padrão acima) o cliente confirma com um
   # código. Sem WhatsApp, o horário fica PENDENTE e o cliente confirma mandando uma mensagem ao WhatsApp do
   # estabelecimento. O cliente tem confirm-minutes para isso; se não tocar, o horário é liberado. Depois que ele toca, o
