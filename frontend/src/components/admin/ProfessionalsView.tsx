@@ -239,6 +239,7 @@ export default function ProfessionalsView() {
   const [editId, setEditId]         = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [deleteId, setDeleteId]     = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState('');
   const [form, setForm]             = useState<ProfFormData>(EMPTY_FORM);
   const [formError, setFormError]   = useState('');
   const [saving, setSaving]         = useState(false);
@@ -313,11 +314,12 @@ export default function ProfessionalsView() {
 
   const handleDelete = async () => {
     if (!deleteId) return;
+    setDeleteError('');
     try {
       await deleteProfessional(deleteId);
       setDeleteId(null);
     } catch (err) {
-      console.error('Erro ao excluir profissional:', err);
+      setDeleteError(err instanceof ApiError ? err.message : 'Não foi possível excluir o profissional. Tente novamente.');
     }
   };
 
@@ -512,7 +514,7 @@ export default function ProfessionalsView() {
       </Dialog>
 
       {/* Delete confirm dialog */}
-      <Dialog open={!!deleteId} onOpenChange={o => !o && setDeleteId(null)}>
+      <Dialog open={!!deleteId} onOpenChange={o => { if (!o) { setDeleteId(null); setDeleteError(''); } }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
@@ -524,13 +526,14 @@ export default function ProfessionalsView() {
             {deleteId && hasActiveAppts(deleteId) && (
               <div className="flex items-start gap-2 p-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 text-amber-800 dark:text-amber-400 text-sm">
                 <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                <p>Este profissional tem agendamentos ativos. Eles <strong>não serão cancelados</strong> automaticamente.</p>
+                <p>Este profissional tem agendamentos ativos: <strong>cancele ou remarque antes</strong> de excluir (o sistema recusa a exclusão).</p>
               </div>
             )}
-            <p className="text-xs text-muted-foreground">Esta ação não pode ser desfeita.</p>
+            {deleteError && <p role="alert" className="text-sm text-destructive">{deleteError}</p>}
+            <p className="text-xs text-muted-foreground">O histórico de atendimentos dele e o login dele também são apagados. Esta ação não pode ser desfeita.</p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteId(null)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => { setDeleteId(null); setDeleteError(''); }}>Cancelar</Button>
             <Button variant="destructive" onClick={handleDelete}>Excluir</Button>
           </DialogFooter>
         </DialogContent>

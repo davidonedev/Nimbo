@@ -50,6 +50,7 @@ export default function ClientsView() {
   const [addOpen, setAddOpen]     = useState(false);
   const [editOpen, setEditOpen]   = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const [form, setForm]           = useState(EMPTY_FORM);
   const [saving, setSaving]       = useState(false);
   const [formError, setFormError] = useState('');
@@ -125,6 +126,7 @@ export default function ClientsView() {
   // ── DELETE ────────────────────────────────────────────────────────────────────
   const openDelete = (client: Client) => {
     setSelected(client);
+    setDeleteError('');
     setDeleteOpen(true);
   };
 
@@ -135,8 +137,8 @@ export default function ClientsView() {
       await deleteClient(selected.id);
       setDeleteOpen(false);
       setSelected(null);
-    } catch {
-      // erro silencioso — pode adicionar toast aqui se quiser
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Não foi possível excluir o cliente. Tente novamente.');
     } finally {
       setSaving(false);
     }
@@ -388,8 +390,9 @@ export default function ClientsView() {
           <DialogHeader><DialogTitle>Excluir Cliente</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">
             Tem certeza que deseja excluir <span className="font-semibold text-foreground">{selected?.name}</span>?
-            Esta ação não pode ser desfeita.
+            O histórico dele também é apagado e a ação não pode ser desfeita. Se ainda houver agendamentos futuros, a exclusão é recusada.
           </p>
+          {deleteError && <p role="alert" className="text-sm text-destructive">{deleteError}</p>}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={saving}>
               Cancelar
